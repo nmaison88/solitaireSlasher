@@ -14,6 +14,7 @@ var _menu_button: Button
 var _player_status_label: Label
 var _ready_button: Button
 var _last_standing_notification: Panel
+var _waiting_for_ready: bool = false  # Flag to prevent status updates during ready phase
 
 func _ready() -> void:
 	_status_label = get_node("StatusLabel") as Label
@@ -369,17 +370,20 @@ func _on_multiplayer_game_started() -> void:
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
-	# Player status label (top right, below forfeit button)
+	# Player status label (bottom right, above undo button)
 	_player_status_label = Label.new()
 	_player_status_label.name = "PlayerStatusLabel"
-	_player_status_label.position = Vector2(750, 70)  # Moved to top right, below buttons
-	_player_status_label.size = Vector2(250, 30)
+	_player_status_label.position = Vector2(700, 650)  # Bottom right, above undo button
+	_player_status_label.size = Vector2(300, 30)
 	_player_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_player_status_label.text = "Race in progress..."
+	_player_status_label.text = "Playing: 0 | Jammed: 0 | Completed: 0"
 	add_child(_player_status_label)
 
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
+	# Set waiting for ready flag to prevent status updates
+	_waiting_for_ready = true
+	
 	# Disable all game interactions
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
@@ -512,6 +516,9 @@ func _on_all_players_ready() -> void:
 	"""Called when all players are ready to start new round"""
 	print("All players ready - starting new round")
 	
+	# Clear waiting for ready flag
+	_waiting_for_ready = false
+	
 	# Hide ready notification
 	if _last_standing_notification:
 		_last_standing_notification.queue_free()
@@ -531,9 +538,9 @@ func _on_all_players_ready() -> void:
 		if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
 			_game.card_moved.connect(_on_multiplayer_card_moved)
 	
-	# Reset status label
+	# Reset status label - will be updated by _update_player_status_display()
 	if _player_status_label:
-		_player_status_label.text = "Race in progress..."
+		_player_status_label.text = "Playing: 0 | Jammed: 0 | Completed: 0"
 
 func _on_forfeit_pressed() -> void:
 	"""Handle forfeit button press in multiplayer"""
@@ -565,6 +572,10 @@ func _on_multiplayer_card_moved(_from_pile: String, _to_pile: String, _card_coun
 func _update_player_status_display() -> void:
 	"""Update the player status label with current game state"""
 	if not _player_status_label or not MultiplayerGameManager.is_multiplayer:
+		return
+	
+	# Don't update status display if we're waiting for players to be ready
+	if _waiting_for_ready:
 		return
 	
 	var statuses = MultiplayerGameManager.player_statuses
