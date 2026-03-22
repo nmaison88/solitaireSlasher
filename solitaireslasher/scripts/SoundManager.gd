@@ -4,6 +4,7 @@ extends Node
 var card_place_player: AudioStreamPlayer
 var card_draw_player: AudioStreamPlayer
 var win_player: AudioStreamPlayer
+var retry_player: AudioStreamPlayer
 
 func _ready() -> void:
 	_setup_audio_players()
@@ -24,13 +25,19 @@ func _setup_audio_players() -> void:
 	win_player = AudioStreamPlayer.new()
 	win_player.name = "WinPlayer"
 	add_child(win_player)
+	
+	# Retry sound
+	retry_player = AudioStreamPlayer.new()
+	retry_player.name = "RetryPlayer"
+	add_child(retry_player)
 
 func _load_sound_files() -> void:
 	# Try to load sound files from the sounds directory
 	var sound_paths = {
 		"card_place": ["res://sounds/card_place.wav", "res://sounds/card_place.ogg"],
 		"card_draw": ["res://sounds/card_draw.wav", "res://sounds/card_draw.ogg"],
-		"win": ["res://sounds/win.wav", "res://sounds/win.ogg"]
+		"win": ["res://sounds/win.wav", "res://sounds/win.ogg"],
+		"retry": ["res://sounds/retry.wav", "res://sounds/retry.ogg"]
 	}
 	
 	# Load card place sound
@@ -53,6 +60,13 @@ func _load_sound_files() -> void:
 			win_player.stream = load(path)
 			print("Loaded win sound: ", path)
 			break
+	
+	# Load retry sound
+	for path in sound_paths["retry"]:
+		if ResourceLoader.exists(path):
+			retry_player.stream = load(path)
+			print("Loaded retry sound: ", path)
+			break
 
 func play_card_place() -> void:
 	if card_place_player and card_place_player.stream:
@@ -65,6 +79,10 @@ func play_card_draw() -> void:
 func play_win() -> void:
 	if win_player and win_player.stream:
 		win_player.play()
+
+func play_retry() -> void:
+	if retry_player and retry_player.stream:
+		retry_player.play()
 
 # Helper function to load sounds from files
 func load_sounds(card_place_path: String, card_draw_path: String, win_path: String) -> void:

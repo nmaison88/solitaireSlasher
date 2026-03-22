@@ -260,12 +260,12 @@ func _draw_waste(pos: Vector2) -> void:
 		i += 1
 
 func _on_waste_card_pressed(card: SolitaireCard):
-	# Try to move to foundation first
-	for i in range(4):
-		if game.can_place_on_foundation(card, i):
-			if game.move_to_foundation("waste", -1, i):
-				render()
-				return
+	# Try to move to foundation first - use card's suit to determine correct foundation
+	var correct_foundation = card.suit  # 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+	if game.can_place_on_foundation(card, correct_foundation):
+		if game.move_to_foundation("waste", -1, correct_foundation):
+			render()
+			return
 	
 	# If not moved to foundation, try to move to tableau
 	for i in range(7):
@@ -344,15 +344,15 @@ func _draw_tableau_column(pile: Array, origin: Vector2, max_h: float, column_ind
 			y += 10.0
 
 func _on_test_card_pressed(card: SolitaireCard):
-	# Try to move to foundation first
-	for i in range(4):
-		if game.can_place_on_foundation(card, i):
-			# Find which pile this card is in
-			for j in range(7):
-				if not game.tableau[j].is_empty() and game.tableau[j][-1] == card:
-					if game.move_to_foundation("tableau", j, i):
-						render()
-						return
+	# Try to move to foundation first - use card's suit to determine correct foundation
+	var correct_foundation = card.suit  # 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+	if game.can_place_on_foundation(card, correct_foundation):
+		# Find which pile this card is in
+		for j in range(7):
+			if not game.tableau[j].is_empty() and game.tableau[j][-1] == card:
+				if game.move_to_foundation("tableau", j, correct_foundation):
+					render()
+					return
 	
 	# If not moved to foundation, try to move to another tableau pile
 	# Find which tableau pile this card is in
@@ -470,16 +470,47 @@ func _get_drop_zone_at_position(pos: Vector2) -> ColorRect:
 			return zone
 	return null
 
-func _try_move_to_foundation(card: Card, foundation_index: int) -> bool:
-	# Find where the card is coming from
+func _try_move_to_foundation(card: Card, clicked_foundation_index: int) -> bool:
+	# Automatically determine the correct foundation based on card's suit
+	# Foundation indices: 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+	var card_suit = -1
+	var from_pile = ""
+	var from_index = -1
+	
+	print("DEBUG: Trying to move card with rank ", card.rank, " to foundation")
+	
+	# Find the card in tableau and get its suit
 	for i in range(7):
-		if not game.tableau[i].is_empty() and game.tableau[i][-1] == card:
-			return game.move_to_foundation("tableau", i, foundation_index)
+		if not game.tableau[i].is_empty():
+			var top_card = game.tableau[i][-1]
+			# Match by rank to find the right card (since Card Framework card != Game card)
+			if top_card.rank == card.rank and top_card.face_up:
+				card_suit = top_card.suit
+				from_pile = "tableau"
+				from_index = i
+				print("DEBUG: Found card in tableau ", i, " with suit ", card_suit)
+				break
 	
-	if game.waste.has(card) and card == game.waste[-1]:
-		return game.move_to_foundation("waste", -1, foundation_index)
+	# If not found in tableau, check waste
+	if card_suit == -1 and game.waste.size() > 0:
+		var top_waste = game.waste[-1]
+		if top_waste.rank == card.rank:
+			card_suit = top_waste.suit
+			from_pile = "waste"
+			from_index = -1
+			print("DEBUG: Found card in waste with suit ", card_suit)
 	
-	return false
+	if card_suit == -1:
+		print("DEBUG: Card suit not found!")
+		return false
+	
+	# Use the card's suit to determine correct foundation (0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades)
+	var correct_foundation_index = card_suit
+	
+	print("DEBUG: Moving to foundation index ", correct_foundation_index, " (clicked ", clicked_foundation_index, ")")
+	
+	# Move to the correct foundation based on suit
+	return game.move_to_foundation(from_pile, from_index, correct_foundation_index)
 
 func _try_move_to_tableau(tableau_index: int) -> bool:
 	if _dragged_cards.is_empty():

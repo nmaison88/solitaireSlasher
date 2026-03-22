@@ -98,26 +98,42 @@ func _show_new_game_button():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
 			child.queue_free()
 	
-	# New Game button (top right) - icon only
+	# New Game button (top right) - FontAwesome icon
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.text = "↻"  # Unicode refresh symbol
 	new_game_button.position = Vector2(950, 10)
 	new_game_button.size = Vector2(50, 50)
-	new_game_button.add_theme_font_size_override("font_size", 32)
 	new_game_button.tooltip_text = "New Game"
 	new_game_button.pressed.connect(_on_new_game_pressed)
+	
+	# Add FontAwesome icon as child
+	var retry_icon = FontAwesome.new()
+	retry_icon.icon_name = "rotate-right"  # or "arrows-rotate" or "refresh"
+	retry_icon.icon_type = "solid"
+	retry_icon.icon_size = 32
+	retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	new_game_button.add_child(retry_icon)
+	
 	add_child(new_game_button)
 	
-	# Undo button (bottom center) - icon only
+	# Undo button (bottom center) - FontAwesome icon
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	undo_button.text = "↶"  # Unicode undo/counterclockwise arrow
 	undo_button.position = Vector2(487, 700)  # Bottom center (1024/2 - 25)
 	undo_button.size = Vector2(50, 50)
-	undo_button.add_theme_font_size_override("font_size", 32)
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
+	
+	# Add FontAwesome icon as child
+	var undo_icon = FontAwesome.new()
+	undo_icon.icon_name = "rotate-left"  # or "arrow-rotate-left"
+	undo_icon.icon_type = "solid"
+	undo_icon.icon_size = 32
+	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	undo_button.add_child(undo_icon)
+	
 	add_child(undo_button)
 	
 	# Store reference to undo button for state updates
@@ -141,6 +157,9 @@ func _setup_multiplayer_game() -> void:
 		_board.render()
 
 func _on_new_game_pressed() -> void:
+	# Play retry sound
+	if SoundManager:
+		SoundManager.play_retry()
 	_new_game()
 
 func _new_game() -> void:
