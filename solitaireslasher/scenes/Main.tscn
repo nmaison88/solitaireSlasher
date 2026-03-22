@@ -13,17 +13,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="TopBar" type="HBoxContainer" parent="."]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 44.0
-grow_horizontal = 2
-
-[node name="NewGameButton" type="Button" parent="TopBar"]
-layout_mode = 2
-text = "New Game"
-
 [node name="StatusLabel" type="Label" parent="."]
 layout_mode = 1
 anchors_preset = 10
@@ -45,5 +34,3 @@ script = ExtResource("2")
 
 [node name="Game" type="Node" parent="."]
 script = ExtResource("3")
-
-[connection signal="pressed" from="TopBar/NewGameButton" to="." method="_on_new_game_pressed"]

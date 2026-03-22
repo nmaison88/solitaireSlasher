@@ -4,7 +4,7 @@ class_name Board
 const CARD_SIZE = Vector2(120, 180)  # Increased size for better readability
 const PILE_GAP_X = 22.0
 const TABLEAU_GAP_Y = 28.0
-const WASTE_FAN_X = 18.0
+const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
 
 signal stock_clicked
 
@@ -95,9 +95,10 @@ func render() -> void:
 	_drop_zones.clear()
 
 	var margin_x = 18.0
+	var margin_right = 80.0  # Extra padding on the right side to accommodate waste card fanning
 	var top_y = 16.0
 	var bottom_margin = 18.0
-	var available_w = maxf(0.0, size.x - margin_x * 2.0)
+	var available_w = maxf(0.0, size.x - margin_x - margin_right)
 	var available_h = maxf(0.0, size.y - top_y - bottom_margin)
 
 	var piles_row_y = top_y
@@ -108,24 +109,30 @@ func render() -> void:
 	var total_tableau_w = (CARD_SIZE.x * 7.0) + (col_gap * 6.0)
 	var left_x = margin_x + maxf(0.0, (available_w - total_tableau_w) * 0.5)
 
-	var stock_pos = Vector2(left_x, piles_row_y)
-	var waste_pos = Vector2(left_x + CARD_SIZE.x + col_gap, piles_row_y)
-	var foundation_start_x = left_x + (CARD_SIZE.x + col_gap) * 3.0
+	# Foundations on the left (4 piles)
+	var foundation_start_x = left_x
+	# Waste and stock on the right - swapped so waste is single card on left, stock fans on right
+	var waste_pos = Vector2(left_x + (CARD_SIZE.x + col_gap) * 5.0, piles_row_y)
+	var stock_pos = Vector2(left_x + (CARD_SIZE.x + col_gap) * 6.0, piles_row_y)
 
 	# Update stock count label position
 	if is_instance_valid(_stock_count_label):
 		_stock_count_label.position = stock_pos + Vector2(0, CARD_SIZE.y + 4.0)
 		_stock_count_label.text = str(game.stock.size())
 
-	_draw_slot(stock_pos)
-	_draw_slot(waste_pos)
+	# Draw foundation slots first (left side) - darker for visibility
 	for i in range(4):
-		_draw_slot(Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y))
+		_draw_foundation_slot(Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y), i)
+	# Draw waste and stock slots (right side)
+	_draw_slot(waste_pos)
+	_draw_slot(stock_pos)
 
-	_draw_stock(stock_pos)
-	_draw_waste(waste_pos)
+	# Draw foundations (left side)
 	for i in range(4):
 		_draw_foundation(game.foundations[i], Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y), i)
+	# Draw waste and stock (right side) - waste first (left), then stock (right)
+	_draw_waste(waste_pos)
+	_draw_stock(stock_pos)
 
 	for col in range(7):
 		var x = left_x + col * (CARD_SIZE.x + col_gap)
@@ -140,6 +147,32 @@ func _draw_slot(pos: Vector2) -> void:
 	bg.position = pos
 	bg.size = CARD_SIZE
 	add_child(bg)
+
+func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
+	# Use suite logo placeholder images from card-framework reference
+	# suit_index: 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+	var suit_names = ["club", "diamond", "heart", "spade"]
+	var placeholder_path = "res://addons/card-framework/freecell/assets/images/spots/foundation_%s_spot.png" % suit_names[suit_index]
+	
+	# Create a TextureRect to display the placeholder image
+	var placeholder = TextureRect.new()
+	placeholder.position = pos
+	placeholder.custom_minimum_size = CARD_SIZE
+	placeholder.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	placeholder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	
+	if ResourceLoader.exists(placeholder_path):
+		placeholder.texture = load(placeholder_path)
+	else:
+		# Fallback to dark background if placeholder not found
+		var bg = ColorRect.new()
+		bg.color = Color(0.0, 0.0, 0.0, 0.25)
+		bg.position = pos
+		bg.size = CARD_SIZE
+		add_child(bg)
+		return
+	
+	add_child(placeholder)
 
 func _draw_stock(pos: Vector2) -> void:
 	# Always create a clickable area for the stock pile, even when empty

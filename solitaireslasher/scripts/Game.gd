@@ -70,6 +70,10 @@ func draw_from_stock_3() -> void:
 		var c = stock.pop_back()
 		c.face_up = true
 		waste.append(c)
+	
+	# Play card draw sound
+	if SoundManager:
+		SoundManager.play_card_draw()
 
 func _recycle_waste_to_stock() -> void:
 	if waste.is_empty():
@@ -174,6 +178,11 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 	_moves_count += 1
 	card_moved.emit(from_pile, "foundation", 1)
 	_check_completion()
+	
+	# Play card place sound
+	if SoundManager:
+		SoundManager.play_card_place()
+	
 	return true
 
 func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) -> bool:
@@ -206,6 +215,11 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 	
 	_moves_count += 1
 	card_moved.emit("tableau", "tableau", card_count)
+	
+	# Play card place sound
+	if SoundManager:
+		SoundManager.play_card_place()
+	
 	return true
 
 func move_waste_to_tableau(tableau_index: int) -> bool:
@@ -222,6 +236,11 @@ func move_waste_to_tableau(tableau_index: int) -> bool:
 	tableau[tableau_index].append(waste.pop_back())
 	_moves_count += 1
 	card_moved.emit("waste", "tableau", 1)
+	
+	# Play card place sound
+	if SoundManager:
+		SoundManager.play_card_place()
+	
 	return true
 
 func _check_completion() -> void:
@@ -234,11 +253,17 @@ func _check_completion() -> void:
 	
 	_is_completed = true
 	game_completed.emit()
+	
+	# Play win sound
+	if SoundManager:
+		SoundManager.play_win()
+	
+	print("Game completed! Moves: ", _moves_count, " Time: ", Time.get_ticks_msec() / 1000.0 - _start_time)
 
 func get_game_time() -> float:
 	if _start_time == 0.0:
 		return 0.0
-	return Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second - _start_time
+	return Time.get_ticks_msec() / 1000.0 - _start_time
 
 func get_moves_count() -> int:
 	return _moves_count

@@ -8,6 +8,7 @@ var _multiplayer_ui: Control
 var _lobby_ui: Control
 var _game_ui: Control
 var _multiplayer_lobby: Control
+var _undo_button: Button
 
 func _ready() -> void:
 	_status_label = get_node("StatusLabel") as Label
@@ -80,6 +81,9 @@ func _setup_single_player_game() -> void:
 		_hide_menu_buttons()
 		# Show new game button
 		_show_new_game_button()
+		# Connect to game signals to update undo button state
+		if not _game.card_moved.is_connected(_on_card_moved):
+			_game.card_moved.connect(_on_card_moved)
 	else:
 		print("Failed to get local game or game is invalid")
 
@@ -94,27 +98,37 @@ func _show_new_game_button():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
 			child.queue_free()
 	
-	# New Game button
+	# New Game button (top right) - icon only
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.text = "New Game"
-	new_game_button.position = Vector2(850, 10)
+	new_game_button.text = "↻"  # Unicode refresh symbol
+	new_game_button.position = Vector2(950, 10)
+	new_game_button.size = Vector2(50, 50)
+	new_game_button.add_theme_font_size_override("font_size", 32)
+	new_game_button.tooltip_text = "New Game"
 	new_game_button.pressed.connect(_on_new_game_pressed)
 	add_child(new_game_button)
 	
-	# Undo button
+	# Undo button (bottom center) - icon only
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	undo_button.text = "Undo"
-	undo_button.position = Vector2(850, 50)
+	undo_button.text = "↶"  # Unicode undo/counterclockwise arrow
+	undo_button.position = Vector2(487, 700)  # Bottom center (1024/2 - 25)
+	undo_button.size = Vector2(50, 50)
+	undo_button.add_theme_font_size_override("font_size", 32)
+	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
 	add_child(undo_button)
 	
-	# Back to Menu button
+	# Store reference to undo button for state updates
+	_undo_button = undo_button
+	_update_undo_button_state()
+	
+	# Back to Menu button (keep text for now, top right below new game)
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
 	menu_button.text = "Back to Menu"
-	menu_button.position = Vector2(850, 90)
+	menu_button.position = Vector2(850, 70)
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
 	add_child(menu_button)
 
@@ -143,9 +157,21 @@ func _on_undo_pressed() -> void:
 	if _game and is_instance_valid(_game):
 		if _game.undo():
 			_board.render()
+			_update_undo_button_state()
 			print("Undo successful")
 		else:
 			print("Cannot undo - no moves to undo or already undone")
+
+func _update_undo_button_state() -> void:
+	if _undo_button and is_instance_valid(_undo_button):
+		if _game and is_instance_valid(_game):
+			_undo_button.disabled = not _game.can_undo()
+		else:
+			_undo_button.disabled = true
+
+func _on_card_moved(_from_pile: String, _to_pile: String, _card_count: int) -> void:
+	# Update undo button state after any card move
+	_update_undo_button_state()
 
 func _on_back_to_menu_pressed() -> void:
 	# Show menu buttons again
