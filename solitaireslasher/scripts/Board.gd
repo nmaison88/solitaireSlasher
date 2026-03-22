@@ -111,8 +111,9 @@ func render() -> void:
 
 	# Foundations on the left (4 piles)
 	var foundation_start_x = left_x
-	# Waste and stock on the right - swapped so waste is single card on left, stock fans on right
-	var waste_pos = Vector2(left_x + (CARD_SIZE.x + col_gap) * 5.0, piles_row_y)
+	# Waste and stock on the right - waste fans out, so needs extra space before stock
+	# Waste needs space for 3 cards fanning (2 * WASTE_FAN_X = 70px extra)
+	var waste_pos = Vector2(left_x + (CARD_SIZE.x + col_gap) * 4.5, piles_row_y)
 	var stock_pos = Vector2(left_x + (CARD_SIZE.x + col_gap) * 6.0, piles_row_y)
 
 	# Update stock count label position
