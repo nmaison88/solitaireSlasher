@@ -369,12 +369,12 @@ func _on_multiplayer_game_started() -> void:
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
-	# Player status label (top center)
+	# Player status label (top right, below forfeit button)
 	_player_status_label = Label.new()
 	_player_status_label.name = "PlayerStatusLabel"
-	_player_status_label.position = Vector2(400, 10)
-	_player_status_label.size = Vector2(200, 30)
-	_player_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_player_status_label.position = Vector2(750, 70)  # Moved to top right, below buttons
+	_player_status_label.size = Vector2(250, 30)
+	_player_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_player_status_label.text = "Race in progress..."
 	add_child(_player_status_label)
 
@@ -537,6 +537,10 @@ func _on_all_players_ready() -> void:
 
 func _on_forfeit_pressed() -> void:
 	"""Handle forfeit button press in multiplayer"""
+	# Play lose sound
+	if SoundManager:
+		SoundManager.play_lose()
+	
 	# Mark player as jammed
 	MultiplayerGameManager.forfeit_player()
 	
