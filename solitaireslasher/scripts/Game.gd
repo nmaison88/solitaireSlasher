@@ -401,3 +401,47 @@ func undo() -> bool:
 func can_undo() -> bool:
 	"""Check if undo is available"""
 	return _can_undo
+
+func has_valid_moves() -> bool:
+	"""Check if the player has any valid moves available (not jammed)"""
+	# Check if we can draw from stock
+	if not stock.is_empty():
+		return true
+	
+	# Check if waste can move to foundation
+	if not waste.is_empty():
+		var waste_card = waste[-1]
+		for i in range(4):
+			if can_place_on_foundation(waste_card, i):
+				return true
+		# Check if waste can move to tableau
+		for i in range(7):
+			if can_place_on_tableau(waste_card, i):
+				return true
+	
+	# Check if any tableau card can move to foundation
+	for pile_idx in range(7):
+		if not tableau[pile_idx].is_empty():
+			var top_card = tableau[pile_idx][-1]
+			if top_card.face_up:
+				for f_idx in range(4):
+					if can_place_on_foundation(top_card, f_idx):
+						return true
+	
+	# Check if any tableau cards can move to another tableau
+	for from_idx in range(7):
+		if tableau[from_idx].is_empty():
+			continue
+		for card_idx in range(tableau[from_idx].size()):
+			var card = tableau[from_idx][card_idx]
+			if not card.face_up:
+				continue
+			# Try moving this card (and cards below it) to other tableau piles
+			for to_idx in range(7):
+				if from_idx == to_idx:
+					continue
+				if can_place_on_tableau(card, to_idx):
+					return true
+	
+	# No valid moves found - player is jammed
+	return false

@@ -55,8 +55,11 @@ func set_game(value) -> void:
 func set_multiplayer_manager(value) -> void:
 	multiplayer_manager = value
 	if multiplayer_manager:
-		multiplayer_manager.race_started.connect(_on_race_started)
-		multiplayer_manager.race_ended.connect(_on_race_ended)
+		# Check if signals are already connected before connecting
+		if not multiplayer_manager.race_started.is_connected(_on_race_started):
+			multiplayer_manager.race_started.connect(_on_race_started)
+		if not multiplayer_manager.race_ended.is_connected(_on_race_ended):
+			multiplayer_manager.race_ended.connect(_on_race_ended)
 
 func _on_race_started() -> void:
 	render()

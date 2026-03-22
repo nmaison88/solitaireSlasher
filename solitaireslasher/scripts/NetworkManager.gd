@@ -6,7 +6,7 @@ signal game_started
 signal race_completed(player_id: int, time: float)
 signal game_state_received(game_state: Dictionary)
 
-const DEFAULT_PORT = 7000
+const DEFAULT_PORT = 7777  # Changed from 7000 to avoid conflicts with other applications
 const MAX_PLAYERS = 8
 const BROADCAST_INTERVAL = 2.0
 
@@ -17,6 +17,8 @@ var local_player_id: int = 1
 var game_session_active: bool = false
 var broadcast_timer: Timer
 var discovery_server: UDPServer
+var custom_port: int = DEFAULT_PORT  # Can be overridden via command line (for hosting)
+var connect_port: int = DEFAULT_PORT  # Port to connect to when joining (always use host's port)
 
 enum MessageType {
 	PLAYER_JOIN,
@@ -24,7 +26,9 @@ enum MessageType {
 	GAME_START,
 	GAME_STATE,
 	RACE_COMPLETE,
-	SESSION_INFO
+	SESSION_INFO,
+	PLAYER_STATUS,
+	PLAYER_READY
 }
 
 func _ready() -> void:
@@ -34,7 +38,20 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	
+	# Parse command line arguments for custom port
+	_parse_command_line_args()
+	
 	_setup_broadcast()
+
+func _parse_command_line_args() -> void:
+	"""Parse command line arguments to allow custom port for testing"""
+	var args = OS.get_cmdline_args()
+	for arg in args:
+		if arg.begins_with("--port="):
+			var port_str = arg.split("=")[1]
+			custom_port = int(port_str)
+			print("Using custom port: ", custom_port)
+			break
 
 func _setup_broadcast() -> void:
 	broadcast_timer = Timer.new()
@@ -43,11 +60,20 @@ func _setup_broadcast() -> void:
 	add_child(broadcast_timer)
 
 func host_game(player_name: String) -> bool:
+	# Clean up any existing connection first
+	if multiplayer_peer:
+		multiplayer_peer.close()
+		multiplayer_peer = null
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer = null
+	
 	multiplayer_peer = ENetMultiplayerPeer.new()
-	var error = multiplayer_peer.create_server(DEFAULT_PORT, MAX_PLAYERS)
+	var error = multiplayer_peer.create_server(custom_port, MAX_PLAYERS)
 	
 	if error != OK:
 		print("Failed to create server: ", error)
+		print("Error code 20 usually means port is already in use.")
+		print("To test multiplayer on same machine, use: --port=7778 for second instance")
 		return false
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
@@ -63,16 +89,20 @@ func host_game(player_name: String) -> bool:
 	
 	_setup_discovery_server()
 	broadcast_timer.start()
-	print("Hosting game on port ", DEFAULT_PORT)
+	print("Hosting game on port ", custom_port)
 	return true
 
 func join_game(host_ip: String, player_name: String) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
+	# Always connect to DEFAULT_PORT (host's port), not custom_port
 	var error = multiplayer_peer.create_client(host_ip, DEFAULT_PORT)
 	
 	if error != OK:
 		print("Failed to create client: ", error)
+		print("Make sure host is running on port ", DEFAULT_PORT)
 		return false
+	
+	print("Attempting to connect to ", host_ip, ":", DEFAULT_PORT)
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
 	local_player_id = multiplayer.get_unique_id()
@@ -155,16 +185,28 @@ func send_game_state(game_state: Dictionary) -> void:
 	
 	_broadcast_message(MessageType.GAME_STATE, game_state)
 
-func report_race_completion(completion_time: float) -> void:
-	players[local_player_id].completed = true
-	players[local_player_id].completion_time = completion_time
+func report_race_completion(time: float) -> void:
+	if not game_session_active:
+		return
 	
 	_broadcast_message(MessageType.RACE_COMPLETE, {
 		"player_id": local_player_id,
-		"time": completion_time
+		"time": time
 	})
-	
-	race_completed.emit(local_player_id, completion_time)
+
+func broadcast_player_status(player_id: int, status: String) -> void:
+	"""Broadcast player status change to all players"""
+	_broadcast_message(MessageType.PLAYER_STATUS, {
+		"player_id": player_id,
+		"status": status
+	})
+
+func broadcast_player_ready(player_id: int, ready: bool) -> void:
+	"""Broadcast player ready status for next round"""
+	_broadcast_message(MessageType.PLAYER_READY, {
+		"player_id": player_id,
+		"ready": ready
+	})
 
 func _broadcast_message(message_type: MessageType, data: Dictionary) -> void:
 	var message = {
@@ -190,6 +232,10 @@ func receive_message(message: Dictionary) -> void:
 			_handle_game_state(data)
 		MessageType.RACE_COMPLETE:
 			_handle_race_complete(data)
+		MessageType.PLAYER_STATUS:
+			_handle_player_status(data)
+		MessageType.PLAYER_READY:
+			_handle_player_ready(data)
 
 func _handle_player_join(data: Dictionary) -> void:
 	var player_id = data.player_id
@@ -226,22 +272,52 @@ func _handle_race_complete(data: Dictionary) -> void:
 	
 	race_completed.emit(player_id, time)
 
-func _on_peer_connected(peer_id: int) -> void:
-	if is_host:
-		var player_data = {
-			"player_id": peer_id,
-			"player_name": players[local_player_id].name
+func _handle_player_status(data: Dictionary) -> void:
+	"""Handle player status updates from other players"""
+	var player_id = data.player_id
+	var status = data.status
+	print("Received player status update: Player ", player_id, " is now ", status)
+	
+	# Forward to MultiplayerGameManager
+	if MultiplayerGameManager:
+		MultiplayerGameManager.receive_player_status(player_id, status)
+
+func _handle_player_ready(data: Dictionary) -> void:
+	"""Handle player ready status for next round"""
+	var player_id = data.player_id
+	var ready = data.ready
+	print("Received player ready update: Player ", player_id, " ready: ", ready)
+	
+	# Forward to MultiplayerGameManager
+	if MultiplayerGameManager:
+		MultiplayerGameManager.receive_player_ready(player_id, ready)
+
+func _on_peer_connected(id: int) -> void:
+	print("✓ Peer connected: ", id)
+	print("  Total peers now: ", multiplayer.get_peers().size() + 1)
+	# Send player info to the new peer
+	rpc_id(id, "_receive_player_info", local_player_id, players[local_player_id].name)
+
+@rpc("any_peer", "reliable")
+func _receive_player_info(player_id: int, player_name: String) -> void:
+	"""Receive player info from a peer"""
+	print("Received player info: ", player_name, " (ID: ", player_id, ")")
+	if not players.has(player_id):
+		players[player_id] = {
+			"name": player_name,
+			"ready": false,
+			"completed": false,
+			"completion_time": 0.0
 		}
-		rpc_id(peer_id, "receive_message", {
-			"type": MessageType.PLAYER_JOIN,
-			"data": player_data
-		})
+		player_connected.emit(player_id, player_name)
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	players.erase(peer_id)
 	player_disconnected.emit(peer_id)
 
 func _on_connected_to_server() -> void:
+	print("✓ Successfully connected to server!")
+	print("  Local player ID: ", local_player_id)
 	var join_data = {
 		"player_id": local_player_id,
 		"player_name": players[local_player_id].name
@@ -252,7 +328,8 @@ func _on_connected_to_server() -> void:
 	})
 
 func _on_connection_failed() -> void:
-	print("Failed to connect to server")
+	print("✗ Connection to server failed")
+	print("  Check that host is running and port ", DEFAULT_PORT, " is accessible")
 
 func _on_server_disconnected() -> void:
 	print("Disconnected from server")

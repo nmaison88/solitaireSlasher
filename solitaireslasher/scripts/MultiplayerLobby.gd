@@ -99,6 +99,7 @@ func _connect_signals() -> void:
 	if NetworkManager:
 		NetworkManager.player_connected.connect(_on_player_connected)
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
+		NetworkManager.game_started.connect(_on_network_game_started)
 
 func setup_as_host(player_name: String) -> void:
 	is_host = true
@@ -111,12 +112,20 @@ func setup_as_host(player_name: String) -> void:
 
 func setup_as_client(player_name: String) -> void:
 	is_host = false
+	host_label.text = "Join Multiplayer Game"
+	status_label.text = "Enter host IP address to connect"
+	# Keep IP input visible for joining
+	ip_input.visible = true
+	join_button.visible = true
+	start_button.visible = false
+	# Don't add player yet - wait until connected
+
+func _on_client_connected() -> void:
+	"""Called after successfully connecting to host"""
 	host_label.text = "Connected as client"
 	status_label.text = "Connected to host"
 	ip_input.visible = false
 	join_button.visible = false
-	start_button.visible = false
-	_add_player(NetworkManager.local_player_id, player_name + " (You)")
 
 func _get_local_ip() -> String:
 	var addresses = IP.get_local_addresses()
@@ -155,7 +164,8 @@ func _on_join_pressed() -> void:
 	var player_name = "Player" + str(randi() % 1000)
 	
 	if NetworkManager.join_game(host_ip, player_name):
-		setup_as_client(player_name)
+		_on_client_connected()
+		_add_player(NetworkManager.local_player_id, player_name + " (You)")
 	else:
 		status_label.text = "Failed to connect to " + host_ip
 
@@ -163,6 +173,11 @@ func _on_start_pressed() -> void:
 	if is_host:
 		NetworkManager.start_race()
 		game_started.emit()
+
+func _on_network_game_started() -> void:
+	"""Called when NetworkManager broadcasts game start (for clients)"""
+	print("Client received game start signal from host")
+	game_started.emit()
 
 func _on_leave_pressed() -> void:
 	NetworkManager.leave_game()
