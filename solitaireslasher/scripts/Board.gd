@@ -3,7 +3,7 @@ class_name Board
 
 const CARD_SIZE = Vector2(120, 180)  # Increased size for better readability
 const PILE_GAP_X = 22.0
-const TABLEAU_GAP_Y = 28.0
+const TABLEAU_GAP_Y = 45.0  # Increased spacing to show suit and rank on stacked cards
 const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
 
 signal stock_clicked

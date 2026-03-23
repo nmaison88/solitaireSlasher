@@ -14,8 +14,19 @@ signal game_started
 var is_host: bool = false
 var players: Dictionary = {}
 var client_player_name: String = ""
+var ip_helper: Node
+var local_ip_label: Label
+var public_ip_label: Label
+var port_forward_label: Label
 
 func _ready() -> void:
+	# Load and setup IP helper
+	var ip_helper_script = preload("res://scripts/IPHelper.gd")
+	ip_helper = ip_helper_script.new()
+	add_child(ip_helper)
+	ip_helper.public_ip_received.connect(_on_public_ip_received)
+	ip_helper.public_ip_failed.connect(_on_public_ip_failed)
+	
 	_create_ui()
 	_connect_signals()
 
@@ -59,8 +70,8 @@ func _create_ui() -> void:
 	ip_section.add_child(ip_label)
 	
 	ip_input = LineEdit.new()
-	ip_input.placeholder_text = "Enter host IP address (e.g., 192.168.1.100)"
-	ip_input.custom_minimum_size = Vector2(300, 0)
+	ip_input.placeholder_text = "Enter host IP (LAN: 192.168.x.x or Internet: public IP)"
+	ip_input.custom_minimum_size = Vector2(400, 0)
 	ip_section.add_child(ip_input)
 	
 	join_button = Button.new()
@@ -106,11 +117,41 @@ func _connect_signals() -> void:
 func setup_as_host(player_name: String) -> void:
 	is_host = true
 	host_label.text = "You are hosting"
-	status_label.text = "Your IP: " + _get_local_ip() + " | Port: 7000"
+	
+	# Create IP info section for host
+	var ip_info_container = VBoxContainer.new()
+	ip_info_container.name = "IPInfoContainer"
+	
+	# Local IP (for LAN play)
+	local_ip_label = Label.new()
+	local_ip_label.text = "Local IP (LAN): " + ip_helper.get_local_ip() + " | Port: 7777"
+	local_ip_label.add_theme_font_size_override("font_size", 16)
+	ip_info_container.add_child(local_ip_label)
+	
+	# Public IP (for internet play) - will be fetched
+	public_ip_label = Label.new()
+	public_ip_label.text = "Public IP (Internet): Fetching..."
+	public_ip_label.add_theme_font_size_override("font_size", 16)
+	ip_info_container.add_child(public_ip_label)
+	
+	# Port forwarding instructions
+	port_forward_label = Label.new()
+	port_forward_label.text = "For internet play: Forward port 7777 (TCP/UDP) on your router"
+	port_forward_label.add_theme_font_size_override("font_size", 14)
+	port_forward_label.modulate = Color(1.0, 0.8, 0.0)  # Yellow warning color
+	ip_info_container.add_child(port_forward_label)
+	
+	# Add to status area (replace status_label)
+	status_label.get_parent().add_child(ip_info_container)
+	status_label.visible = false
+	
 	ip_input.visible = false
 	join_button.visible = false
 	start_button.visible = true
 	_add_player(NetworkManager.local_player_id, player_name + " (You - Host)")
+	
+	# Fetch public IP
+	ip_helper.get_public_ip()
 
 func setup_as_client(player_name: String) -> void:
 	is_host = false
@@ -129,6 +170,18 @@ func _on_client_connected() -> void:
 	status_label.text = "Connected to host"
 	ip_input.visible = false
 	join_button.visible = false
+
+func _on_public_ip_received(ip: String) -> void:
+	"""Called when public IP is successfully fetched"""
+	if public_ip_label:
+		public_ip_label.text = "Public IP (Internet): " + ip + " | Port: 7777"
+		print("Public IP fetched: ", ip)
+
+func _on_public_ip_failed(error: String) -> void:
+	"""Called when public IP fetch fails"""
+	if public_ip_label:
+		public_ip_label.text = "Public IP (Internet): Failed to fetch (" + error + ")"
+		print("Failed to fetch public IP: ", error)
 
 func _get_local_ip() -> String:
 	var addresses = IP.get_local_addresses()

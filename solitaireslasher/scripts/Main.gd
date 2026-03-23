@@ -25,7 +25,8 @@ func _ready() -> void:
 	_board = get_node("Board")
 	
 	# Add safe area margin for iPhone notch - move cards below top buttons
-	_board.position.y = 180
+	# Buttons are 200x180 starting at y=110, ending at y=290, add 20px margin
+	_board.position.y = 310
 	
 	# Hide game elements on startup
 	_board.visible = false
@@ -194,11 +195,10 @@ func _show_main_menu() -> void:
 		_menu_container.visible = true
 	_board.visible = false
 	_status_label.visible = false
-	
-	# Hide game control buttons
+	# Hide and remove game buttons when showing menu
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
-			child.visible = false
+			child.queue_free()  # Remove buttons instead of just hiding them
 
 func _hide_main_menu() -> void:
 	if _menu_container:
@@ -264,8 +264,8 @@ func _show_new_game_button():
 	# In multiplayer mode, this becomes a forfeit button
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.position = Vector2(930, 110)  # Moved down 100px for notch
-	new_game_button.size = Vector2(70, 70)  # Larger button
+	new_game_button.position = Vector2(812, 110)  # Moved down 100px for notch, adjusted for larger size
+	new_game_button.size = Vector2(200, 180)  # Match undo button size
 	new_game_button.flat = true  # Remove button background
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
@@ -280,7 +280,7 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 50
+		forfeit_icon.icon_size = 100  # Match undo icon size
 		forfeit_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -294,7 +294,7 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 50
+		retry_icon.icon_size = 100  # Match undo icon size
 		retry_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -302,11 +302,11 @@ func _show_new_game_button():
 	
 	add_child(new_game_button)
 	
-	# Undo button (bottom center) - FontAwesome icon with label below
+	# Undo button (bottom quarter of screen) - FontAwesome icon with label below
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	undo_button.position = Vector2(462, 680)  # Centered, moved up slightly for taller button
-	undo_button.size = Vector2(100, 90)  # Larger button to accommodate vertical layout
+	undo_button.position = Vector2(412, 1050)  # Bottom 4th of screen (1366 * 0.75 = 1025), centered
+	undo_button.size = Vector2(200, 180)  # 2x larger (was 100x90)
 	undo_button.flat = true  # Remove button background
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
@@ -321,21 +321,21 @@ func _show_new_game_button():
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 50  # Larger icon
+	undo_icon.icon_size = 100  # 2x larger (was 50)
 	undo_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_icon)
 	
 	# Add small spacer
 	var undo_spacer = Control.new()
-	undo_spacer.custom_minimum_size = Vector2(0, 4)
+	undo_spacer.custom_minimum_size = Vector2(0, 8)  # 2x larger (was 4)
 	undo_vbox.add_child(undo_spacer)
 	
 	# Add text label below icon
 	var undo_label = Label.new()
 	undo_label.text = "Undo"
 	undo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	undo_label.add_theme_font_size_override("font_size", 16)
+	undo_label.add_theme_font_size_override("font_size", 32)  # 2x larger (was 16)
 	undo_label.modulate = Color(1.0, 0.9, 0.0)  # Yellow color to match icon
 	undo_vbox.add_child(undo_label)
 	
@@ -349,7 +349,7 @@ func _show_new_game_button():
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
 	menu_button.position = Vector2(10, 110)  # Moved down 100px for notch
-	menu_button.size = Vector2(70, 70)  # Larger button
+	menu_button.size = Vector2(200, 180)  # Match undo button size
 	menu_button.flat = true  # Remove button background
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
@@ -358,7 +358,7 @@ func _show_new_game_button():
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "bars"  # Hamburger menu icon
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 50
+	menu_icon.icon_size = 100  # Match undo icon size
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
