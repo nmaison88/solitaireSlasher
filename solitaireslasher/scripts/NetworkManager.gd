@@ -5,6 +5,7 @@ signal player_disconnected(player_id: int)
 signal game_started
 signal race_completed(player_id: int, time: float)
 signal game_state_received(game_state: Dictionary)
+signal game_settings_received(game_settings: Dictionary)
 
 const DEFAULT_PORT = 7777  # Changed from 7000 to avoid conflicts with other applications
 const MAX_PLAYERS = 8
@@ -262,6 +263,10 @@ func _handle_player_leave(data: Dictionary) -> void:
 	var player_id = data.player_id
 	players.erase(player_id)
 	player_disconnected.emit(player_id)
+
+func _handle_game_settings(data: Dictionary) -> void:
+	print("Received game settings from host: ", data)
+	game_settings_received.emit(data)
 
 func _handle_game_start(data: Dictionary) -> void:
 	game_session_active = true

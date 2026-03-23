@@ -50,6 +50,9 @@ func _ready() -> void:
 	_sudoku_board.visible = false
 	add_child(_sudoku_board)
 	
+	# Connect to NetworkManager signals for multiplayer game settings
+	NetworkManager.game_settings_received.connect(_on_game_settings_received)
+	
 	# Hide game elements on startup
 	_board.visible = false
 	_sudoku_board.visible = false
@@ -747,6 +750,15 @@ func _on_lobby_closed() -> void:
 	
 	# Show main menu again
 	_show_main_menu()
+
+func _on_game_settings_received(game_settings: Dictionary) -> void:
+	"""Called when client receives game settings from host"""
+	if game_settings.has("game_type"):
+		_current_game_type = game_settings.game_type
+		print("Client received game type: ", _current_game_type)
+	if game_settings.has("difficulty"):
+		_current_difficulty = game_settings.difficulty
+		print("Client received difficulty: ", _current_difficulty)
 
 func _on_multiplayer_game_started() -> void:
 	# Hide lobby

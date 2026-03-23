@@ -77,7 +77,11 @@ func _on_race_started() -> void:
 		add_child(local_game)
 	
 	local_game.new_game(randi())
-	local_game.game_completed.connect(_on_local_game_completed)
+	
+	# Only connect if not already connected
+	if not local_game.game_completed.is_connected(_on_local_game_completed):
+		local_game.game_completed.connect(_on_local_game_completed)
+	
 	race_started.emit()
 
 func _on_local_game_completed() -> void:
