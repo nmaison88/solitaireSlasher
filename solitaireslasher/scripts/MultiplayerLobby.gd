@@ -12,6 +12,8 @@ signal game_started
 @onready var host_label: Label
 
 var is_host: bool = false
+var players: Dictionary = {}
+var client_player_name: String = ""
 
 func _ready() -> void:
 	_create_ui()
@@ -112,6 +114,7 @@ func setup_as_host(player_name: String) -> void:
 
 func setup_as_client(player_name: String) -> void:
 	is_host = false
+	client_player_name = player_name  # Store the player name for later use
 	host_label.text = "Join Multiplayer Game"
 	status_label.text = "Enter host IP address to connect"
 	# Keep IP input visible for joining
@@ -161,7 +164,11 @@ func _on_join_pressed() -> void:
 		return
 	
 	status_label.text = "Connecting to " + host_ip + "..."
-	var player_name = "Player" + str(randi() % 1000)
+	
+	# Use the stored player name instead of generating a random one
+	var player_name = client_player_name
+	if player_name.is_empty():
+		player_name = "Player" + str(randi() % 1000)
 	
 	if NetworkManager.join_game(host_ip, player_name):
 		_on_client_connected()

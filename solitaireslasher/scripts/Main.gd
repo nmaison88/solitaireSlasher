@@ -15,11 +15,17 @@ var _player_status_label: Label
 var _ready_button: Button
 var _last_standing_notification: Panel
 var _waiting_for_ready: bool = false  # Flag to prevent status updates during ready phase
+var _player_name_input: LineEdit
+var _difficulty_option: OptionButton
+var _current_difficulty: String = "Medium"
 
 func _ready() -> void:
 	_status_label = get_node("StatusLabel") as Label
 	_game = get_node("Game")
 	_board = get_node("Board")
+	
+	# Add safe area margin for iPhone notch - move cards below top buttons
+	_board.position.y = 180
 	
 	# Hide game elements on startup
 	_board.visible = false
@@ -38,58 +44,150 @@ func _setup_main_menu() -> void:
 	_menu_container.anchor_right = 0.5
 	_menu_container.anchor_bottom = 0.5
 	_menu_container.offset_left = -100
-	_menu_container.offset_top = -150
+	_menu_container.offset_top = -200  # Increased for difficulty dropdown
 	_menu_container.offset_right = 100
-	_menu_container.offset_bottom = 150
-	_menu_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_menu_container.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_menu_container.offset_bottom = 200  # Increased for difficulty dropdown
+	_menu_container.add_theme_constant_override("separation", 10)
 	add_child(_menu_container)
 	
-	# Add title
+	# Title
 	var title = Label.new()
 	title.text = "Solitaire Slasher"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
 	_menu_container.add_child(title)
 	
-	# Add spacing
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 40)
-	_menu_container.add_child(spacer1)
+	# Player name input
+	var name_label = Label.new()
+	name_label.text = "Your Name:"
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_menu_container.add_child(name_label)
 	
-	# Create menu buttons
-	var single_button = Button.new()
-	single_button.name = "menu_single"
-	single_button.text = "Single Player"
-	single_button.custom_minimum_size = Vector2(200, 50)
-	single_button.pressed.connect(_on_single_player)
-	_menu_container.add_child(single_button)
+	_player_name_input = LineEdit.new()
+	_player_name_input.placeholder_text = "Enter your name"
+	_player_name_input.text = PlayerData.get_player_name()  # Load saved name
+	_player_name_input.custom_minimum_size = Vector2(200, 30)
+	_player_name_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_menu_container.add_child(_player_name_input)
 	
+	# Difficulty selection
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty:"
+	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_menu_container.add_child(difficulty_label)
+	
+	_difficulty_option = OptionButton.new()
+	_difficulty_option.add_item("Easy (Draw 1)")
+	_difficulty_option.add_item("Medium (Draw 3)")
+	_difficulty_option.add_item("Hard (Draw 3, Limited)")
+	_difficulty_option.select(1)  # Default to Medium
+	_difficulty_option.custom_minimum_size = Vector2(200, 30)
+	_difficulty_option.item_selected.connect(_on_difficulty_changed)
+	_menu_container.add_child(_difficulty_option)
+	
+	# Single Player button
+	var single_player_button = Button.new()
+	single_player_button.custom_minimum_size = Vector2(200, 40)
+	single_player_button.pressed.connect(_on_single_player)
+	
+	var sp_hbox = HBoxContainer.new()
+	sp_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sp_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	single_player_button.add_child(sp_hbox)
+	
+	var sp_icon = FontAwesome.new()
+	sp_icon.icon_name = "user"
+	sp_icon.icon_type = "solid"
+	sp_icon.icon_size = 20
+	sp_hbox.add_child(sp_icon)
+	
+	var sp_spacer = Control.new()
+	sp_spacer.custom_minimum_size = Vector2(10, 0)
+	sp_hbox.add_child(sp_spacer)
+	
+	var sp_label = Label.new()
+	sp_label.text = "Single Player"
+	sp_hbox.add_child(sp_label)
+	
+	_menu_container.add_child(single_player_button)
+	
+	# Host Multiplayer button
 	var host_button = Button.new()
-	host_button.name = "menu_host"
-	host_button.text = "Host Multiplayer"
-	host_button.custom_minimum_size = Vector2(200, 50)
+	host_button.custom_minimum_size = Vector2(200, 40)
 	host_button.pressed.connect(_on_host_game)
+	
+	var host_hbox = HBoxContainer.new()
+	host_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	host_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	host_button.add_child(host_hbox)
+	
+	var host_icon = FontAwesome.new()
+	host_icon.icon_name = "users"
+	host_icon.icon_type = "solid"
+	host_icon.icon_size = 20
+	host_hbox.add_child(host_icon)
+	
+	var host_spacer = Control.new()
+	host_spacer.custom_minimum_size = Vector2(10, 0)
+	host_hbox.add_child(host_spacer)
+	
+	var host_label = Label.new()
+	host_label.text = "Host Multiplayer"
+	host_hbox.add_child(host_label)
+	
 	_menu_container.add_child(host_button)
 	
+	# Join Multiplayer button
 	var join_button = Button.new()
-	join_button.name = "menu_join"
-	join_button.text = "Join Multiplayer"
-	join_button.custom_minimum_size = Vector2(200, 50)
+	join_button.custom_minimum_size = Vector2(200, 40)
 	join_button.pressed.connect(_on_join_game)
+	
+	var join_hbox = HBoxContainer.new()
+	join_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	join_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	join_button.add_child(join_hbox)
+	
+	var join_icon = FontAwesome.new()
+	join_icon.icon_name = "user-plus"
+	join_icon.icon_type = "solid"
+	join_icon.icon_size = 20
+	join_hbox.add_child(join_icon)
+	
+	var join_spacer = Control.new()
+	join_spacer.custom_minimum_size = Vector2(10, 0)
+	join_hbox.add_child(join_spacer)
+	
+	var join_label = Label.new()
+	join_label.text = "Join Multiplayer"
+	join_hbox.add_child(join_label)
+	
 	_menu_container.add_child(join_button)
 
 func _on_host_game() -> void:
-	var player_name = "Player" + str(randi() % 1000)
+	var player_name = _player_name_input.text.strip_edges()
+	if player_name.is_empty():
+		player_name = "Player" + str(randi() % 1000)
+	
+	# Save player name
+	PlayerData.set_player_name(player_name)
+	
 	if NetworkManager.host_game(player_name):
-		print("Hosting multiplayer game")
+		print("Hosting multiplayer game as: ", player_name)
 		_show_multiplayer_lobby(true, player_name)
 	else:
 		print("Failed to host game")
 
 func _on_join_game() -> void:
+	var player_name = _player_name_input.text.strip_edges()
+	if player_name.is_empty():
+		player_name = "Player" + str(randi() % 1000)
+	
+	# Save player name
+	PlayerData.set_player_name(player_name)
+	
 	# Show lobby with manual IP entry
-	_show_multiplayer_lobby(false, "Player" + str(randi() % 1000))
+	print("Joining multiplayer game as: ", player_name)
+	_show_multiplayer_lobby(false, player_name)
 
 func _show_main_menu() -> void:
 	if _menu_container:
@@ -108,9 +206,21 @@ func _hide_main_menu() -> void:
 	_board.visible = true
 	_status_label.visible = true
 
+func _on_difficulty_changed(index: int) -> void:
+	"""Handle difficulty selection change"""
+	match index:
+		0:
+			_current_difficulty = "Easy"
+		1:
+			_current_difficulty = "Medium"
+		2:
+			_current_difficulty = "Hard"
+	print("Difficulty changed to: ", _current_difficulty)
+
 func _on_single_player() -> void:
-	_hide_main_menu()
+	MultiplayerGameManager.is_multiplayer = false
 	MultiplayerGameManager.start_local_game()
+	_hide_main_menu()  # Hide menu and show board
 	_setup_single_player_game()
 
 func _start_multiplayer_game() -> void:
@@ -125,6 +235,8 @@ func _setup_single_player_game() -> void:
 	if local_game and is_instance_valid(local_game):
 		print("Got local game, setting up board")
 		_game = local_game
+		# Set difficulty before rendering
+		_game.set_difficulty(_current_difficulty)
 		_board.set_game(_game)
 		_board.render()
 		# Hide menu buttons to avoid interfering with game
@@ -152,7 +264,7 @@ func _show_new_game_button():
 	# In multiplayer mode, this becomes a forfeit button
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.position = Vector2(950, 10)
+	new_game_button.position = Vector2(950, 110)  # Moved down 100px for notch
 	new_game_button.size = Vector2(50, 50)
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
@@ -167,7 +279,7 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 32
+		forfeit_icon.icon_size = 40
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(forfeit_icon)
@@ -180,7 +292,7 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 32
+		retry_icon.icon_size = 40
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(retry_icon)
@@ -199,7 +311,7 @@ func _show_new_game_button():
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"  # or "arrow-rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 32
+	undo_icon.icon_size = 40
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	undo_button.add_child(undo_icon)
@@ -213,7 +325,7 @@ func _show_new_game_button():
 	# Menu button (top left) - FontAwesome icon
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
-	menu_button.position = Vector2(10, 10)
+	menu_button.position = Vector2(10, 110)  # Moved down 100px for notch
 	menu_button.size = Vector2(50, 50)
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
@@ -222,7 +334,7 @@ func _show_new_game_button():
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "bars"  # Hamburger menu icon
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 32
+	menu_icon.icon_size = 40
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
@@ -234,6 +346,8 @@ func _setup_multiplayer_game() -> void:
 	var local_game = MultiplayerGameManager.get_local_game()
 	if local_game and is_instance_valid(local_game):
 		_game = local_game
+		# Set difficulty before rendering
+		_game.set_difficulty(_current_difficulty)
 		_board.set_game(_game)
 		_board.set_multiplayer_manager(MultiplayerGameManager)
 		_board.render()

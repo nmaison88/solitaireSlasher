@@ -20,12 +20,15 @@ config/icon="res://icon.svg"
 NetworkManager="*res://scripts/NetworkManager.gd"
 MultiplayerGameManager="*res://scripts/MultiplayerGameManager.gd"
 SoundManager="*res://scripts/SoundManager.gd"
+PlayerData="*res://scripts/PlayerData.gd"
 
 [display]
 
 window/size/viewport_width=1024
-window/size/viewport_height=768
-window/stretch/mode="canvas_items"
+window/size/viewport_height=1366
+window/stretch/mode="viewport"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [physics]
 
@@ -35,4 +38,5 @@ window/stretch/mode="canvas_items"
 
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.180075, 0.532684, 0.120833, 1)

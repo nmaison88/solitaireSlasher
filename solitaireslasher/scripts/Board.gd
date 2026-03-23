@@ -15,6 +15,7 @@ var _stock_count_label: Label
 var _dragged_card_view: CardView
 var _dragged_cards: Array = []
 var _drop_zones: Dictionary = {}
+var _animation_duration: float = 0.25  # Duration for card animations
 
 # Reference to our project's Card class to avoid conflicts with Card Framework
 const SolitaireCard = preload("res://scripts/Card.gd")
@@ -455,17 +456,31 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 				var card = _dragged_cards[0]
 				if _try_move_to_foundation(card, foundation_index):
 					moved = true
+					# Animate card to foundation position
+					_animate_card_to_zone(card_view, drop_zone)
 		elif zone_name.begins_with("tableau_"):
 			var tableau_index = zone_name.split("_")[1].to_int()
 			if _try_move_to_tableau(tableau_index):
 				moved = true
+				# Animate card to tableau position
+				_animate_card_to_zone(card_view, drop_zone)
 	
 	if not moved:
+		# Animate card back to original position
 		card_view.reset_position()
+	else:
+		# Wait for animation to complete before re-rendering
+		await get_tree().create_timer(_animation_duration).timeout
 	
 	_dragged_card_view = null
 	_dragged_cards.clear()
 	render()
+
+func _animate_card_to_zone(card_view: CardView, drop_zone: ColorRect) -> void:
+	"""Animate card smoothly to drop zone position"""
+	if card_view and drop_zone:
+		var target_pos = drop_zone.global_position
+		card_view.animate_to_position(target_pos, _animation_duration)
 
 func _get_drop_zone_at_position(pos: Vector2) -> ColorRect:
 	for zone in _drop_zones.values():

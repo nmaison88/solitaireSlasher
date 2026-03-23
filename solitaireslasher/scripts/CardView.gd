@@ -13,6 +13,7 @@ var is_dragging: bool = false
 var drag_offset: Vector2
 var original_position: Vector2
 var z_index_when_dragging: int = 100
+var _tween: Tween  # For smooth animations
 
 func set_card(value: SolitaireCard) -> void:
 	card = value
@@ -97,8 +98,26 @@ func _on_mouse_exited() -> void:
 		card.is_mouse_entered = false
 
 func reset_position() -> void:
-	global_position = original_position
+	animate_to_position(original_position)
 	z_index = 0
+
+func animate_to_position(target_pos: Vector2, duration: float = 0.2) -> void:
+	"""Smoothly animate card to target position"""
+	# Cancel any existing tween
+	if _tween:
+		_tween.kill()
+	
+	# Create new tween
+	_tween = create_tween()
+	_tween.set_ease(Tween.EASE_OUT)
+	_tween.set_trans(Tween.TRANS_CUBIC)
+	
+	# Animate position
+	_tween.tween_property(self, "global_position", target_pos, duration)
+
+func move_to_position_instant(target_pos: Vector2) -> void:
+	"""Move card instantly without animation (for initial setup)"""
+	global_position = target_pos
 
 func get_drag_data() -> SolitaireCard:
 	return card if is_dragging else null

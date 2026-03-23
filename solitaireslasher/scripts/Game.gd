@@ -14,9 +14,29 @@ var _moves_count: int = 0
 var _start_time: float = 0.0
 var _is_completed: bool = false
 
+# Difficulty settings
+var difficulty: String = "Medium"  # Easy, Medium, Hard
+var draw_count: int = 3  # Cards to draw from stock
+var max_stock_passes: int = -1  # -1 = unlimited, else limited passes
+
 # Undo state tracking
 var _last_move_state: Dictionary = {}
 var _can_undo: bool = false
+
+func set_difficulty(diff: String) -> void:
+	"""Set game difficulty"""
+	difficulty = diff
+	match diff:
+		"Easy":
+			draw_count = 1
+			max_stock_passes = -1  # Unlimited
+		"Medium":
+			draw_count = 3
+			max_stock_passes = -1  # Unlimited
+		"Hard":
+			draw_count = 3
+			max_stock_passes = 3  # Limited to 3 passes
+	print("Difficulty set to: ", difficulty, " (Draw: ", draw_count, ", Passes: ", max_stock_passes, ")")
 
 func new_game(seed: int = -1) -> void:
 	_rng.randomize()
@@ -64,9 +84,9 @@ func draw_from_stock_3() -> void:
 		if stock.is_empty():
 			return
 
-	# Draw up to 3 cards from stock to waste
-	var draw_count: int = min(3, stock.size())
-	for _i in range(draw_count):
+	# Draw cards from stock to waste (respects difficulty setting)
+	var cards_to_draw: int = min(draw_count, stock.size())
+	for _i in range(cards_to_draw):
 		var c = stock.pop_back()
 		c.face_up = true
 		waste.append(c)
@@ -207,8 +227,13 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 	if not can_place_on_tableau(first_moving_card, to_index):
 		return false
 	
+	# Move cards in correct order (not reversed)
+	for card in moving_cards:
+		to_pile.append(card)
+	
+	# Remove the moved cards from source pile
 	for i in range(card_count):
-		to_pile.append(from_pile.pop_back())
+		from_pile.pop_back()
 	
 	if not from_pile.is_empty():
 		from_pile[-1].face_up = true
