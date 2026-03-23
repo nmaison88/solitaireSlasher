@@ -266,6 +266,7 @@ func _show_new_game_button():
 	new_game_button.name = "new_game"
 	new_game_button.position = Vector2(950, 110)  # Moved down 100px for notch
 	new_game_button.size = Vector2(50, 50)
+	new_game_button.flat = true  # Remove button background
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
 	print("Creating game button - is_multiplayer: ", is_multiplayer_mode)
@@ -280,6 +281,7 @@ func _show_new_game_button():
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
 		forfeit_icon.icon_size = 40
+		forfeit_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(forfeit_icon)
@@ -293,6 +295,7 @@ func _show_new_game_button():
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
 		retry_icon.icon_size = 40
+		retry_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(retry_icon)
@@ -304,6 +307,7 @@ func _show_new_game_button():
 	undo_button.name = "undo_button"
 	undo_button.position = Vector2(487, 700)  # Bottom center (1024/2 - 25)
 	undo_button.size = Vector2(50, 50)
+	undo_button.flat = true  # Remove button background
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
 	
@@ -312,6 +316,7 @@ func _show_new_game_button():
 	undo_icon.icon_name = "rotate-left"  # or "arrow-rotate-left"
 	undo_icon.icon_type = "solid"
 	undo_icon.icon_size = 40
+	undo_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	undo_button.add_child(undo_icon)
@@ -327,6 +332,7 @@ func _show_new_game_button():
 	menu_button.name = "menu_button"
 	menu_button.position = Vector2(10, 110)  # Moved down 100px for notch
 	menu_button.size = Vector2(50, 50)
+	menu_button.flat = true  # Remove button background
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
 	
