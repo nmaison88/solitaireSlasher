@@ -18,6 +18,10 @@ var ip_helper: Node
 var local_ip_label: Label
 var public_ip_label: Label
 var port_forward_label: Label
+var game_type_option: OptionButton
+var difficulty_option: OptionButton
+var selected_game_type: String = "Solitaire"
+var selected_difficulty: String = "Medium"
 
 func _ready() -> void:
 	# Load and setup IP helper
@@ -85,6 +89,53 @@ func _create_ui() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	ip_section.add_child(join_button)
 	
+	# Game settings (only visible for host)
+	var settings_label = Label.new()
+	settings_label.name = "SettingsLabel"
+	settings_label.text = "Game Settings:"
+	settings_label.add_theme_font_size_override("font_size", 20)
+	settings_label.visible = false
+	vbox.add_child(settings_label)
+	
+	# Game type selection
+	var game_type_container = HBoxContainer.new()
+	game_type_container.name = "GameTypeContainer"
+	game_type_container.visible = false
+	vbox.add_child(game_type_container)
+	
+	var game_type_label = Label.new()
+	game_type_label.text = "Game Type:"
+	game_type_label.add_theme_font_size_override("font_size", 18)
+	game_type_container.add_child(game_type_label)
+	
+	game_type_option = OptionButton.new()
+	game_type_option.add_item("Solitaire")
+	game_type_option.add_item("Sudoku")
+	game_type_option.select(0)
+	game_type_option.custom_minimum_size = Vector2(200, 40)
+	game_type_option.item_selected.connect(_on_game_type_changed)
+	game_type_container.add_child(game_type_option)
+	
+	# Difficulty selection
+	var difficulty_container = HBoxContainer.new()
+	difficulty_container.name = "DifficultyContainer"
+	difficulty_container.visible = false
+	vbox.add_child(difficulty_container)
+	
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty:"
+	difficulty_label.add_theme_font_size_override("font_size", 18)
+	difficulty_container.add_child(difficulty_label)
+	
+	difficulty_option = OptionButton.new()
+	difficulty_option.add_item("Easy")
+	difficulty_option.add_item("Medium")
+	difficulty_option.add_item("Hard")
+	difficulty_option.select(1)
+	difficulty_option.custom_minimum_size = Vector2(200, 40)
+	difficulty_option.item_selected.connect(_on_difficulty_changed)
+	difficulty_container.add_child(difficulty_option)
+	
 	# Player list
 	var players_label = Label.new()
 	players_label.text = "Players:"
@@ -123,6 +174,19 @@ func _connect_signals() -> void:
 func setup_as_host(player_name: String) -> void:
 	is_host = true
 	host_label.text = "You are hosting"
+	
+	# Show game settings for host
+	var settings_label = get_node_or_null("ScrollOuter/VBoxContainer/SettingsLabel")
+	if settings_label:
+		settings_label.visible = true
+	
+	var game_type_container = get_node_or_null("ScrollOuter/VBoxContainer/GameTypeContainer")
+	if game_type_container:
+		game_type_container.visible = true
+	
+	var difficulty_container = get_node_or_null("ScrollOuter/VBoxContainer/DifficultyContainer")
+	if difficulty_container:
+		difficulty_container.visible = true
 	
 	# Create IP info section for host
 	var ip_info_container = VBoxContainer.new()
@@ -244,6 +308,26 @@ func _on_network_game_started() -> void:
 	"""Called when NetworkManager broadcasts game start (for clients)"""
 	print("Client received game start signal from host")
 	game_started.emit()
+
+func _on_game_type_changed(index: int) -> void:
+	"""Handle game type selection change"""
+	match index:
+		0:
+			selected_game_type = "Solitaire"
+		1:
+			selected_game_type = "Sudoku"
+	print("Multiplayer game type changed to: ", selected_game_type)
+
+func _on_difficulty_changed(index: int) -> void:
+	"""Handle difficulty selection change"""
+	match index:
+		0:
+			selected_difficulty = "Easy"
+		1:
+			selected_difficulty = "Medium"
+		2:
+			selected_difficulty = "Hard"
+	print("Multiplayer difficulty changed to: ", selected_difficulty)
 
 func _on_leave_pressed() -> void:
 	NetworkManager.leave_game()

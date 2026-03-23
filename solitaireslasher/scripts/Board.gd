@@ -147,10 +147,21 @@ func _on_test_button_pressed():
 	print("TEST BUTTON PRESSED! Mouse input works!")
 
 func _draw_slot(pos: Vector2) -> void:
-	var bg = ColorRect.new()
-	bg.color = Color(0.0, 0.0, 0.0, 0.10)
-	bg.position = pos
-	bg.size = CARD_SIZE
+	# Create white border for empty card slots
+	var border = Panel.new()
+	border.position = pos
+	border.size = CARD_SIZE
+	
+	var stylebox = StyleBoxFlat.new()
+	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
+	stylebox.border_color = Color(1.0, 1.0, 1.0)  # White border
+	stylebox.border_width_left = 2
+	stylebox.border_width_right = 2
+	stylebox.border_width_top = 2
+	stylebox.border_width_bottom = 2
+	border.add_theme_stylebox_override("panel", stylebox)
+	
+	var bg = border
 	add_child(bg)
 
 func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
@@ -159,25 +170,31 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	var suit_names = ["club", "diamond", "heart", "spade"]
 	var placeholder_path = "res://addons/card-framework/freecell/assets/images/spots/foundation_%s_spot.png" % suit_names[suit_index]
 	
+	# Create white border first
+	var border = Panel.new()
+	border.position = pos
+	border.size = CARD_SIZE
+	
+	var stylebox = StyleBoxFlat.new()
+	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
+	stylebox.border_color = Color(1.0, 1.0, 1.0)  # White border
+	stylebox.border_width_left = 2
+	stylebox.border_width_right = 2
+	stylebox.border_width_top = 2
+	stylebox.border_width_bottom = 2
+	border.add_theme_stylebox_override("panel", stylebox)
+	add_child(border)
+	
 	# Create a TextureRect to display the placeholder image
 	var placeholder = TextureRect.new()
 	placeholder.position = pos
-	placeholder.custom_minimum_size = CARD_SIZE
-	placeholder.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	placeholder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	placeholder.size = CARD_SIZE
+	placeholder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	
-	if ResourceLoader.exists(placeholder_path):
+	if FileAccess.file_exists(placeholder_path):
 		placeholder.texture = load(placeholder_path)
-	else:
-		# Fallback to dark background if placeholder not found
-		var bg = ColorRect.new()
-		bg.color = Color(0.0, 0.0, 0.0, 0.25)
-		bg.position = pos
-		bg.size = CARD_SIZE
-		add_child(bg)
-		return
-	
-	add_child(placeholder)
+		add_child(placeholder)
+	# No fallback needed - white border already added
 
 func _draw_stock(pos: Vector2) -> void:
 	# Always create a clickable area for the stock pile, even when empty

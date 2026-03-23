@@ -20,6 +20,8 @@ var race_start_time: float = 0.0
 var local_player_finished: bool = false
 var player_statuses: Dictionary = {}  # player_id -> PlayerStatus
 var players_ready: Dictionary = {}  # player_id -> bool (for next round)
+var current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
+var sudoku_puzzle_state: Dictionary = {}  # Shared Sudoku puzzle for all players
 
 func _ready() -> void:
 	# NetworkManager is an autoload singleton, don't create a new instance
@@ -320,6 +322,22 @@ func _start_new_round() -> void:
 	local_game.game_completed.connect(_on_local_game_completed)
 	
 	print("New round started!")
+
+func set_game_type(game_type: String) -> void:
+	"""Set the current game type for multiplayer session"""
+	current_game_type = game_type
+	print("MultiplayerGameManager: Game type set to ", game_type)
+
+func get_game_type() -> String:
+	return current_game_type
+
+func set_sudoku_puzzle(puzzle_state: Dictionary) -> void:
+	"""Set the Sudoku puzzle state (host generates, clients receive)"""
+	sudoku_puzzle_state = puzzle_state
+	print("MultiplayerGameManager: Sudoku puzzle state set")
+
+func get_sudoku_puzzle() -> Dictionary:
+	return sudoku_puzzle_state
 
 func get_local_player_id() -> int:
 	return network_manager.local_player_id if is_multiplayer else 1

@@ -28,7 +28,8 @@ enum MessageType {
 	RACE_COMPLETE,
 	SESSION_INFO,
 	PLAYER_STATUS,
-	PLAYER_READY
+	PLAYER_READY,
+	GAME_SETTINGS
 }
 
 func _ready() -> void:
@@ -171,11 +172,16 @@ func discover_games() -> Array:
 	udp_peer.close()
 	return discovered_games
 
-func start_race() -> void:
+func start_race(game_settings: Dictionary = {}) -> void:
 	if not is_host:
 		return
 	
 	game_session_active = true
+	
+	# Send game settings first if provided
+	if not game_settings.is_empty():
+		_broadcast_message(MessageType.GAME_SETTINGS, game_settings)
+	
 	_broadcast_message(MessageType.GAME_START, {})
 	game_started.emit()
 
@@ -226,6 +232,8 @@ func receive_message(message: Dictionary) -> void:
 			_handle_player_join(data)
 		MessageType.PLAYER_LEAVE:
 			_handle_player_leave(data)
+		MessageType.GAME_SETTINGS:
+			_handle_game_settings(data)
 		MessageType.GAME_START:
 			_handle_game_start(data)
 		MessageType.GAME_STATE:

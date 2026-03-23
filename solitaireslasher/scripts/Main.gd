@@ -3,6 +3,8 @@ extends Control
 var _status_label: Label
 var _game: Node
 var _board: Node
+var _sudoku_game: SudokuGame
+var _sudoku_board: SudokuBoard
 
 var _multiplayer_ui: Control
 var _lobby_ui: Control
@@ -18,18 +20,39 @@ var _waiting_for_ready: bool = false  # Flag to prevent status updates during re
 var _player_name_input: LineEdit
 var _difficulty_option: OptionButton
 var _current_difficulty: String = "Medium"
+var _game_type_option: OptionButton
+var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
 func _ready() -> void:
 	_status_label = get_node("StatusLabel") as Label
 	_game = get_node("Game")
 	_board = get_node("Board")
 	
+	# Add blue background for both Solitaire and Sudoku
+	var game_background = ColorRect.new()
+	game_background.name = "GameBackground"
+	game_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	game_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	game_background.z_index = -1  # Behind everything
+	game_background.visible = false
+	add_child(game_background)
+	
 	# Add safe area margin for iPhone notch - move cards below top buttons
 	# Buttons are 200x180 starting at y=110, ending at y=290, add 20px margin
 	_board.position.y = 310
 	
+	# Create Sudoku game and board
+	_sudoku_game = SudokuGame.new()
+	add_child(_sudoku_game)
+	
+	_sudoku_board = SudokuBoard.new()
+	_sudoku_board.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_sudoku_board.visible = false
+	add_child(_sudoku_board)
+	
 	# Hide game elements on startup
 	_board.visible = false
+	_sudoku_board.visible = false
 	_status_label.visible = false
 	
 	_setup_main_menu()
@@ -45,9 +68,9 @@ func _setup_main_menu() -> void:
 	_menu_container.anchor_right = 0.5
 	_menu_container.anchor_bottom = 0.5
 	_menu_container.offset_left = -200  # 2x larger (was -100)
-	_menu_container.offset_top = -400  # 2x larger (was -200)
+	_menu_container.offset_top = -500  # Increased for game type dropdown
 	_menu_container.offset_right = 200  # 2x larger (was 100)
-	_menu_container.offset_bottom = 400  # 2x larger (was 200)
+	_menu_container.offset_bottom = 500  # Increased for game type dropdown
 	_menu_container.add_theme_constant_override("separation", 20)  # 2x larger (was 10)
 	add_child(_menu_container)
 	
@@ -73,6 +96,28 @@ func _setup_main_menu() -> void:
 	_player_name_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_menu_container.add_child(_player_name_input)
 	
+	# Game type selection
+	var game_type_label = Label.new()
+	game_type_label.text = "Game Type:"
+	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	game_type_label.add_theme_font_size_override("font_size", 32)
+	_menu_container.add_child(game_type_label)
+	
+	_game_type_option = OptionButton.new()
+	_game_type_option.add_item("Solitaire")
+	_game_type_option.add_item("Sudoku")
+	_game_type_option.select(0)  # Default to Solitaire
+	_game_type_option.custom_minimum_size = Vector2(400, 80)  # Increased height from 60 to 80
+	_game_type_option.add_theme_font_size_override("font_size", 48)  # Increased from 32 to 48
+	_game_type_option.item_selected.connect(_on_game_type_changed)
+	
+	# Style the popup menu items to be larger
+	var game_type_popup = _game_type_option.get_popup()
+	game_type_popup.add_theme_font_size_override("font_size", 48)
+	game_type_popup.add_theme_constant_override("v_separation", 20)
+	
+	_menu_container.add_child(_game_type_option)
+	
 	# Difficulty selection
 	var difficulty_label = Label.new()
 	difficulty_label.text = "Difficulty:"
@@ -81,14 +126,21 @@ func _setup_main_menu() -> void:
 	_menu_container.add_child(difficulty_label)
 	
 	_difficulty_option = OptionButton.new()
-	_difficulty_option.add_item("Easy (Draw 1)")
-	_difficulty_option.add_item("Medium (Draw 3)")
-	_difficulty_option.add_item("Hard (Draw 3, Limited)")
+	_difficulty_option.add_item("Easy")
+	_difficulty_option.add_item("Medium")
+	_difficulty_option.add_item("Hard")
 	_difficulty_option.select(1)  # Default to Medium
-	_difficulty_option.custom_minimum_size = Vector2(400, 60)  # 2x larger (was 200x30)
-	_difficulty_option.add_theme_font_size_override("font_size", 32)  # 2x larger text
+	_difficulty_option.custom_minimum_size = Vector2(400, 80)  # Increased height from 60 to 80
+	_difficulty_option.add_theme_font_size_override("font_size", 48)  # Increased from 32 to 48
 	_difficulty_option.item_selected.connect(_on_difficulty_changed)
+	
+	# Style the popup menu items to be larger
+	var difficulty_popup = _difficulty_option.get_popup()
+	difficulty_popup.add_theme_font_size_override("font_size", 48)
+	difficulty_popup.add_theme_constant_override("v_separation", 20)
+	
 	_menu_container.add_child(_difficulty_option)
+	_update_difficulty_labels()  # Set initial labels based on game type
 	
 	# Single Player button
 	var single_player_button = Button.new()
@@ -201,7 +253,14 @@ func _show_main_menu() -> void:
 	if _menu_container:
 		_menu_container.visible = true
 	_board.visible = false
+	_sudoku_board.visible = false
 	_status_label.visible = false
+	
+	# Hide blue background when in menu
+	var game_bg = get_node_or_null("GameBackground")
+	if game_bg:
+		game_bg.visible = false
+	
 	# Hide and remove game buttons when showing menu
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
@@ -210,8 +269,47 @@ func _show_main_menu() -> void:
 func _hide_main_menu() -> void:
 	if _menu_container:
 		_menu_container.visible = false
-	_board.visible = true
+	
+	# Show appropriate board and background based on game type
+	var game_bg = get_node_or_null("GameBackground")
+	if _current_game_type == "Solitaire":
+		_board.visible = true
+		_sudoku_board.visible = false
+	else:
+		_board.visible = false
+		_sudoku_board.visible = true
+	
+	# Show blue background for both games
+	if game_bg:
+		game_bg.visible = true
+	
 	_status_label.visible = true
+
+func _on_game_type_changed(index: int) -> void:
+	"""Handle game type selection change"""
+	match index:
+		0:
+			_current_game_type = "Solitaire"
+		1:
+			_current_game_type = "Sudoku"
+	_update_difficulty_labels()
+	print("Game type changed to: ", _current_game_type)
+
+func _update_difficulty_labels():
+	"""Update difficulty dropdown labels based on game type"""
+	if not _difficulty_option:
+		return
+	
+	_difficulty_option.clear()
+	if _current_game_type == "Solitaire":
+		_difficulty_option.add_item("Easy (Draw 1)")
+		_difficulty_option.add_item("Medium (Draw 3)")
+		_difficulty_option.add_item("Hard (Draw 3, Limited)")
+	else:  # Sudoku
+		_difficulty_option.add_item("Easy (10 empty)")
+		_difficulty_option.add_item("Medium (30 empty)")
+		_difficulty_option.add_item("Hard (50 empty)")
+	_difficulty_option.select(1)  # Default to Medium
 
 func _on_difficulty_changed(index: int) -> void:
 	"""Handle difficulty selection change"""
@@ -226,9 +324,13 @@ func _on_difficulty_changed(index: int) -> void:
 
 func _on_single_player() -> void:
 	MultiplayerGameManager.is_multiplayer = false
-	MultiplayerGameManager.start_local_game()
 	_hide_main_menu()  # Hide menu and show board
-	_setup_single_player_game()
+	
+	if _current_game_type == "Solitaire":
+		MultiplayerGameManager.start_local_game()
+		_setup_single_player_game()
+	else:  # Sudoku
+		_setup_single_player_sudoku()
 
 func _start_multiplayer_game() -> void:
 	_hide_main_menu()
@@ -255,6 +357,138 @@ func _setup_single_player_game() -> void:
 			_game.card_moved.connect(_on_card_moved)
 	else:
 		print("Failed to get local game or game is invalid")
+
+func _setup_single_player_sudoku() -> void:
+	print("Setting up single player Sudoku...")
+	
+	# Clear status label
+	_status_label.text = ""
+	
+	# Get difficulty level (1=Easy, 3=Medium, 5=Hard)
+	var difficulty_level = 1
+	match _current_difficulty:
+		"Easy":
+			difficulty_level = 1
+		"Medium":
+			difficulty_level = 3
+		"Hard":
+			difficulty_level = 5
+	
+	# Create new Sudoku game
+	_sudoku_game.new_game(difficulty_level, true)
+	_sudoku_board.set_game(_sudoku_game)
+	_sudoku_board.render()
+	
+	# Connect to game completion and game over signals
+	if not _sudoku_game.puzzle_completed.is_connected(_on_sudoku_completed):
+		_sudoku_game.puzzle_completed.connect(_on_sudoku_completed)
+	if not _sudoku_game.game_over.is_connected(_on_sudoku_game_over):
+		_sudoku_game.game_over.connect(_on_sudoku_game_over)
+	
+	# Show game buttons (menu, forfeit)
+	_show_new_game_button()
+	
+	print("Sudoku game setup complete")
+
+func _on_sudoku_completed():
+	print("Sudoku puzzle completed!")
+	_status_label.text = "Puzzle Complete! 🎉"
+	# Play win sound
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.stream = load("res://sounds/win.wav")
+	add_child(audio_player)
+	audio_player.play()
+	audio_player.finished.connect(func(): audio_player.queue_free())
+
+func _on_sudoku_game_over():
+	print("Sudoku game over - ran out of lives!")
+	_status_label.text = "Game Over! ☠️"
+	# Play lose sound
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.stream = load("res://sounds/lose.wav")
+	add_child(audio_player)
+	audio_player.play()
+	audio_player.finished.connect(func(): audio_player.queue_free())
+
+func _setup_multiplayer_sudoku() -> void:
+	print("Setting up multiplayer Sudoku...")
+	
+	# Set game type in multiplayer manager
+	MultiplayerGameManager.set_game_type("Sudoku")
+	
+	# Get difficulty level (1=Easy, 3=Medium, 5=Hard)
+	var difficulty_level = 1
+	match _current_difficulty:
+		"Easy":
+			difficulty_level = 1
+		"Medium":
+			difficulty_level = 3
+		"Hard":
+			difficulty_level = 5
+	
+	# If host, generate puzzle and share it
+	if NetworkManager.is_host:
+		print("Host generating Sudoku puzzle...")
+		_sudoku_game.new_game(difficulty_level, true)
+		var puzzle_state = _sudoku_game.get_game_state()
+		MultiplayerGameManager.set_sudoku_puzzle(puzzle_state)
+		# TODO: Broadcast puzzle to all clients via NetworkManager
+	else:
+		# Client waits for puzzle from host
+		print("Client waiting for Sudoku puzzle from host...")
+		# TODO: Receive puzzle from host
+		# For now, generate same puzzle (will be replaced with sync)
+		_sudoku_game.new_game(difficulty_level, true)
+	
+	_sudoku_board.set_game(_sudoku_game)
+	_sudoku_board.render()
+	
+	# Connect to game completion and game over signals
+	if not _sudoku_game.puzzle_completed.is_connected(_on_multiplayer_sudoku_completed):
+		_sudoku_game.puzzle_completed.connect(_on_multiplayer_sudoku_completed)
+	if not _sudoku_game.game_over.is_connected(_on_multiplayer_sudoku_game_over):
+		_sudoku_game.game_over.connect(_on_multiplayer_sudoku_game_over)
+	
+	# Show game buttons (menu, forfeit)
+	_show_new_game_button()
+	
+	# Setup multiplayer UI
+	_setup_multiplayer_ui()
+	
+	print("Multiplayer Sudoku game setup complete")
+
+func _on_multiplayer_sudoku_completed():
+	print("Multiplayer Sudoku puzzle completed!")
+	_status_label.text = "Puzzle Complete! 🎉"
+	
+	# Play win sound
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.stream = load("res://sounds/win.wav")
+	add_child(audio_player)
+	audio_player.play()
+	audio_player.finished.connect(func(): audio_player.queue_free())
+	
+	# Mark as completed in multiplayer
+	if MultiplayerGameManager.is_multiplayer:
+		MultiplayerGameManager.mark_local_game_completed()
+		# When first player completes, others lose
+		# This will be handled by the race_ended signal
+
+func _on_multiplayer_sudoku_game_over():
+	print("Multiplayer Sudoku game over - ran out of lives!")
+	_status_label.text = "Game Over! ☠️"
+	
+	# Play lose sound
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.stream = load("res://sounds/lose.wav")
+	add_child(audio_player)
+	audio_player.play()
+	audio_player.finished.connect(func(): audio_player.queue_free())
+	
+	# Mark as jammed (equivalent to forfeit) in multiplayer
+	if MultiplayerGameManager.is_multiplayer:
+		MultiplayerGameManager.mark_local_game_jammed()
+		print("Marked as jammed in multiplayer")
 
 func _hide_menu_buttons():
 	for child in get_children():
@@ -310,6 +544,7 @@ func _show_new_game_button():
 	add_child(new_game_button)
 	
 	# Undo button (bottom quarter of screen) - FontAwesome icon with label below
+	# Hide for Sudoku mode (undo not applicable)
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
 	undo_button.position = Vector2(412, 1050)  # Bottom 4th of screen (1366 * 0.75 = 1025), centered
@@ -317,6 +552,7 @@ func _show_new_game_button():
 	undo_button.flat = true  # Remove button background
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
+	undo_button.visible = (_current_game_type == "Solitaire")  # Only show for Solitaire
 	
 	# Create VBox container for vertical icon + text layout
 	var undo_vbox = VBoxContainer.new()
@@ -414,10 +650,16 @@ func _new_game() -> void:
 		if MultiplayerGameManager.is_multiplayer:
 			if MultiplayerGameManager.is_host_player():
 				MultiplayerGameManager.start_multiplayer_race()
-				_setup_multiplayer_game()
+				if _current_game_type == "Sudoku":
+					_setup_multiplayer_sudoku()
+				else:
+					_setup_multiplayer_game()
 		else:
-			MultiplayerGameManager.start_local_game()
-			_setup_single_player_game()
+			if _current_game_type == "Sudoku":
+				_setup_single_player_sudoku()
+			else:
+				MultiplayerGameManager.start_local_game()
+				_setup_single_player_game()
 
 func _on_undo_pressed() -> void:
 	if _game and is_instance_valid(_game):
@@ -492,6 +734,9 @@ func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
 	# Connect signals
 	_multiplayer_lobby.lobby_closed.connect(_on_lobby_closed)
 	_multiplayer_lobby.game_started.connect(_on_multiplayer_game_started)
+	
+	# Store lobby reference for accessing game settings later
+	print("Multiplayer lobby created")
 
 func _on_lobby_closed() -> void:
 	if _multiplayer_lobby:
@@ -508,14 +753,39 @@ func _on_multiplayer_game_started() -> void:
 	if _multiplayer_lobby:
 		_multiplayer_lobby.visible = false
 	
+	# Get game settings from lobby
+	var game_type = "Solitaire"
+	var difficulty = "Medium"
+	if _multiplayer_lobby:
+		game_type = _multiplayer_lobby.selected_game_type
+		difficulty = _multiplayer_lobby.selected_difficulty
+		print("Lobby game settings - Type: ", game_type, ", Difficulty: ", difficulty)
+	
+	# Store settings
+	_current_game_type = game_type
+	_current_difficulty = difficulty
+	
+	# If host, broadcast game settings to all clients
+	if NetworkManager.is_host:
+		var game_settings = {
+			"game_type": game_type,
+			"difficulty": difficulty
+		}
+		NetworkManager.start_race(game_settings)
+	
 	# Hide main menu and start multiplayer game
 	_hide_main_menu()
 	
 	# Set multiplayer flag before starting game
 	MultiplayerGameManager.is_multiplayer = true
 	
-	MultiplayerGameManager.start_local_game()
-	_setup_multiplayer_game()
+	print("Starting multiplayer game - Type: ", _current_game_type, ", Difficulty: ", _current_difficulty)
+	
+	if _current_game_type == "Solitaire":
+		MultiplayerGameManager.start_local_game()
+		_setup_multiplayer_game()
+	else:  # Sudoku
+		_setup_multiplayer_sudoku()
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
