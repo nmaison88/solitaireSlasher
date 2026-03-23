@@ -264,8 +264,8 @@ func _show_new_game_button():
 	# In multiplayer mode, this becomes a forfeit button
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.position = Vector2(950, 110)  # Moved down 100px for notch
-	new_game_button.size = Vector2(50, 50)
+	new_game_button.position = Vector2(930, 110)  # Moved down 100px for notch
+	new_game_button.size = Vector2(70, 70)  # Larger button
 	new_game_button.flat = true  # Remove button background
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
@@ -280,7 +280,7 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 40
+		forfeit_icon.icon_size = 50
 		forfeit_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -294,7 +294,7 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 40
+		retry_icon.icon_size = 50
 		retry_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -302,24 +302,42 @@ func _show_new_game_button():
 	
 	add_child(new_game_button)
 	
-	# Undo button (bottom center) - FontAwesome icon
+	# Undo button (bottom center) - FontAwesome icon with label below
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	undo_button.position = Vector2(487, 700)  # Bottom center (1024/2 - 25)
-	undo_button.size = Vector2(50, 50)
+	undo_button.position = Vector2(462, 680)  # Centered, moved up slightly for taller button
+	undo_button.size = Vector2(100, 90)  # Larger button to accommodate vertical layout
 	undo_button.flat = true  # Remove button background
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
 	
-	# Add FontAwesome icon as child
+	# Create VBox container for vertical icon + text layout
+	var undo_vbox = VBoxContainer.new()
+	undo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	undo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	undo_button.add_child(undo_vbox)
+	
+	# Add FontAwesome icon
 	var undo_icon = FontAwesome.new()
-	undo_icon.icon_name = "rotate-left"  # or "arrow-rotate-left"
+	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 40
+	undo_icon.icon_size = 50  # Larger icon
 	undo_icon.modulate = Color(1.0, 0.9, 0.0)  # Yellow color
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	undo_button.add_child(undo_icon)
+	undo_vbox.add_child(undo_icon)
+	
+	# Add small spacer
+	var undo_spacer = Control.new()
+	undo_spacer.custom_minimum_size = Vector2(0, 4)
+	undo_vbox.add_child(undo_spacer)
+	
+	# Add text label below icon
+	var undo_label = Label.new()
+	undo_label.text = "Undo"
+	undo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	undo_label.add_theme_font_size_override("font_size", 16)
+	undo_label.modulate = Color(1.0, 0.9, 0.0)  # Yellow color to match icon
+	undo_vbox.add_child(undo_label)
 	
 	add_child(undo_button)
 	
@@ -331,7 +349,7 @@ func _show_new_game_button():
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
 	menu_button.position = Vector2(10, 110)  # Moved down 100px for notch
-	menu_button.size = Vector2(50, 50)
+	menu_button.size = Vector2(70, 70)  # Larger button
 	menu_button.flat = true  # Remove button background
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
@@ -340,7 +358,7 @@ func _show_new_game_button():
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "bars"  # Hamburger menu icon
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 40
+	menu_icon.icon_size = 50
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
