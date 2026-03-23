@@ -347,7 +347,7 @@ func leave_game() -> void:
 		broadcast_timer.stop()
 	
 	if discovery_server:
-		discovery_server.close()
+		discovery_server.stop()  # UDPServer uses stop() not close()
 
 func get_players() -> Dictionary:
 	return players.duplicate()

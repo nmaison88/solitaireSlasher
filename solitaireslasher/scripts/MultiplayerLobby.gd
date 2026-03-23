@@ -40,9 +40,15 @@ func _create_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", 50)
 	add_child(margin)
 	
+	# Add scroll container to ensure all content is accessible
+	var scroll_outer = ScrollContainer.new()
+	scroll_outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_child(scroll_outer)
+	
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 20)
-	margin.add_child(vbox)
+	vbox.size_flags_horizontal = Control.SIZE_FILL
+	scroll_outer.add_child(vbox)
 	
 	# Title
 	var title = Label.new()

@@ -44,30 +44,32 @@ func _setup_main_menu() -> void:
 	_menu_container.anchor_top = 0.5
 	_menu_container.anchor_right = 0.5
 	_menu_container.anchor_bottom = 0.5
-	_menu_container.offset_left = -100
-	_menu_container.offset_top = -200  # Increased for difficulty dropdown
-	_menu_container.offset_right = 100
-	_menu_container.offset_bottom = 200  # Increased for difficulty dropdown
-	_menu_container.add_theme_constant_override("separation", 10)
+	_menu_container.offset_left = -200  # 2x larger (was -100)
+	_menu_container.offset_top = -400  # 2x larger (was -200)
+	_menu_container.offset_right = 200  # 2x larger (was 100)
+	_menu_container.offset_bottom = 400  # 2x larger (was 200)
+	_menu_container.add_theme_constant_override("separation", 20)  # 2x larger (was 10)
 	add_child(_menu_container)
 	
 	# Title
 	var title = Label.new()
 	title.text = "Solitaire Slasher"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_font_size_override("font_size", 64)  # 2x larger (was 32)
 	_menu_container.add_child(title)
 	
 	# Player name input
 	var name_label = Label.new()
 	name_label.text = "Your Name:"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 32)  # 2x larger
 	_menu_container.add_child(name_label)
 	
 	_player_name_input = LineEdit.new()
 	_player_name_input.placeholder_text = "Enter your name"
 	_player_name_input.text = PlayerData.get_player_name()  # Load saved name
-	_player_name_input.custom_minimum_size = Vector2(200, 30)
+	_player_name_input.custom_minimum_size = Vector2(400, 60)  # 2x larger (was 200x30)
+	_player_name_input.add_theme_font_size_override("font_size", 32)  # 2x larger text
 	_player_name_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_menu_container.add_child(_player_name_input)
 	
@@ -75,6 +77,7 @@ func _setup_main_menu() -> void:
 	var difficulty_label = Label.new()
 	difficulty_label.text = "Difficulty:"
 	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.add_theme_font_size_override("font_size", 32)  # 2x larger (was 16 default)
 	_menu_container.add_child(difficulty_label)
 	
 	_difficulty_option = OptionButton.new()
@@ -82,13 +85,14 @@ func _setup_main_menu() -> void:
 	_difficulty_option.add_item("Medium (Draw 3)")
 	_difficulty_option.add_item("Hard (Draw 3, Limited)")
 	_difficulty_option.select(1)  # Default to Medium
-	_difficulty_option.custom_minimum_size = Vector2(200, 30)
+	_difficulty_option.custom_minimum_size = Vector2(400, 60)  # 2x larger (was 200x30)
+	_difficulty_option.add_theme_font_size_override("font_size", 32)  # 2x larger text
 	_difficulty_option.item_selected.connect(_on_difficulty_changed)
 	_menu_container.add_child(_difficulty_option)
 	
 	# Single Player button
 	var single_player_button = Button.new()
-	single_player_button.custom_minimum_size = Vector2(200, 40)
+	single_player_button.custom_minimum_size = Vector2(400, 80)  # 2x larger (was 200x40)
 	single_player_button.pressed.connect(_on_single_player)
 	
 	var sp_hbox = HBoxContainer.new()
@@ -99,22 +103,23 @@ func _setup_main_menu() -> void:
 	var sp_icon = FontAwesome.new()
 	sp_icon.icon_name = "user"
 	sp_icon.icon_type = "solid"
-	sp_icon.icon_size = 20
+	sp_icon.icon_size = 40  # 2x larger (was 20)
 	sp_hbox.add_child(sp_icon)
 	
 	var sp_spacer = Control.new()
-	sp_spacer.custom_minimum_size = Vector2(10, 0)
+	sp_spacer.custom_minimum_size = Vector2(20, 0)  # 2x larger (was 10)
 	sp_hbox.add_child(sp_spacer)
 	
 	var sp_label = Label.new()
 	sp_label.text = "Single Player"
+	sp_label.add_theme_font_size_override("font_size", 32)  # 2x larger
 	sp_hbox.add_child(sp_label)
 	
 	_menu_container.add_child(single_player_button)
 	
 	# Host Multiplayer button
 	var host_button = Button.new()
-	host_button.custom_minimum_size = Vector2(200, 40)
+	host_button.custom_minimum_size = Vector2(400, 80)  # 2x larger (was 200x40)
 	host_button.pressed.connect(_on_host_game)
 	
 	var host_hbox = HBoxContainer.new()
@@ -125,22 +130,23 @@ func _setup_main_menu() -> void:
 	var host_icon = FontAwesome.new()
 	host_icon.icon_name = "users"
 	host_icon.icon_type = "solid"
-	host_icon.icon_size = 20
+	host_icon.icon_size = 40  # 2x larger (was 20)
 	host_hbox.add_child(host_icon)
 	
 	var host_spacer = Control.new()
-	host_spacer.custom_minimum_size = Vector2(10, 0)
+	host_spacer.custom_minimum_size = Vector2(20, 0)  # 2x larger (was 10)
 	host_hbox.add_child(host_spacer)
 	
 	var host_label = Label.new()
 	host_label.text = "Host Multiplayer"
+	host_label.add_theme_font_size_override("font_size", 32)  # 2x larger
 	host_hbox.add_child(host_label)
 	
 	_menu_container.add_child(host_button)
 	
 	# Join Multiplayer button
 	var join_button = Button.new()
-	join_button.custom_minimum_size = Vector2(200, 40)
+	join_button.custom_minimum_size = Vector2(400, 80)  # 2x larger (was 200x40)
 	join_button.pressed.connect(_on_join_game)
 	
 	var join_hbox = HBoxContainer.new()
@@ -151,15 +157,16 @@ func _setup_main_menu() -> void:
 	var join_icon = FontAwesome.new()
 	join_icon.icon_name = "user-plus"
 	join_icon.icon_type = "solid"
-	join_icon.icon_size = 20
+	join_icon.icon_size = 40  # 2x larger (was 20)
 	join_hbox.add_child(join_icon)
 	
 	var join_spacer = Control.new()
-	join_spacer.custom_minimum_size = Vector2(10, 0)
+	join_spacer.custom_minimum_size = Vector2(20, 0)  # 2x larger (was 10)
 	join_hbox.add_child(join_spacer)
 	
 	var join_label = Label.new()
 	join_label.text = "Join Multiplayer"
+	join_label.add_theme_font_size_override("font_size", 32)  # 2x larger
 	join_hbox.add_child(join_label)
 	
 	_menu_container.add_child(join_button)
@@ -456,6 +463,10 @@ func _on_back_to_menu_pressed() -> void:
 	_board.render()
 
 func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
+	# Hide main menu
+	if _menu_container:
+		_menu_container.visible = false
+	
 	# Hide menu buttons
 	_hide_menu_buttons()
 	
@@ -487,10 +498,10 @@ func _on_lobby_closed() -> void:
 		_multiplayer_lobby.queue_free()
 		_multiplayer_lobby = null
 	
-	# Show menu buttons again
-	for child in get_children():
-		if child is Button and child.name.begins_with("menu_"):
-			child.visible = true
+	NetworkManager.leave_game()
+	
+	# Show main menu again
+	_show_main_menu()
 
 func _on_multiplayer_game_started() -> void:
 	# Hide lobby
