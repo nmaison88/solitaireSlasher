@@ -69,19 +69,24 @@ func start_multiplayer_race() -> void:
 	network_manager.start_race()
 
 func _on_race_started() -> void:
+	print("DEBUG: MultiplayerGameManager._on_race_started() - game_type: ", current_game_type)
 	race_start_time = Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second
 	local_player_finished = false
 	
-	if not local_game:
-		local_game = Game.new()
-		add_child(local_game)
+	# Only create and initialize game for Solitaire
+	# For Sudoku, the game is already set up in Main.gd
+	if current_game_type == "Solitaire":
+		if not local_game:
+			local_game = Game.new()
+			add_child(local_game)
+		
+		local_game.new_game(randi())
+		
+		# Only connect if not already connected
+		if not local_game.game_completed.is_connected(_on_local_game_completed):
+			local_game.game_completed.connect(_on_local_game_completed)
 	
-	local_game.new_game(randi())
-	
-	# Only connect if not already connected
-	if not local_game.game_completed.is_connected(_on_local_game_completed):
-		local_game.game_completed.connect(_on_local_game_completed)
-	
+	print("DEBUG: Emitting race_started signal")
 	race_started.emit()
 
 func _on_local_game_completed() -> void:

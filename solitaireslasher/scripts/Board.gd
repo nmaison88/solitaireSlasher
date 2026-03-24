@@ -45,6 +45,13 @@ func _ready() -> void:
 	add_child(_stock_count_label)
 
 	resized.connect(render)
+	
+	print("DEBUG: Board._ready() - mouse_filter: ", mouse_filter)
+
+func _gui_input(event: InputEvent) -> void:
+	print("DEBUG: Board._gui_input called! Event: ", event)
+	if event is InputEventMouseButton and event.pressed:
+		print("DEBUG: Board received click at: ", event.position)
 
 func set_game(value) -> void:
 	game = value
@@ -87,7 +94,11 @@ func _on_stock_pressed() -> void:
 
 func render() -> void:
 	if game == null:
+		print("ERROR: Board.render() called but game is null!")
 		return
+
+	print("Board.render() called from: ", get_stack())
+	print("  stock size: ", game.stock.size(), ", waste size: ", game.waste.size())
 
 	# Clear existing card views and drop zones
 	for child in get_children():
@@ -197,6 +208,7 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	# No fallback needed - white border already added
 
 func _draw_stock(pos: Vector2) -> void:
+	print("DEBUG: _draw_stock called at position: ", pos, ", stock size: ", game.stock.size())
 	# Always create a clickable area for the stock pile, even when empty
 	if game.stock.is_empty():
 		# Create a clickable empty slot that shows when stock needs recycling
@@ -234,9 +246,12 @@ func _draw_stock(pos: Vector2) -> void:
 	# Add our own mouse input handling
 	stock_card.gui_input.connect(_on_stock_gui_input)
 	add_child(stock_card)
+	print("DEBUG: Stock card added - position: ", stock_card.position, ", size: ", stock_card.card_size, ", mouse_filter: ", stock_card.mouse_filter)
 
 func _on_stock_gui_input(event: InputEvent) -> void:
+	print("DEBUG: _on_stock_gui_input called! Event: ", event)
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		print("DEBUG: Stock clicked via gui_input!")
 		_on_stock_pressed()
 
 func _draw_waste(pos: Vector2) -> void:

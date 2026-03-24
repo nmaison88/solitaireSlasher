@@ -30,6 +30,7 @@ anchor_bottom = 1.0
 offset_top = 72.0
 grow_horizontal = 2
 grow_vertical = 2
+z_index = 1
 script = ExtResource("2")
 
 [node name="Game" type="Node" parent="."]

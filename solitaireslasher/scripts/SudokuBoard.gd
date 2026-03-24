@@ -14,7 +14,7 @@ var game_over_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
 
 const GRID_SIZE = 9
-const CELL_SIZE = 80  # Reduced from 100 to fit better
+const CELL_SIZE = 80  # Sized for 1366px viewport
 const NUMBER_BUTTON_SIZE = 80
 
 signal game_completed
@@ -24,21 +24,21 @@ func _ready():
 
 func _create_ui():
 	# Hearts container (lives) at top
-	# Board: 9 cells * 80px + 8 gaps * 2px = 736px width, starts at x=144
+	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
+	# Screen width: 1024px, center: (1024 - 736) / 2 = 144px
 	# Center hearts over board: 144 + (736 / 2) - (hearts_width / 2)
 	# 3 hearts * 80px + 2 gaps * 20px = 240 + 40 = 280px total width
 	# Center: 144 + 368 - 140 = 372
-	# Board starts at y=320, hearts at y=220 gives 100px padding
 	hearts_container = HBoxContainer.new()
-	hearts_container.position = Vector2(372, 220)  # Centered with board, with padding below
-	hearts_container.add_theme_constant_override("separation", 20)  # Increased spacing
+	hearts_container.position = Vector2(372, 220)  # Below top buttons with padding
+	hearts_container.add_theme_constant_override("separation", 20)
 	add_child(hearts_container)
 	
-	# Create 3 heart icons (larger)
+	# Create 3 heart icons (larger for 1366px viewport)
 	for i in range(3):
 		var heart_label = Label.new()
 		heart_label.text = "❤"  # Heart emoji
-		heart_label.add_theme_font_size_override("font_size", 80)  # Increased from 48 to 80
+		heart_label.add_theme_font_size_override("font_size", 80)
 		heart_label.modulate = Color(1.0, 0.0, 0.0)  # Red color
 		hearts_container.add_child(heart_label)
 		heart_icons.append(heart_label)
@@ -68,19 +68,23 @@ func _create_ui():
 	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
 	# Screen width: 1024px, center: (1024 - 736) / 2 = 144px
 	# Board height: 9 cells * 80px + 8 gaps * 2px = 736px
+	# Grid starts at y=320 (below hearts and top buttons)
 	grid_container = GridContainer.new()
 	grid_container.columns = GRID_SIZE
-	grid_container.position = Vector2(144, 320)  # Centered horizontally, below top buttons
+	grid_container.position = Vector2(144, 320)  # Centered horizontally, below hearts
 	grid_container.add_theme_constant_override("h_separation", 2)
 	grid_container.add_theme_constant_override("v_separation", 2)
 	add_child(grid_container)
 	
-	# Number selector at bottom (below undo button area)
-	# Undo button is at y=1050, height=180, ends at y=1230
+	# Number selector at bottom
+	# Grid ends at: 320 + 736 = 1056
+	# Undo button area: y=1050, height=180, ends at y=1230
 	# Number selector: 9 buttons * 80px + 8 gaps * 8px = 720 + 64 = 784px width
+	# Center: (1024 - 784) / 2 = 120px
+	# Position at y=1240 (below undo button area)
 	number_selector = GridContainer.new()
 	number_selector.columns = 9
-	number_selector.position = Vector2(120, 1240)  # Below undo button, centered
+	number_selector.position = Vector2(120, 1240)  # Bottom of 1366px viewport
 	number_selector.add_theme_constant_override("h_separation", 8)
 	add_child(number_selector)
 	
@@ -95,7 +99,7 @@ func _create_ui():
 	
 	# Create border overlay for 3x3 subgrids (drawn on top of everything)
 	border_overlay = Control.new()
-	border_overlay.position = Vector2(152, 320)  # Same as grid_container
+	border_overlay.position = Vector2(144, 320)  # Match grid_container position
 	border_overlay.size = Vector2(CELL_SIZE * 9 + 16, CELL_SIZE * 9 + 16)  # 9 cells + gaps
 	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass through clicks
 	border_overlay.z_index = 100  # Draw on top of everything
@@ -138,6 +142,7 @@ func set_game(sudoku_game: SudokuGame):
 		game.life_lost.connect(_on_life_lost)
 		game.game_over.connect(_on_game_over)
 		_update_hearts(game.lives)
+		render()
 
 func render():
 	if not game:
@@ -171,7 +176,7 @@ func render():
 func _create_cell_button(row: int, col: int) -> Button:
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(CELL_SIZE, CELL_SIZE)
-	btn.add_theme_font_size_override("font_size", 48)
+	btn.add_theme_font_size_override("font_size", 48)  # Font size for 80px cells
 	
 	var value = game.get_cell_value(row, col)
 	if value != 0:
@@ -185,10 +190,13 @@ func _create_cell_button(row: int, col: int) -> Button:
 		# Pre-filled cells - light gray background
 		stylebox.bg_color = Color(0.85, 0.85, 0.85)
 		btn.disabled = true
+		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0))  # Black text
+		btn.add_theme_color_override("font_disabled_color", Color(0.0, 0.0, 0.0))  # Black text when disabled
 	else:
-		# Editable cells - transparent background (blue shows through)
-		stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		# Editable cells - white background
+		stylebox.bg_color = Color(1.0, 1.0, 1.0)  # White background for editable cells
 		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
+		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 1.0))  # Blue text for user input
 	
 	# Add thicker borders for 3x3 subgrids (every 3rd row/column)
 	# Normal borders: 1px, Subgrid borders: 4px
@@ -234,7 +242,7 @@ func _highlight_selected_cell():
 			var btn = grid_buttons[row_idx][col_idx]
 			if btn and not btn.disabled:
 				var stylebox = StyleBoxFlat.new()
-				stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
+				stylebox.bg_color = Color(1.0, 1.0, 1.0)  # White background
 				stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black borders
 				stylebox.draw_center = true
 				

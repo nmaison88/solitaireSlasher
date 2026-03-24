@@ -301,8 +301,14 @@ func _on_join_pressed() -> void:
 
 func _on_start_pressed() -> void:
 	if is_host:
-		NetworkManager.start_race()
-		game_started.emit()
+		print("DEBUG: Host start button pressed")
+		# Pass game settings to start_race so they can be broadcast to clients
+		var game_settings = {
+			"game_type": selected_game_type,
+			"difficulty": selected_difficulty
+		}
+		NetworkManager.start_race(game_settings)
+		# Don't emit game_started here - NetworkManager will broadcast it
 
 func _on_network_game_started() -> void:
 	"""Called when NetworkManager broadcasts game start (for clients)"""

@@ -177,12 +177,15 @@ func start_race(game_settings: Dictionary = {}) -> void:
 	if not is_host:
 		return
 	
+	print("DEBUG: start_race called - is_host: ", is_host, ", settings: ", game_settings)
 	game_session_active = true
 	
 	# Send game settings first if provided
 	if not game_settings.is_empty():
+		print("DEBUG: Broadcasting GAME_SETTINGS")
 		_broadcast_message(MessageType.GAME_SETTINGS, game_settings)
 	
+	print("DEBUG: Broadcasting GAME_START")
 	_broadcast_message(MessageType.GAME_START, {})
 	game_started.emit()
 
@@ -225,6 +228,15 @@ func _broadcast_message(message_type: MessageType, data: Dictionary) -> void:
 
 @rpc("any_peer", "reliable")
 func receive_message(message: Dictionary) -> void:
+	var sender_id = multiplayer.get_remote_sender_id()
+	
+	print("DEBUG: receive_message - sender_id: ", sender_id, ", is_host: ", is_host, ", message_type: ", message.type)
+	
+	# Host shouldn't process its own broadcast messages
+	if is_host and sender_id == 1:
+		print("DEBUG: Host ignoring own message")
+		return
+	
 	var message_type = message.type
 	var data = message.data
 	
