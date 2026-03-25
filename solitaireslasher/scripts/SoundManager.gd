@@ -6,6 +6,8 @@ var card_draw_player: AudioStreamPlayer
 var win_player: AudioStreamPlayer
 var retry_player: AudioStreamPlayer
 var lose_player: AudioStreamPlayer
+var incorrect_player: AudioStreamPlayer
+var place_player: AudioStreamPlayer
 
 func _ready() -> void:
 	_setup_audio_players()
@@ -36,6 +38,16 @@ func _setup_audio_players() -> void:
 	lose_player = AudioStreamPlayer.new()
 	lose_player.name = "LosePlayer"
 	add_child(lose_player)
+	
+	# Incorrect sound
+	incorrect_player = AudioStreamPlayer.new()
+	incorrect_player.name = "IncorrectPlayer"
+	add_child(incorrect_player)
+	
+	# Place sound (for Sudoku correct entries)
+	place_player = AudioStreamPlayer.new()
+	place_player.name = "PlacePlayer"
+	add_child(place_player)
 
 func _load_sound_files() -> void:
 	# Try to load sound files from the sounds directory
@@ -44,7 +56,9 @@ func _load_sound_files() -> void:
 		"card_draw": ["res://sounds/card_draw.wav", "res://sounds/card_draw.ogg"],
 		"win": ["res://sounds/win.wav", "res://sounds/win.ogg"],
 		"retry": ["res://sounds/retry.wav", "res://sounds/retry.ogg"],
-		"lose": ["res://sounds/lose.wav", "res://sounds/lose.ogg"]
+		"lose": ["res://sounds/lose.wav", "res://sounds/lose.ogg"],
+		"incorrect": ["res://sounds/incorrect.wav", "res://sounds/incorrect.ogg"],
+		"place": ["res://sounds/place.wav", "res://sounds/place.ogg"]
 	}
 	
 	# Load card place sound
@@ -81,6 +95,20 @@ func _load_sound_files() -> void:
 			lose_player.stream = load(path)
 			print("Loaded lose sound: ", path)
 			break
+	
+	# Load incorrect sound
+	for path in sound_paths["incorrect"]:
+		if ResourceLoader.exists(path):
+			incorrect_player.stream = load(path)
+			print("Loaded incorrect sound: ", path)
+			break
+	
+	# Load place sound
+	for path in sound_paths["place"]:
+		if ResourceLoader.exists(path):
+			place_player.stream = load(path)
+			print("Loaded place sound: ", path)
+			break
 
 func play_card_place() -> void:
 	if card_place_player and card_place_player.stream:
@@ -101,6 +129,14 @@ func play_retry() -> void:
 func play_lose() -> void:
 	if lose_player and lose_player.stream:
 		lose_player.play()
+
+func play_incorrect() -> void:
+	if incorrect_player and incorrect_player.stream:
+		incorrect_player.play()
+
+func play_place() -> void:
+	if place_player and place_player.stream:
+		place_player.play()
 
 # Helper function to load sounds from files
 func load_sounds(card_place_path: String, card_draw_path: String, win_path: String) -> void:

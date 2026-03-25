@@ -402,8 +402,14 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	# Set text color based on correctness
 	if is_correct:
 		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White for correct
+		# Play place sound for correct entries
+		if SoundManager:
+			SoundManager.play_place()
 	else:
 		btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect
+		# Play incorrect sound for wrong entries
+		if SoundManager:
+			SoundManager.play_incorrect()
 	
 	# Keep gray background consistent with other cells
 	var stylebox = StyleBoxFlat.new()

@@ -15,7 +15,7 @@ extends RefCounted
 
 # Animation Constants
 ## Speed of card movement animations in pixels per second
-const ANIMATION_MOVE_SPEED: float = 2000.0
+const ANIMATION_MOVE_SPEED: float = 500.0
 ## Duration of hover animations in seconds
 const ANIMATION_HOVER_DURATION: float = 0.10
 ## Scale multiplier applied during hover effects
