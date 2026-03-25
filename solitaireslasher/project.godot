@@ -28,6 +28,7 @@ window/size/viewport_width=1024
 window/size/viewport_height=1366
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=1
 
 [physics]
 

@@ -20,28 +20,48 @@ const NUMBER_BUTTON_SIZE = 80
 signal game_completed
 
 func _ready():
+	print("=== SudokuBoard._ready() called ===")
 	_create_ui()
 
 func _create_ui():
-	# Hearts container (lives) at top
-	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
-	# Screen width: 1024px, center: (1024 - 736) / 2 = 144px
-	# Center hearts over board: 144 + (736 / 2) - (hearts_width / 2)
-	# 3 hearts * 80px + 2 gaps * 20px = 240 + 40 = 280px total width
-	# Center: 144 + 368 - 140 = 372
+	print("=== SudokuBoard._create_ui() called ===")
+	# Hearts container (lives) - positioned above the Sudoku grid
+	# Grid is at y=320, so hearts at y=220 with 100px height leaves padding
 	hearts_container = HBoxContainer.new()
-	hearts_container.position = Vector2(372, 220)  # Below top buttons with padding
+	hearts_container.position = Vector2(0, 220)  # Above grid at y=320
+	hearts_container.custom_minimum_size = Vector2(0, 90)  # Height for hearts
 	hearts_container.add_theme_constant_override("separation", 20)
-	add_child(hearts_container)
+	hearts_container.alignment = BoxContainer.ALIGNMENT_CENTER  # Center horizontally
 	
-	# Create 3 heart icons (larger for 1366px viewport)
+	# Use anchors to center horizontally across screen width
+	hearts_container.anchor_left = 0.0
+	hearts_container.anchor_right = 1.0
+	hearts_container.offset_left = 0
+	hearts_container.offset_right = 0
+	
+	add_child(hearts_container)
+	print("Hearts container added above grid at y=220")
+	
+	# Create 3 heart icons using FontAwesome - just red hearts, no background circles
 	for i in range(3):
-		var heart_label = Label.new()
-		heart_label.text = "❤"  # Heart emoji
-		heart_label.add_theme_font_size_override("font_size", 80)
-		heart_label.modulate = Color(1.0, 0.0, 0.0)  # Red color
-		hearts_container.add_child(heart_label)
-		heart_icons.append(heart_label)
+		# Create FontAwesome heart icon directly (no background panel)
+		var heart_icon = FontAwesome.new()
+		heart_icon.icon_name = "heart"
+		heart_icon.icon_type = "solid"
+		heart_icon.icon_size = 60  # Larger since no background
+		heart_icon.modulate = Color(1.0, 0.0, 0.0)  # Red heart
+		heart_icon.custom_minimum_size = Vector2(80, 80)
+		heart_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		hearts_container.add_child(heart_icon)
+		heart_icons.append(heart_icon)
+		
+		print("Heart ", i + 1, " created as red FontAwesome icon (no background)")
+	
+	# Ensure hearts container is visible
+	hearts_container.z_index = 10
+	hearts_container.visible = true
+	print("Hearts container created at position: ", hearts_container.position)
 	
 	# Create game over overlay (hidden by default)
 	game_over_overlay = Panel.new()
@@ -137,6 +157,17 @@ func _draw_border_overlay():
 func set_game(sudoku_game: SudokuGame):
 	game = sudoku_game
 	if game:
+		# Disconnect existing signals first to avoid reconnection errors
+		if game.cell_filled.is_connected(_on_cell_filled):
+			game.cell_filled.disconnect(_on_cell_filled)
+		if game.puzzle_completed.is_connected(_on_puzzle_completed):
+			game.puzzle_completed.disconnect(_on_puzzle_completed)
+		if game.life_lost.is_connected(_on_life_lost):
+			game.life_lost.disconnect(_on_life_lost)
+		if game.game_over.is_connected(_on_game_over):
+			game.game_over.disconnect(_on_game_over)
+		
+		# Now connect signals
 		game.cell_filled.connect(_on_cell_filled)
 		game.puzzle_completed.connect(_on_puzzle_completed)
 		game.life_lost.connect(_on_life_lost)
@@ -193,8 +224,8 @@ func _create_cell_button(row: int, col: int) -> Button:
 		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0))  # Black text
 		btn.add_theme_color_override("font_disabled_color", Color(0.0, 0.0, 0.0))  # Black text when disabled
 	else:
-		# Editable cells - white background
-		stylebox.bg_color = Color(1.0, 1.0, 1.0)  # White background for editable cells
+		# Editable cells - same gray background as pre-filled cells for consistency
+		stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Same gray as pre-filled cells
 		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
 		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 1.0))  # Blue text for user input
 	
@@ -236,13 +267,13 @@ func _on_cell_pressed(pos: Vector2i):
 	_highlight_selected_cell()
 
 func _highlight_selected_cell():
-	# Clear previous highlights - restore white background for editable cells
+	# Clear previous highlights - restore gray background
 	for row_idx in range(grid_buttons.size()):
 		for col_idx in range(grid_buttons[row_idx].size()):
 			var btn = grid_buttons[row_idx][col_idx]
 			if btn and not btn.disabled:
 				var stylebox = StyleBoxFlat.new()
-				stylebox.bg_color = Color(1.0, 1.0, 1.0)  # White background
+				stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Gray background (same as all cells)
 				stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black borders
 				stylebox.draw_center = true
 				
@@ -361,11 +392,18 @@ func _on_life_lost(remaining_lives: int):
 
 func _update_hearts(lives_remaining: int):
 	"""Update heart icons based on remaining lives"""
+	print("Updating hearts - lives remaining: ", lives_remaining)
 	for i in range(heart_icons.size()):
+		var heart_icon = heart_icons[i]
+		
 		if i < lives_remaining:
-			heart_icons[i].modulate = Color(1.0, 0.0, 0.0)  # Red (alive)
+			# Alive - red heart
+			heart_icon.modulate = Color(1.0, 0.0, 0.0)  # Red
+			print("Heart ", i + 1, " set to alive (red)")
 		else:
-			heart_icons[i].modulate = Color(0.5, 0.5, 0.5)  # Gray (lost)
+			# Lost - gray heart
+			heart_icon.modulate = Color(0.5, 0.5, 0.5)  # Gray
+			print("Heart ", i + 1, " set to lost (gray)")
 
 func _on_game_over():
 	"""Handle game over - disable input and show overlay"""

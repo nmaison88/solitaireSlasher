@@ -28,9 +28,33 @@ var _game_type_option: OptionButton
 var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
 func _ready() -> void:
+	# Force portrait orientation on mobile devices
+	if OS.has_feature("mobile"):
+		print("=== FORCING PORTRAIT ORIENTATION ===")
+		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
+		print("Orientation set to: ", DisplayServer.screen_get_orientation(DisplayServer.SCREEN_OF_MAIN_WINDOW))
+		print("Window size: ", DisplayServer.window_get_size())
+		print("Viewport size: ", get_viewport().size)
+		
+		# Get safe area to avoid notch
+		var safe_area = DisplayServer.get_display_safe_area()
+		print("Safe area: ", safe_area)
+	
 	_status_label = get_node("StatusLabel") as Label
 	_game = get_node("Game")
 	_board = get_node("Board")
+	
+	# Add top padding for safe area (iPhone notch) and larger buttons
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		var top_padding = safe_area.position.y
+		print("Adding top padding: ", top_padding)
+		
+		# Offset Board to avoid notch and larger buttons (100px buttons + padding)
+		_board.offset_top = top_padding + 120  # Extra 120px for larger buttons
+		
+		# Offset StatusLabel to avoid notch and buttons
+		_status_label.offset_top = 48 + top_padding + 120
 	
 	# Add blue background for both Solitaire and Sudoku
 	var game_background = ColorRect.new()
@@ -51,6 +75,12 @@ func _ready() -> void:
 	_sudoku_board.visible = false
 	add_child(_sudoku_board)
 	
+	# Add top padding for Sudoku board to avoid notch and larger buttons
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		var top_padding = safe_area.position.y
+		_sudoku_board.offset_top = top_padding + 120  # Extra 120px for larger buttons
+	
 	# Hide game elements on startup
 	_board.visible = false
 	_sudoku_board.visible = false
@@ -60,6 +90,15 @@ func _ready() -> void:
 	_show_main_menu()
 
 func _setup_main_menu() -> void:
+	# Add blue background for menu
+	var menu_background = ColorRect.new()
+	menu_background.name = "MenuBackground"
+	menu_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	menu_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	menu_background.z_index = -2  # Behind game background
+	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
+	add_child(menu_background)
+	
 	# Create centered menu container
 	_menu_container = VBoxContainer.new()
 	_menu_container.name = "MainMenuContainer"
@@ -102,6 +141,12 @@ func _setup_main_menu() -> void:
 	_game_type_option.custom_minimum_size = Vector2(200, 40)
 	_game_type_option.add_theme_font_size_override("font_size", 18)
 	_game_type_option.item_selected.connect(_on_game_type_changed)
+	
+	# Style the popup menu items to be larger
+	var game_type_popup = _game_type_option.get_popup()
+	game_type_popup.add_theme_font_size_override("font_size", 18)
+	game_type_popup.add_theme_constant_override("v_separation", 10)
+	
 	_menu_container.add_child(_game_type_option)
 	
 	var spacer2 = Control.new()
@@ -149,7 +194,12 @@ func _show_main_menu() -> void:
 	_sudoku_board.visible = false
 	_status_label.visible = false
 	
-	# Hide blue background when in menu
+	# Show menu background
+	var menu_bg = get_node_or_null("MenuBackground")
+	if menu_bg:
+		menu_bg.visible = true
+	
+	# Hide blue game background when in menu
 	var game_bg = get_node_or_null("GameBackground")
 	if game_bg:
 		game_bg.visible = false
@@ -162,6 +212,11 @@ func _show_main_menu() -> void:
 func _hide_main_menu() -> void:
 	if _menu_container:
 		_menu_container.visible = false
+	
+	# Hide menu background
+	var menu_bg = get_node_or_null("MenuBackground")
+	if menu_bg:
+		menu_bg.visible = false
 	
 	# Show blue background for game
 	var game_bg = get_node_or_null("GameBackground")
@@ -272,17 +327,32 @@ func _hide_menu_buttons():
 			child.visible = false
 
 func _show_new_game_button():
-	# Remove existing game control buttons if any
+	# Remove existing game control buttons if any (immediate removal to prevent duplicates)
+	var buttons_to_remove = []
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
-			child.queue_free()
+			buttons_to_remove.append(child)
+	
+	for button in buttons_to_remove:
+		remove_child(button)
+		button.queue_free()
+	
+	# Clear undo button reference
+	_undo_button = null
 	
 	# New Game/Forfeit button (top right) - FontAwesome icon
 	# In multiplayer mode, this becomes a forfeit button
 	var new_game_button = Button.new()
 	new_game_button.name = "new_game"
-	new_game_button.position = Vector2(950, 10)
-	new_game_button.size = Vector2(50, 50)
+	
+	# Get safe area padding for iPhone notch/rounded corners
+	var top_padding = 10
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_padding = max(10, safe_area.position.y)
+	
+	new_game_button.position = Vector2(900, top_padding)  # Moved left and down for safe area
+	new_game_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
 	print("Creating game button - is_multiplayer: ", is_multiplayer_mode)
@@ -296,7 +366,7 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 32
+		forfeit_icon.icon_size = 64  # 2x larger (was 32)
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(forfeit_icon)
@@ -309,7 +379,7 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 32
+		retry_icon.icon_size = 64  # 2x larger (was 32)
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(retry_icon)
@@ -320,17 +390,37 @@ func _show_new_game_button():
 	# Only show for Solitaire, not Sudoku
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	undo_button.position = Vector2(487, 700)  # Bottom center (1024/2 - 25)
-	undo_button.size = Vector2(50, 50)
+	
+	# Use anchors to position at bottom center, works on any screen size
+	undo_button.anchor_left = 0.5
+	undo_button.anchor_right = 0.5
+	undo_button.anchor_top = 1.0
+	undo_button.anchor_bottom = 1.0
+	undo_button.offset_left = -50  # Half of button width (100/2)
+	undo_button.offset_right = 50   # Half of button width (100/2)
+	undo_button.offset_top = -120  # Button height + padding from bottom
+	undo_button.offset_bottom = -20  # Padding from bottom
+	undo_button.custom_minimum_size = Vector2(100, 100)  # 2x larger (was 50x50)
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
 	undo_button.visible = (_current_game_type == "Solitaire")  # Hide for Sudoku
 	
+	print("Undo button positioned with anchors at bottom center")
+	
+	# Make button background transparent
+	var transparent_style = StyleBoxFlat.new()
+	transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
+	transparent_style.draw_center = false  # Don't draw background
+	undo_button.add_theme_stylebox_override("normal", transparent_style)
+	undo_button.add_theme_stylebox_override("hover", transparent_style)
+	undo_button.add_theme_stylebox_override("pressed", transparent_style)
+	undo_button.add_theme_stylebox_override("disabled", transparent_style)
+	
 	# Add FontAwesome icon as child
 	var undo_icon = FontAwesome.new()
-	undo_icon.icon_name = "rotate-left"  # or "arrow-rotate-left"
+	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 32
+	undo_icon.icon_size = 64  # 2x larger (was 32)
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	undo_button.add_child(undo_icon)
@@ -345,8 +435,8 @@ func _show_new_game_button():
 	# Menu button (top left) - FontAwesome icon
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
-	menu_button.position = Vector2(10, 10)
-	menu_button.size = Vector2(50, 50)
+	menu_button.position = Vector2(10, top_padding)  # Use safe area padding
+	menu_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
 	
@@ -354,7 +444,7 @@ func _show_new_game_button():
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "bars"  # Hamburger menu icon
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 32
+	menu_icon.icon_size = 64  # 2x larger (was 32)
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
@@ -490,10 +580,15 @@ func _on_lobby_closed() -> void:
 		if child is Button and child.name.begins_with("menu_"):
 			child.visible = true
 
-func _on_multiplayer_game_started() -> void:
+func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void:
 	# Hide lobby
 	if _multiplayer_lobby:
 		_multiplayer_lobby.visible = false
+	
+	# Store game type and difficulty from host
+	_current_game_type = game_type
+	_current_difficulty = difficulty
+	print("Starting multiplayer game - Type: ", game_type, ", Difficulty: ", difficulty)
 	
 	# Hide main menu and start multiplayer game
 	_hide_main_menu()
@@ -501,8 +596,65 @@ func _on_multiplayer_game_started() -> void:
 	# Set multiplayer flag before starting game
 	MultiplayerGameManager.is_multiplayer = true
 	
-	MultiplayerGameManager.start_local_game()
-	_setup_multiplayer_game()
+	# Start appropriate game type
+	if game_type == "Sudoku":
+		_setup_multiplayer_sudoku()
+	else:  # Solitaire
+		MultiplayerGameManager.start_local_game()
+		_setup_multiplayer_game()
+
+func _setup_multiplayer_sudoku() -> void:
+	"""Setup multiplayer Sudoku game"""
+	print("Setting up multiplayer Sudoku...")
+	
+	# Clear status label
+	_status_label.text = ""
+	
+	# Get difficulty level (1=Easy, 3=Medium, 5=Hard)
+	var difficulty_level = 3  # Default to Medium
+	match _current_difficulty:
+		"Easy":
+			difficulty_level = 1
+		"Medium":
+			difficulty_level = 3
+		"Hard":
+			difficulty_level = 5
+	
+	# Start new Sudoku game
+	_sudoku_game.new_game(difficulty_level, true)
+	_sudoku_board.set_game(_sudoku_game)
+	
+	# Connect signals
+	if not _sudoku_game.puzzle_completed.is_connected(_on_multiplayer_sudoku_completed):
+		_sudoku_game.puzzle_completed.connect(_on_multiplayer_sudoku_completed)
+	if not _sudoku_game.game_over.is_connected(_on_multiplayer_sudoku_game_over):
+		_sudoku_game.game_over.connect(_on_multiplayer_sudoku_game_over)
+	
+	# Hide menu buttons
+	_hide_menu_buttons()
+	
+	# Show game buttons (menu button only, no undo for Sudoku)
+	_show_new_game_button()
+	
+	# Setup multiplayer UI
+	_setup_multiplayer_ui()
+	
+	print("Multiplayer Sudoku game setup complete")
+
+func _on_multiplayer_sudoku_completed() -> void:
+	"""Handle Sudoku completion in multiplayer"""
+	print("Multiplayer Sudoku puzzle completed!")
+	_status_label.text = "Puzzle Completed!"
+	if SoundManager:
+		SoundManager.play_win()
+	# TODO: Send completion to server for race tracking
+
+func _on_multiplayer_sudoku_game_over() -> void:
+	"""Handle Sudoku game over in multiplayer"""
+	print("Multiplayer Sudoku game over - out of lives")
+	_status_label.text = "Game Over - Out of Lives"
+	if SoundManager:
+		SoundManager.play_lose()
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
@@ -517,15 +669,17 @@ func _setup_multiplayer_ui() -> void:
 
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
-	# Disable all game interactions
+	# Disable all game interactions for both Solitaire and Sudoku
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _sudoku_board:
+		_sudoku_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	# Disable all game buttons
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button"):
 			child.disabled = true
 	
-	# Show ready notification
+	# Show ready notification to all players
 	_show_ready_notification(winner_id)
 
 func _show_ready_notification(winner_id: int) -> void:
@@ -654,19 +808,31 @@ func _on_all_players_ready() -> void:
 		_last_standing_notification.queue_free()
 		_last_standing_notification = null
 	
-	# Re-enable board interactions
-	_board.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	# Setup new game
-	var local_game = MultiplayerGameManager.get_local_game()
-	if local_game and is_instance_valid(local_game):
-		_game = local_game
-		_board.set_game(_game)
-		_board.render()
+	# Re-enable board interactions for current game type
+	if _current_game_type == "Sudoku":
+		if _sudoku_board:
+			_sudoku_board.mouse_filter = Control.MOUSE_FILTER_STOP
+		# Setup new Sudoku game
+		_setup_multiplayer_sudoku()
+	else:  # Solitaire
+		_board.mouse_filter = Control.MOUSE_FILTER_STOP
 		
-		# Reconnect card moved signal
-		if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
-			_game.card_moved.connect(_on_multiplayer_card_moved)
+		# Setup new Solitaire game
+		var local_game = MultiplayerGameManager.get_local_game()
+		if local_game and is_instance_valid(local_game):
+			_game = local_game
+			_board.set_game(_game)
+			_board.render()
+			
+			# Reconnect card moved signal
+			if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
+				_game.card_moved.connect(_on_multiplayer_card_moved)
+	
+	# Re-enable game buttons
+	for child in get_children():
+		if child is Button and child.name == "new_game":
+			child.disabled = false
+			child.tooltip_text = "Forfeit (Mark as Jammed)"
 	
 	# Reset status label
 	if _player_status_label:

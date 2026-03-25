@@ -1,7 +1,7 @@
 extends Control
 
 signal lobby_closed
-signal game_started
+signal game_started(game_type: String, difficulty: String)
 
 @onready var player_list: VBoxContainer
 @onready var ip_input: LineEdit
@@ -170,6 +170,7 @@ func _connect_signals() -> void:
 		NetworkManager.player_connected.connect(_on_player_connected)
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
 		NetworkManager.game_started.connect(_on_network_game_started)
+		NetworkManager.game_settings_received.connect(_on_game_settings_received)
 
 func setup_as_host(player_name: String) -> void:
 	is_host = true
@@ -313,7 +314,17 @@ func _on_start_pressed() -> void:
 func _on_network_game_started() -> void:
 	"""Called when NetworkManager broadcasts game start (for clients)"""
 	print("Client received game start signal from host")
-	game_started.emit()
+	print("Lobby game settings - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty)
+	game_started.emit(selected_game_type, selected_difficulty)
+
+func _on_game_settings_received(settings: Dictionary) -> void:
+	"""Called when client receives game settings from host"""
+	print("Received game settings from host: ", settings)
+	if settings.has("game_type"):
+		selected_game_type = settings["game_type"]
+	if settings.has("difficulty"):
+		selected_difficulty = settings["difficulty"]
+	print("Updated lobby settings - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty)
 
 func _on_game_type_changed(index: int) -> void:
 	"""Handle game type selection change"""
