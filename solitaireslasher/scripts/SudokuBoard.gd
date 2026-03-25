@@ -13,6 +13,7 @@ var heart_icons = []  # Array of 3 heart labels
 var game_over_overlay: Panel
 var win_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
+var erase_button: Button  # Erase button for incorrect values
 
 const GRID_SIZE = 9
 const CELL_SIZE = 80  # Sized for 1366px viewport
@@ -138,6 +139,25 @@ func _create_ui():
 	grid_container.add_theme_constant_override("h_separation", 2)
 	grid_container.add_theme_constant_override("v_separation", 2)
 	add_child(grid_container)
+	
+	# Erase button (above number selector)
+	# Position at y=1140 (above number selector at y=1240)
+	erase_button = Button.new()
+	erase_button.custom_minimum_size = Vector2(100, 80)
+	erase_button.position = Vector2(462, 1140)  # Centered: (1024 - 100) / 2 = 462
+	erase_button.disabled = true  # Start disabled
+	erase_button.pressed.connect(_on_erase_pressed)
+	
+	# Add FontAwesome eraser icon
+	var erase_icon = FontAwesome.new()
+	erase_icon.icon_name = "eraser"
+	erase_icon.icon_type = "solid"
+	erase_icon.icon_size = 48
+	erase_icon.modulate = Color(1.0, 1.0, 1.0)  # White icon
+	erase_icon.position = Vector2(26, 16)  # Center in button
+	erase_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	erase_button.add_child(erase_icon)
+	add_child(erase_button)
 	
 	# Number selector at bottom
 	# Grid ends at: 320 + 736 = 1056
@@ -310,6 +330,7 @@ func _create_cell_button(row: int, col: int) -> Button:
 func _on_cell_pressed(pos: Vector2i):
 	selected_cell = pos
 	_highlight_selected_cell()
+	_update_erase_button_state()
 
 func _highlight_selected_cell():
 	# Get the value of the selected cell (if any)
@@ -414,22 +435,69 @@ func _on_number_selected(number: int):
 	if game.is_cell_editable(row, col):
 		game.set_cell(row, col, number)
 
+func _on_erase_pressed():
+	if selected_cell == Vector2i(-1, -1):
+		return
+	
+	var row = selected_cell.x
+	var col = selected_cell.y
+	
+	# Only erase if cell is editable and has incorrect value
+	if game.is_cell_editable(row, col):
+		var btn = grid_buttons[row][col]
+		# Check if the cell has a value and it's incorrect (red text)
+		if btn.text != "" and btn.get_theme_color("font_color") == Color(1.0, 0.0, 0.0):
+			# Set the cell to 0 (which will trigger _on_cell_filled)
+			game.set_cell(row, col, 0)
+
+func _update_erase_button_state():
+	if not erase_button:
+		return
+	
+	# Enable erase button only if selected cell has incorrect value
+	if selected_cell == Vector2i(-1, -1):
+		erase_button.disabled = true
+		return
+	
+	var row = selected_cell.x
+	var col = selected_cell.y
+	
+	# Check if cell is editable and has incorrect value (red text)
+	if game.is_cell_editable(row, col):
+		var btn = grid_buttons[row][col]
+		# Enable if cell has text and it's red (incorrect)
+		if btn.text != "" and btn.get_theme_color("font_color") == Color(1.0, 0.0, 0.0):
+			erase_button.disabled = false
+		else:
+			erase_button.disabled = true
+	else:
+		erase_button.disabled = true
+
 func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	# Update button text
 	var btn = grid_buttons[row][col]
-	btn.text = str(value)
 	
-	# Set text color based on correctness
-	if is_correct:
-		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White for correct
-		# Play place sound for correct entries
-		if SoundManager:
-			SoundManager.play_place()
+	# If value is 0, clear the cell visually (erase action)
+	if value == 0:
+		btn.text = ""
+		# No sound for erasing
 	else:
-		btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect
-		# Play incorrect sound for wrong entries
-		if SoundManager:
-			SoundManager.play_incorrect()
+		btn.text = str(value)
+		
+		# Set text color based on correctness
+		if is_correct:
+			btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White for correct
+			# Play place sound for correct entries
+			if SoundManager:
+				SoundManager.play_place()
+		else:
+			btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect
+			# Play incorrect sound for wrong entries
+			if SoundManager:
+				SoundManager.play_incorrect()
+	
+	# Update erase button state after filling a cell
+	_update_erase_button_state()
 	
 	# Keep gray background consistent with other cells
 	var stylebox = StyleBoxFlat.new()

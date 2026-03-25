@@ -54,6 +54,12 @@ func set_cell(row: int, col: int, value: int) -> bool:
 		return false  # Game over, no more moves allowed
 	
 	player_grid[row][col] = value
+	
+	# Special case: value=0 means erasing, don't check correctness or lose lives
+	if value == 0:
+		cell_filled.emit(row, col, value, true)  # Emit as "correct" to avoid red text
+		return true
+	
 	var is_correct = (value == solution_grid[row][col])
 	
 	# Lose a life if incorrect
