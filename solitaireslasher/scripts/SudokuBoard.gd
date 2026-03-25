@@ -259,16 +259,15 @@ func _create_cell_button(row: int, col: int) -> Button:
 	# Create stylebox with proper borders for 3x3 subgrids
 	var stylebox = StyleBoxFlat.new()
 	
-	# Set background color based on whether it's editable
+	# Set background color and text color based on whether it's editable
 	if not game.is_cell_editable(row, col):
-		# Pre-filled cells - light gray background
-		stylebox.bg_color = Color(0.85, 0.85, 0.85)
-		btn.disabled = true
+		# Pre-filled cells - can be selected but not edited
+		stylebox.bg_color = Color(0.75, 0.80, 0.90)  # Light blue-gray
 		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0))  # Black text
-		btn.add_theme_color_override("font_disabled_color", Color(0.0, 0.0, 0.0))  # Black text when disabled
+		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))  # Allow selection
 	else:
-		# Editable cells - same gray background as pre-filled cells for consistency
-		stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Same gray as pre-filled cells
+		# Editable cells - can be selected and edited
+		stylebox.bg_color = Color(0.75, 0.80, 0.90)  # Light blue-gray
 		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
 		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 1.0))  # Blue text for user input
 	
@@ -313,13 +312,34 @@ func _on_cell_pressed(pos: Vector2i):
 	_highlight_selected_cell()
 
 func _highlight_selected_cell():
-	# Clear previous highlights - restore gray background
+	# Get the value of the selected cell (if any)
+	var selected_value = 0
+	if selected_cell != Vector2i(-1, -1):
+		var selected_btn = grid_buttons[selected_cell.x][selected_cell.y]
+		if selected_btn.text != "":
+			selected_value = int(selected_btn.text)
+	
+	# Clear previous highlights and apply new ones
 	for row_idx in range(grid_buttons.size()):
 		for col_idx in range(grid_buttons[row_idx].size()):
 			var btn = grid_buttons[row_idx][col_idx]
-			if btn and not btn.disabled:
+			if btn:
 				var stylebox = StyleBoxFlat.new()
-				stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Gray background (same as all cells)
+				
+				# Determine background color based on highlighting rules
+				var bg_color = Color(0.75, 0.80, 0.90)  # Default light blue-gray
+				
+				# Check if this cell should be highlighted
+				if selected_cell != Vector2i(-1, -1):
+					# Highlight row and column (brighter highlight)
+					if row_idx == selected_cell.x or col_idx == selected_cell.y:
+						bg_color = Color(0.85, 0.90, 1.0)  # Bright blue for row/column
+					
+					# Highlight matching numbers (even darker highlight) - overrides row/column
+					if selected_value > 0 and btn.text == str(selected_value):
+						bg_color = Color(0.60, 0.70, 1.0)  # Darker blue for matching numbers
+				
+				stylebox.bg_color = bg_color
 				stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black borders
 				stylebox.draw_center = true
 				
@@ -348,7 +368,7 @@ func _highlight_selected_cell():
 				btn.add_theme_stylebox_override("hover", stylebox)
 				btn.add_theme_stylebox_override("pressed", stylebox)
 	
-	# Highlight selected cell with light blue
+	# Highlight selected cell with brightest blue (overrides all other highlights)
 	if selected_cell != Vector2i(-1, -1):
 		var btn = grid_buttons[selected_cell.x][selected_cell.y]
 		var stylebox = StyleBoxFlat.new()
