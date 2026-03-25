@@ -11,6 +11,7 @@ var number_selector: GridContainer
 var hearts_container: HBoxContainer
 var heart_icons = []  # Array of 3 heart labels
 var game_over_overlay: Panel
+var win_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
 
 const GRID_SIZE = 9
@@ -69,20 +70,62 @@ func _create_ui():
 	game_over_overlay.visible = false
 	add_child(game_over_overlay)
 	
-	# Semi-transparent dark background
-	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.7)  # Black with 70% opacity
-	game_over_overlay.add_theme_stylebox_override("panel", stylebox)
+	# Matrix-style shader background
+	var shader_bg = ColorRect.new()
+	shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	
-	# "YOU LOST!" text in center
+	# Load and apply shader
+	var shader = load("res://shaders/matrix_background.gdshader")
+	var shader_material = ShaderMaterial.new()
+	shader_material.shader = shader
+	shader_material.set_shader_parameter("columns", 40.0)
+	shader_material.set_shader_parameter("rows", 30.0)
+	shader_material.set_shader_parameter("speed", 3.0)
+	shader_material.set_shader_parameter("char_color", Color(1.0, 0.0, 0.0, 1.0))  # Red for lose
+	shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
+	shader_bg.material = shader_material
+	game_over_overlay.add_child(shader_bg)
+	
+	# "YOU LOST!" text in center (on top of shader)
 	var lost_label = Label.new()
 	lost_label.text = "YOU LOST!"
 	lost_label.add_theme_font_size_override("font_size", 96)
-	lost_label.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red text
+	lost_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
 	lost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lost_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	game_over_overlay.add_child(lost_label)
+	
+	# Create win overlay (hidden by default)
+	win_overlay = Panel.new()
+	win_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	win_overlay.visible = false
+	add_child(win_overlay)
+	
+	# Matrix-style shader background for win (green/cyan)
+	var win_shader_bg = ColorRect.new()
+	win_shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	var win_shader = load("res://shaders/matrix_background.gdshader")
+	var win_shader_material = ShaderMaterial.new()
+	win_shader_material.shader = win_shader
+	win_shader_material.set_shader_parameter("columns", 40.0)
+	win_shader_material.set_shader_parameter("rows", 30.0)
+	win_shader_material.set_shader_parameter("speed", 3.0)
+	win_shader_material.set_shader_parameter("char_color", Color(0.0, 1.0, 0.8, 1.0))  # Cyan for win
+	win_shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
+	win_shader_bg.material = win_shader_material
+	win_overlay.add_child(win_shader_bg)
+	
+	# "YOU WON!" text in center
+	var win_label = Label.new()
+	win_label.text = "YOU WON!"
+	win_label.add_theme_font_size_override("font_size", 96)
+	win_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
+	win_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	win_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	win_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	win_overlay.add_child(win_label)
 	
 	# Main grid container for the 9x9 Sudoku grid
 	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
@@ -259,6 +302,9 @@ func _create_cell_button(row: int, col: int) -> Button:
 		stylebox.border_width_bottom = 1
 	
 	btn.add_theme_stylebox_override("normal", stylebox)
+	btn.add_theme_stylebox_override("hover", stylebox)
+	btn.add_theme_stylebox_override("pressed", stylebox)
+	btn.add_theme_stylebox_override("disabled", stylebox)
 	
 	return btn
 
@@ -299,6 +345,8 @@ func _highlight_selected_cell():
 					stylebox.border_width_bottom = 1
 				
 				btn.add_theme_stylebox_override("normal", stylebox)
+				btn.add_theme_stylebox_override("hover", stylebox)
+				btn.add_theme_stylebox_override("pressed", stylebox)
 	
 	# Highlight selected cell with light blue
 	if selected_cell != Vector2i(-1, -1):
@@ -333,6 +381,8 @@ func _highlight_selected_cell():
 			stylebox.border_width_bottom = 1
 		
 		btn.add_theme_stylebox_override("normal", stylebox)
+		btn.add_theme_stylebox_override("hover", stylebox)
+		btn.add_theme_stylebox_override("pressed", stylebox)
 
 func _on_number_selected(number: int):
 	if selected_cell == Vector2i(-1, -1):
@@ -355,9 +405,9 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	else:
 		btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect
 	
-	# Keep transparent background, no hint backgrounds needed
+	# Keep gray background consistent with other cells
 	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
+	stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Gray background (same as all cells)
 	
 	# Preserve borders
 	stylebox.border_color = Color(0.0, 0.0, 0.0)
@@ -385,6 +435,8 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 		stylebox.border_width_bottom = 1
 	
 	btn.add_theme_stylebox_override("normal", stylebox)
+	btn.add_theme_stylebox_override("hover", stylebox)
+	btn.add_theme_stylebox_override("pressed", stylebox)
 
 func _on_life_lost(remaining_lives: int):
 	"""Update hearts display when a life is lost"""
@@ -421,4 +473,15 @@ func _on_game_over():
 
 func _on_puzzle_completed():
 	print("Sudoku puzzle completed!")
+	
+	# Show win overlay with Matrix shader effect
+	if win_overlay:
+		win_overlay.visible = true
+	
+	# Disable all grid buttons
+	for row in grid_buttons:
+		for btn in row:
+			if btn and not btn.disabled:
+				btn.disabled = true
+	
 	game_completed.emit()
