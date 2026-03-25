@@ -99,7 +99,7 @@ func _setup_main_menu() -> void:
 	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
 	add_child(menu_background)
 	
-	# Create centered menu container
+	# Create centered menu container (2x larger)
 	_menu_container = VBoxContainer.new()
 	_menu_container.name = "MainMenuContainer"
 	_menu_container.set_anchors_preset(Control.PRESET_CENTER)
@@ -107,71 +107,74 @@ func _setup_main_menu() -> void:
 	_menu_container.anchor_top = 0.5
 	_menu_container.anchor_right = 0.5
 	_menu_container.anchor_bottom = 0.5
-	_menu_container.offset_left = -100
-	_menu_container.offset_top = -150
-	_menu_container.offset_right = 100
-	_menu_container.offset_bottom = 150
+	_menu_container.offset_left = -200  # 2x larger: was -100
+	_menu_container.offset_top = -300  # 2x larger: was -150
+	_menu_container.offset_right = 200  # 2x larger: was 100
+	_menu_container.offset_bottom = 300  # 2x larger: was 150
 	_menu_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_menu_container.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_menu_container)
 	
-	# Add title
+	# Add title (2x larger font)
 	var title = Label.new()
 	title.text = "Solitaire Slasher"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_font_size_override("font_size", 64)  # 2x larger: was 32
 	_menu_container.add_child(title)
 	
-	# Add spacing
+	# Add spacing (2x larger)
 	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 20)
+	spacer1.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
 	_menu_container.add_child(spacer1)
 	
-	# Game type selection
+	# Game type selection (2x larger font)
 	var game_type_label = Label.new()
 	game_type_label.text = "Game Type:"
 	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game_type_label.add_theme_font_size_override("font_size", 20)
+	game_type_label.add_theme_font_size_override("font_size", 40)  # 2x larger: was 20
 	_menu_container.add_child(game_type_label)
 	
 	_game_type_option = OptionButton.new()
 	_game_type_option.add_item("Solitaire")
 	_game_type_option.add_item("Sudoku")
 	_game_type_option.select(0)  # Default to Solitaire
-	_game_type_option.custom_minimum_size = Vector2(200, 40)
-	_game_type_option.add_theme_font_size_override("font_size", 18)
+	_game_type_option.custom_minimum_size = Vector2(400, 80)  # 2x larger: was 200x40
+	_game_type_option.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
 	_game_type_option.item_selected.connect(_on_game_type_changed)
 	
-	# Style the popup menu items to be larger
+	# Style the popup menu items to be larger (2x)
 	var game_type_popup = _game_type_option.get_popup()
-	game_type_popup.add_theme_font_size_override("font_size", 18)
-	game_type_popup.add_theme_constant_override("v_separation", 10)
+	game_type_popup.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
+	game_type_popup.add_theme_constant_override("v_separation", 20)  # 2x larger: was 10
 	
 	_menu_container.add_child(_game_type_option)
 	
 	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 20)
+	spacer2.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
 	_menu_container.add_child(spacer2)
 	
-	# Create menu buttons
+	# Create menu buttons (2x larger)
 	var single_button = Button.new()
 	single_button.name = "menu_single"
 	single_button.text = "Single Player"
-	single_button.custom_minimum_size = Vector2(200, 50)
+	single_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
+	single_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
 	single_button.pressed.connect(_on_single_player)
 	_menu_container.add_child(single_button)
 	
 	var host_button = Button.new()
 	host_button.name = "menu_host"
 	host_button.text = "Host Multiplayer"
-	host_button.custom_minimum_size = Vector2(200, 50)
+	host_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
+	host_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
 	host_button.pressed.connect(_on_host_game)
 	_menu_container.add_child(host_button)
 	
 	var join_button = Button.new()
 	join_button.name = "menu_join"
 	join_button.text = "Join Multiplayer"
-	join_button.custom_minimum_size = Vector2(200, 50)
+	join_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
+	join_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
 	join_button.pressed.connect(_on_join_game)
 	_menu_container.add_child(join_button)
 
@@ -544,8 +547,8 @@ func _on_back_to_menu_pressed() -> void:
 	_board.render()
 
 func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
-	# Hide menu buttons
-	_hide_menu_buttons()
+	# Hide main menu
+	_hide_main_menu()
 	
 	# Create and show lobby UI
 	if _multiplayer_lobby:
@@ -575,10 +578,8 @@ func _on_lobby_closed() -> void:
 		_multiplayer_lobby.queue_free()
 		_multiplayer_lobby = null
 	
-	# Show menu buttons again
-	for child in get_children():
-		if child is Button and child.name.begins_with("menu_"):
-			child.visible = true
+	# Show main menu again
+	_show_main_menu()
 
 func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void:
 	# Hide lobby
