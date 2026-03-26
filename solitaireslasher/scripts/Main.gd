@@ -153,6 +153,33 @@ func _setup_main_menu() -> void:
 	spacer2.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
 	_menu_container.add_child(spacer2)
 	
+	# Difficulty selection
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty:"
+	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.add_theme_font_size_override("font_size", 40)  # 2x larger: was 20
+	_menu_container.add_child(difficulty_label)
+	
+	_difficulty_option = OptionButton.new()
+	_difficulty_option.add_item("Easy")
+	_difficulty_option.add_item("Medium")
+	_difficulty_option.add_item("Hard")
+	_difficulty_option.select(1)  # Default to Medium
+	_difficulty_option.custom_minimum_size = Vector2(400, 80)  # 2x larger: was 200x40
+	_difficulty_option.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
+	_difficulty_option.item_selected.connect(_on_difficulty_changed)
+	
+	# Style the popup menu items to be larger (2x)
+	var difficulty_popup = _difficulty_option.get_popup()
+	difficulty_popup.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
+	difficulty_popup.add_theme_constant_override("v_separation", 20)  # 2x larger: was 10
+	
+	_menu_container.add_child(_difficulty_option)
+	
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
+	_menu_container.add_child(spacer3)
+	
 	# Create menu buttons (2x larger)
 	var single_button = Button.new()
 	single_button.name = "menu_single"
@@ -245,6 +272,17 @@ func _on_game_type_changed(index: int) -> void:
 			_current_game_type = "Sudoku"
 	print("Game type changed to: ", _current_game_type)
 
+func _on_difficulty_changed(index: int) -> void:
+	"""Handle difficulty selection change"""
+	match index:
+		0:
+			_current_difficulty = "Easy"
+		1:
+			_current_difficulty = "Medium"
+		2:
+			_current_difficulty = "Hard"
+	print("Difficulty changed to: ", _current_difficulty)
+
 func _on_single_player() -> void:
 	# Clean up any existing game state
 	_cleanup_game_state()
@@ -252,7 +290,7 @@ func _on_single_player() -> void:
 	_hide_main_menu()
 	
 	if _current_game_type == "Solitaire":
-		MultiplayerGameManager.start_local_game()
+		MultiplayerGameManager.start_local_game(_current_difficulty)
 		_setup_single_player_game()
 	else:  # Sudoku
 		_setup_single_player_sudoku()
@@ -502,7 +540,7 @@ func _new_game() -> void:
 				MultiplayerGameManager.start_multiplayer_race()
 				_setup_multiplayer_game()
 		else:
-			MultiplayerGameManager.start_local_game()
+			MultiplayerGameManager.start_local_game(_current_difficulty)
 			_setup_single_player_game()
 
 func _on_undo_pressed() -> void:
@@ -657,7 +695,7 @@ func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void
 	if game_type == "Sudoku":
 		_setup_multiplayer_sudoku()
 	else:  # Solitaire
-		MultiplayerGameManager.start_local_game()
+		MultiplayerGameManager.start_local_game(difficulty)
 		_setup_multiplayer_game()
 
 func _setup_multiplayer_sudoku() -> void:
@@ -758,7 +796,7 @@ func _show_ready_notification(winner_id: int) -> void:
 	if _last_standing_notification:
 		_last_standing_notification.queue_free()
 	
-	# Create notification panel
+	# Create notification panel (larger for mobile)
 	_last_standing_notification = Panel.new()
 	_last_standing_notification.name = "RaceEndedNotification"
 	_last_standing_notification.set_anchors_preset(Control.PRESET_CENTER)
@@ -766,14 +804,15 @@ func _show_ready_notification(winner_id: int) -> void:
 	_last_standing_notification.anchor_top = 0.5
 	_last_standing_notification.anchor_right = 0.5
 	_last_standing_notification.anchor_bottom = 0.5
-	_last_standing_notification.offset_left = -200
-	_last_standing_notification.offset_top = -100
-	_last_standing_notification.offset_right = 200
-	_last_standing_notification.offset_bottom = 100
+	_last_standing_notification.offset_left = -300
+	_last_standing_notification.offset_top = -200
+	_last_standing_notification.offset_right = 300
+	_last_standing_notification.offset_bottom = 200
 	add_child(_last_standing_notification)
 	
 	var vbox = VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 30)
 	_last_standing_notification.add_child(vbox)
 	
 	var title = Label.new()
@@ -787,7 +826,7 @@ func _show_ready_notification(winner_id: int) -> void:
 	else:
 		title.text = "Race Ended"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 56)
 	vbox.add_child(title)
 	
 	var message = Label.new()
@@ -798,16 +837,19 @@ func _show_ready_notification(winner_id: int) -> void:
 	else:
 		message.text = "Another player has won the race."
 	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 32)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(message)
 	
 	var spacer = Control.new()
 	spacer.custom_minimum_size = Vector2(0, 20)
 	vbox.add_child(spacer)
 	
-	# Ready button
+	# Ready button (larger for mobile)
 	_ready_button = Button.new()
 	_ready_button.text = "Ready for Next Round"
-	_ready_button.custom_minimum_size = Vector2(200, 40)
+	_ready_button.custom_minimum_size = Vector2(400, 80)
+	_ready_button.add_theme_font_size_override("font_size", 36)
 	_ready_button.pressed.connect(_on_ready_pressed)
 	vbox.add_child(_ready_button)
 
@@ -819,7 +861,7 @@ func _on_player_status_changed(player_id: int, status: String) -> void:
 
 func _on_last_player_standing(player_id: int) -> void:
 	"""Show notification when player is last one standing"""
-	# Create notification panel
+	# Create notification panel (larger for mobile)
 	_last_standing_notification = Panel.new()
 	_last_standing_notification.name = "LastStandingNotification"
 	_last_standing_notification.set_anchors_preset(Control.PRESET_CENTER)
@@ -827,35 +869,39 @@ func _on_last_player_standing(player_id: int) -> void:
 	_last_standing_notification.anchor_top = 0.5
 	_last_standing_notification.anchor_right = 0.5
 	_last_standing_notification.anchor_bottom = 0.5
-	_last_standing_notification.offset_left = -200
-	_last_standing_notification.offset_top = -100
-	_last_standing_notification.offset_right = 200
-	_last_standing_notification.offset_bottom = 100
+	_last_standing_notification.offset_left = -300
+	_last_standing_notification.offset_top = -200
+	_last_standing_notification.offset_right = 300
+	_last_standing_notification.offset_bottom = 200
 	add_child(_last_standing_notification)
 	
 	var vbox = VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 30)
 	_last_standing_notification.add_child(vbox)
 	
 	var title = Label.new()
 	title.text = "Last Player Standing!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 56)
 	vbox.add_child(title)
 	
 	var message = Label.new()
 	message.text = "All other players are jammed or finished.\nYou can continue playing or start next round."
 	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 32)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(message)
 	
 	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 20)
+	spacer.custom_minimum_size = Vector2(0, 30)
 	vbox.add_child(spacer)
 	
-	# Ready button
+	# Ready button (larger for mobile)
 	_ready_button = Button.new()
 	_ready_button.text = "Ready for Next Round"
-	_ready_button.custom_minimum_size = Vector2(200, 40)
+	_ready_button.custom_minimum_size = Vector2(400, 80)
+	_ready_button.add_theme_font_size_override("font_size", 36)
 	_ready_button.pressed.connect(_on_ready_pressed)
 	vbox.add_child(_ready_button)
 

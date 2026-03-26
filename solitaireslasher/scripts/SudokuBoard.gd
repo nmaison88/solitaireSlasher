@@ -85,16 +85,18 @@ func _create_ui():
 	shader_material.set_shader_parameter("char_color", Color(1.0, 0.0, 0.0, 1.0))  # Red for lose
 	shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
 	shader_bg.material = shader_material
+	shader_bg.z_index = 0
 	game_over_overlay.add_child(shader_bg)
 	
-	# "YOU LOST!" text in center (on top of shader)
+	# "YOU LOST!" text in center (on top of shader) - larger for mobile
 	var lost_label = Label.new()
 	lost_label.text = "YOU LOST!"
-	lost_label.add_theme_font_size_override("font_size", 96)
+	lost_label.add_theme_font_size_override("font_size", 128)
 	lost_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
 	lost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lost_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lost_label.z_index = 1
 	game_over_overlay.add_child(lost_label)
 	
 	# Create win overlay (hidden by default)
@@ -116,16 +118,18 @@ func _create_ui():
 	win_shader_material.set_shader_parameter("char_color", Color(0.0, 1.0, 0.8, 1.0))  # Cyan for win
 	win_shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
 	win_shader_bg.material = win_shader_material
+	win_shader_bg.z_index = 0
 	win_overlay.add_child(win_shader_bg)
 	
-	# "YOU WON!" text in center
+	# "YOU WON!" text in center - larger for mobile
 	var win_label = Label.new()
 	win_label.text = "YOU WON!"
-	win_label.add_theme_font_size_override("font_size", 96)
+	win_label.add_theme_font_size_override("font_size", 128)
 	win_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
 	win_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	win_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	win_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	win_label.z_index = 1
 	win_overlay.add_child(win_label)
 	
 	# Main grid container for the 9x9 Sudoku grid

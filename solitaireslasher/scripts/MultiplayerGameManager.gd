@@ -43,8 +43,8 @@ func join_multiplayer_game(host_ip: String, player_name: String) -> bool:
 		return true
 	return false
 
-func start_local_game() -> void:
-	print("MultiplayerGameManager: Starting local game")
+func start_local_game(difficulty: String = "Medium") -> void:
+	print("MultiplayerGameManager: Starting local game with difficulty: ", difficulty)
 	# Don't reset is_multiplayer here - it's already set by host_multiplayer_game() or join_multiplayer_game()
 	# Only set to false if we're truly in single player mode (not connected to network)
 	if not network_manager.is_host and network_manager.players.size() <= 1:
@@ -52,6 +52,7 @@ func start_local_game() -> void:
 	
 	local_game = Game.new()
 	add_child(local_game)
+	local_game.set_difficulty(difficulty)
 	local_game.new_game()
 	local_game.game_completed.connect(_on_local_game_completed)
 	print("Local game created and initialized (multiplayer: ", is_multiplayer, ")")
