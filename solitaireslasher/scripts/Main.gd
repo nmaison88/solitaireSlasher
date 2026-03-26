@@ -96,7 +96,7 @@ func _ready() -> void:
 	_status_label.visible = false
 	
 	_setup_main_menu()
-	_show_main_menu()
+	call_deferred("_show_main_menu")
 	
 	# Connect to NetworkManager signals for disconnect handling
 	if NetworkManager:
@@ -117,6 +117,42 @@ func _setup_main_menu() -> void:
 	menu_background.z_index = -2  # Behind game background
 	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
 	add_child(menu_background)
+	
+	# Add settings button in top left with iPhone notch padding
+	var settings_button = Button.new()
+	settings_button.name = "settings_button"
+	
+	# Position with iPhone notch padding
+	var top_padding = 0
+	var left_padding = 0
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_padding = safe_area.position.y
+		left_padding = safe_area.position.x
+	
+	settings_button.position = Vector2(10 + left_padding, 10 + top_padding)
+	settings_button.size = Vector2(100, 100)
+	settings_button.tooltip_text = "Settings"
+	
+	# Make button background transparent
+	var transparent_style = StyleBoxFlat.new()
+	transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
+	transparent_style.draw_center = false  # Don't draw background
+	settings_button.add_theme_stylebox_override("normal", transparent_style)
+	settings_button.add_theme_stylebox_override("hover", transparent_style)
+	settings_button.add_theme_stylebox_override("pressed", transparent_style)
+	
+	# Add FontAwesome gear icon for settings (FontAwesome 6 naming)
+	var settings_icon = FontAwesome.new()
+	settings_icon.icon_name = "gear"
+	settings_icon.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White color
+	settings_icon.icon_size = 64
+	settings_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	settings_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settings_button.add_child(settings_icon)
+	
+	settings_button.pressed.connect(_on_settings_button_pressed)
+	add_child(settings_button)
 	
 	# Create centered menu container
 	_menu_container = VBoxContainer.new()
@@ -170,19 +206,16 @@ func _setup_main_menu() -> void:
 	var spacer3 = Control.new()
 	spacer3.custom_minimum_size = Vector2(0, 20)
 	_menu_container.add_child(spacer3)
-	
-	var settings_button = Button.new()
-	settings_button.name = "menu_settings"
-	settings_button.text = "Settings"
-	settings_button.custom_minimum_size = Vector2(400, 100)
-	settings_button.add_theme_font_size_override("font_size", 36)
-	settings_button.pressed.connect(_on_settings_button_pressed)
-	_menu_container.add_child(settings_button)
 
 func _on_show_single_player_menu() -> void:
 	"""Show single player submenu with carousels for game type and difficulty"""
 	# Hide main menu
 	_menu_container.visible = false
+	
+	# Hide settings button when in single player menu
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
 	
 	# Create single player menu container - wider to accommodate larger carousel
 	var sp_menu = VBoxContainer.new()
@@ -315,10 +348,25 @@ func _on_show_single_player_menu() -> void:
 	back_button.pressed.connect(_on_single_player_back)
 	sp_menu.add_child(back_button)
 
+func _on_single_player_back() -> void:
+	"""Handle single player back button"""
+	# Remove single player menu
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		sp_menu.queue_free()
+	
+	# Show main menu
+	_show_main_menu()
+
 func _on_show_multiplayer_menu() -> void:
 	"""Show multiplayer submenu with Host/Join buttons"""
 	# Hide main menu
 	_menu_container.visible = false
+	
+	# Hide settings button when in multiplayer menu
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
 	
 	# Create multiplayer menu container
 	var mp_menu = VBoxContainer.new()
@@ -417,22 +465,26 @@ func _on_difficulty_carousel_changed():
 					break
 
 func _on_single_player_start():
+	"""Handle single player start button"""
 	# Remove single player menu
 	var sp_menu = get_node_or_null("SinglePlayerMenu")
 	if sp_menu:
 		sp_menu.queue_free()
 	
-	# Start the game
-	_on_single_player()
-
-func _on_single_player_back():
-	# Remove single player menu
-	var sp_menu = get_node_or_null("SinglePlayerMenu")
-	if sp_menu:
-		sp_menu.queue_free()
+	# Hide main menu
+	_hide_main_menu()
 	
-	# Show main menu
-	_menu_container.visible = true
+	# Hide settings button when game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
+	# Start game based on selection
+	if _current_game_type == "Solitaire":
+		MultiplayerGameManager.start_local_game(_current_difficulty)
+		_setup_single_player_game()
+	else:  # Sudoku
+		_setup_single_player_sudoku()
 
 func _on_multiplayer_back():
 	# Remove multiplayer menu
@@ -468,14 +520,18 @@ func _on_join_game() -> void:
 func _show_main_menu() -> void:
 	if _menu_container:
 		_menu_container.visible = true
-	_board.visible = false
-	_sudoku_board.visible = false
-	_status_label.visible = false
 	
-	# Show menu background
+	# Show settings button only on main menu (if it exists)
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = true
+	
+	# Update menu background to current theme when returning to main menu
 	var menu_bg = get_node_or_null("MenuBackground")
 	if menu_bg:
 		menu_bg.visible = true
+		var current_theme = PlayerData.get_theme()
+		menu_bg.color = Color(0.2, 0.4, 0.7) if current_theme == "light" else Color(0.1, 0.1, 0.1)
 	
 	# Hide blue game background when in menu
 	var game_bg = get_node_or_null("GameBackground")
@@ -545,12 +601,24 @@ func _on_single_player() -> void:
 
 func _start_multiplayer_game() -> void:
 	_hide_main_menu()
+	
+	# Hide settings button when multiplayer game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
 	if MultiplayerGameManager.is_host_player():
 		MultiplayerGameManager.start_multiplayer_race()
 	_setup_multiplayer_game()
 
 func _setup_single_player_game() -> void:
 	print("Setting up single player game...")
+	
+	# Hide settings button when game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
 	var local_game = MultiplayerGameManager.get_local_game()
 	if local_game and is_instance_valid(local_game):
 		print("Got local game, setting up board")
@@ -569,6 +637,11 @@ func _setup_single_player_game() -> void:
 
 func _setup_single_player_sudoku() -> void:
 	print("Setting up single player Sudoku...")
+	
+	# Hide settings button when game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
 	
 	# Clear status label
 	_status_label.text = ""
@@ -1342,6 +1415,11 @@ func _on_settings_button_pressed() -> void:
 	# Hide main menu
 	_menu_container.visible = false
 	
+	# Hide settings button to prevent duplicate clicks
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
 	# Create settings menu container
 	var settings_menu = VBoxContainer.new()
 	settings_menu.name = "SettingsMenu"
@@ -1455,21 +1533,26 @@ func _on_save_player_name(name_input: LineEdit) -> void:
 func _on_dark_mode_toggled(toggled_on: bool) -> void:
 	"""Handle dark mode toggle"""
 	var new_theme = "dark" if toggled_on else "light"
+	print("Toggle clicked: ", toggled_on, " -> New theme: ", new_theme)
 	PlayerData.set_theme(new_theme)
 	
 	# Update backgrounds immediately
 	var game_bg = get_node_or_null("GameBackground")
 	var menu_bg = get_node_or_null("MenuBackground")
 	
+	print("Updating backgrounds...")
 	if game_bg:
 		game_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
+		print("Game background updated to: ", game_bg.color)
 	
 	if menu_bg:
 		menu_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
+		print("Menu background updated to: ", menu_bg.color)
 	
 	# Update Sudoku board theme if it exists
 	if _sudoku_board:
 		_sudoku_board.update_theme()
+		print("Sudoku board theme updated")
 	
 	print("Theme changed to: ", new_theme)
 
@@ -1480,5 +1563,10 @@ func _on_settings_back() -> void:
 	if settings_menu:
 		settings_menu.queue_free()
 	
-	# Show main menu
+	# Show settings button again
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = true
+	
+	# Show main menu (this will update the background to current theme)
 	_show_main_menu()
