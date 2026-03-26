@@ -33,10 +33,11 @@ func _init_theme_colors() -> void:
 		theme_colors = {
 			"cell": Color(0.75, 0.80, 0.90),  # Light blue-gray
 			"text": Color(0.0, 0.0, 0.0),  # Black text
-			"user_text": Color(0.0, 0.0, 1.0),  # Blue text for user input
+			"user_text": Color(0.0, 0.0, 0.0),  # Black text for user input (better visibility)
 			"highlight_row": Color(0.85, 0.90, 1.0),  # Bright blue
 			"highlight_match": Color(0.60, 0.70, 1.0),  # Darker blue
-			"selected": Color(0.7, 0.85, 1.0)  # Light blue highlight
+			"selected": Color(0.7, 0.85, 1.0),  # Light blue highlight
+			"border": Color(0.0, 0.0, 0.0)  # Black borders for 3x3 subgrids
 		}
 	else:  # dark mode
 		theme_colors = {
@@ -45,7 +46,8 @@ func _init_theme_colors() -> void:
 			"user_text": Color(0.0, 0.0, 1.0),  # Blue text for user input
 			"highlight_row": Color(0, 0.1, 0.2, 0.5),  # Dark blue highlight
 			"highlight_match": Color(0.1, 0.2, 0.4),  # Darker blue
-			"selected": Color(0.3, 0.4, 0.6)  # Medium blue
+			"selected": Color(0.3, 0.4, 0.6),  # Medium blue
+			"border": Color(0.0, 0.0, 0.0)  # Black borders for 3x3 subgrids
 		}
 
 func _ready():
@@ -542,14 +544,14 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	else:
 		btn.text = str(value)
 		
-		# Set text color based on correctness
+		# Set text color based on correctness and theme
 		if is_correct:
-			btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White for correct
+			btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 0.0)))  # Use theme color for correct entries
 			# Play place sound for correct entries
 			if SoundManager:
 				SoundManager.play_place()
 		else:
-			btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect
+			btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect (always red)
 			# Play incorrect sound for wrong entries
 			if SoundManager:
 				SoundManager.play_incorrect()
@@ -593,7 +595,22 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 func update_theme() -> void:
 	"""Update theme colors and refresh display"""
 	_init_theme_colors()
+	_update_all_cell_colors()  # Update text colors for all cells
 	_highlight_selected_cell()
+
+func _update_all_cell_colors() -> void:
+	"""Update text colors for all existing cell buttons when theme changes"""
+	for row_idx in range(grid_buttons.size()):
+		for col_idx in range(grid_buttons[row_idx].size()):
+			var btn = grid_buttons[row_idx][col_idx]
+			if btn and game:
+				# Update text color based on whether cell is editable
+				if not game.is_cell_editable(row_idx, col_idx):
+					# Pre-filled cells
+					btn.add_theme_color_override("font_color", theme_colors.get("text", Color(1,1,1)))
+				else:
+					# User input cells
+					btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 1.0)))
 
 func _on_life_lost(remaining_lives: int):
 	"""Update hearts display when a life is lost"""

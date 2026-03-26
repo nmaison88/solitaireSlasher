@@ -91,6 +91,9 @@ func draw_from_stock_3() -> void:
 		c.face_up = true
 		waste.append(c)
 	
+	# Check for auto-win after drawing from stock
+	_check_auto_win()
+	
 	# Play card draw sound
 	if SoundManager:
 		SoundManager.play_card_draw()
@@ -103,6 +106,10 @@ func _recycle_waste_to_stock() -> void:
 		c.face_up = false
 		stock.append(c)
 	waste.clear()
+	
+	# Play restart deck sound after recycling
+	if SoundManager:
+		SoundManager.play_restart_deck()
 
 func get_debug_summary() -> Dictionary:
 	var face_up_counts: Array = []
@@ -198,10 +205,13 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 	_moves_count += 1
 	card_moved.emit(from_pile, "foundation", 1)
 	_check_completion()
+	_check_auto_win()  # Check for auto-win after foundation move
 	
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
+		# Play foundation sound after card_place sound
+		SoundManager.play_foundation()
 	
 	return true
 
@@ -241,6 +251,42 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 	_moves_count += 1
 	card_moved.emit("tableau", "tableau", card_count)
 	
+	# Check for auto-win after cards are flipped
+	_check_auto_win()
+	
+	# Play card place sound
+	if SoundManager:
+		SoundManager.play_card_place()
+	
+	return true
+
+func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bool:
+	# Save state before move
+	_save_state()
+	
+	if foundation_index >= foundations.size() or tableau_index >= tableau.size():
+		return false
+	
+	if foundations[foundation_index].is_empty():
+		return false
+	
+	var card = foundations[foundation_index][-1]
+	
+	if not can_place_on_tableau(card, tableau_index):
+		return false
+	
+	# Remove card from foundation
+	foundations[foundation_index].pop_back()
+	
+	# Add card to tableau
+	tableau[tableau_index].append(card)
+	
+	_moves_count += 1
+	card_moved.emit("foundation", "tableau", 1)
+	
+	# Check for auto-win after foundation move
+	_check_auto_win()
+	
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
@@ -261,6 +307,9 @@ func move_waste_to_tableau(tableau_index: int) -> bool:
 	tableau[tableau_index].append(waste.pop_back())
 	_moves_count += 1
 	card_moved.emit("waste", "tableau", 1)
+	
+	# Check for auto-win after waste move
+	_check_auto_win()
 	
 	# Play card place sound
 	if SoundManager:
@@ -284,6 +333,80 @@ func _check_completion() -> void:
 		SoundManager.play_win()
 	
 	print("Game completed! Moves: ", _moves_count, " Time: ", Time.get_ticks_msec() / 1000.0 - _start_time)
+
+func _check_auto_win() -> void:
+	"""Check if game can be auto-won (all cards flipped, no stock, all cards can go to foundation)"""
+	if _is_completed:
+		return
+	
+	# Auto-win conditions:
+	# 1. Stock is empty
+	# 2. All tableau cards are face up
+	# 3. All remaining cards can legally move to foundation
+	
+	if not stock.is_empty():
+		return  # Stock still has cards
+	
+	# Check if all tableau cards are face up
+	for pile in tableau:
+		for card in pile:
+			if not card.face_up:
+				return  # Still have face-down cards
+	
+	# Check if all remaining cards can move to foundation
+	var total_cards = 0
+	var can_auto_win = true
+	
+	# Count tableau cards
+	for pile in tableau:
+		total_cards += pile.size()
+		for card in pile:
+			# Check if this card can go to its correct foundation
+			if not can_place_on_foundation(card, card.suit):
+				can_auto_win = false
+				break
+		if not can_auto_win:
+			break
+	
+	# Count waste cards
+	total_cards += waste.size()
+	for card in waste:
+		if not can_place_on_foundation(card, card.suit):
+			can_auto_win = false
+			break
+	
+	# If all cards can go to foundation, auto-win
+	if can_auto_win and total_cards > 0:
+		print("Auto-win detected! Moving all ", total_cards, " cards to foundation")
+		_auto_move_all_to_foundation()
+
+func _auto_move_all_to_foundation() -> void:
+	"""Automatically move all remaining cards to foundation"""
+	var moved = true
+	var moves_made = 0
+	
+	# Keep moving until no more moves possible
+	while moved:
+		moved = false
+		
+		# Try moving waste cards to foundation
+		if not waste.is_empty():
+			var card = waste[-1]
+			if can_place_on_foundation(card, card.suit):
+				move_to_foundation("waste", -1, card.suit)
+				moved = true
+				moves_made += 1
+		
+		# Try moving tableau cards to foundation
+		for i in range(tableau.size()):
+			if not tableau[i].is_empty():
+				var card = tableau[i][-1]
+				if can_place_on_foundation(card, card.suit):
+					move_to_foundation("tableau", i, card.suit)
+					moved = true
+					moves_made += 1
+	
+	print("Auto-win completed! Moved ", moves_made, " cards automatically")
 
 func get_game_time() -> float:
 	if _start_time == 0.0:

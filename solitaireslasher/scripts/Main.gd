@@ -1470,7 +1470,8 @@ func _on_all_players_ready() -> void:
 	else:  # Solitaire
 		_board.mouse_filter = Control.MOUSE_FILTER_STOP
 		
-		# Setup new Solitaire game
+		# Start new Solitaire game (like Sudoku does)
+		MultiplayerGameManager.start_local_game(_current_difficulty)
 		var local_game = MultiplayerGameManager.get_local_game()
 		if local_game and is_instance_valid(local_game):
 			_game = local_game

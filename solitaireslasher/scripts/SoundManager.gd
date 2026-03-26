@@ -8,6 +8,8 @@ var retry_player: AudioStreamPlayer
 var lose_player: AudioStreamPlayer
 var incorrect_player: AudioStreamPlayer
 var place_player: AudioStreamPlayer
+var foundation_player: AudioStreamPlayer
+var restart_deck_player: AudioStreamPlayer
 
 func _ready() -> void:
 	_setup_audio_players()
@@ -48,6 +50,16 @@ func _setup_audio_players() -> void:
 	place_player = AudioStreamPlayer.new()
 	place_player.name = "PlacePlayer"
 	add_child(place_player)
+	
+	# Foundation sound
+	foundation_player = AudioStreamPlayer.new()
+	foundation_player.name = "FoundationPlayer"
+	add_child(foundation_player)
+	
+	# Restart deck sound
+	restart_deck_player = AudioStreamPlayer.new()
+	restart_deck_player.name = "RestartDeckPlayer"
+	add_child(restart_deck_player)
 
 func _load_sound_files() -> void:
 	# Try to load sound files from the sounds directory
@@ -58,7 +70,9 @@ func _load_sound_files() -> void:
 		"retry": ["res://sounds/retry.wav", "res://sounds/retry.ogg"],
 		"lose": ["res://sounds/lose.wav", "res://sounds/lose.ogg"],
 		"incorrect": ["res://sounds/incorrect.wav", "res://sounds/incorrect.ogg"],
-		"place": ["res://sounds/place.wav", "res://sounds/place.ogg"]
+		"place": ["res://sounds/place.wav", "res://sounds/place.ogg"],
+		"foundation": ["res://sounds/foundation.wav", "res://sounds/foundation.ogg"],
+		"restart_deck": ["res://sounds/restart_deck.wav", "res://sounds/restart_deck.ogg"]
 	}
 	
 	# Load card place sound
@@ -109,6 +123,20 @@ func _load_sound_files() -> void:
 			place_player.stream = load(path)
 			print("Loaded place sound: ", path)
 			break
+	
+	# Load foundation sound
+	for path in sound_paths["foundation"]:
+		if ResourceLoader.exists(path):
+			foundation_player.stream = load(path)
+			print("Loaded foundation sound: ", path)
+			break
+	
+	# Load restart deck sound
+	for path in sound_paths["restart_deck"]:
+		if ResourceLoader.exists(path):
+			restart_deck_player.stream = load(path)
+			print("Loaded restart deck sound: ", path)
+			break
 
 func play_card_place() -> void:
 	if card_place_player and card_place_player.stream:
@@ -137,6 +165,14 @@ func play_incorrect() -> void:
 func play_place() -> void:
 	if place_player and place_player.stream:
 		place_player.play()
+
+func play_foundation() -> void:
+	if foundation_player and foundation_player.stream:
+		foundation_player.play()
+
+func play_restart_deck() -> void:
+	if restart_deck_player and restart_deck_player.stream:
+		restart_deck_player.play()
 
 # Helper function to load sounds from files
 func load_sounds(card_place_path: String, card_draw_path: String, win_path: String) -> void:

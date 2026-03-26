@@ -341,13 +341,19 @@ func _draw_foundation(pile: Array, pos: Vector2, foundation_index: int) -> void:
 	foundation_card.show_front = true
 	foundation_card.can_be_interacted_with = false  # Disable Card Framework's interaction system
 	
-	# Disable Card Framework's built-in mouse handling
-	foundation_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Enable mouse handling for foundation cards (allow moving back to tableau)
+	foundation_card.mouse_filter = Control.MOUSE_FILTER_PASS
 	
 	# Set face texture using reference project naming
 	var front_texture = load(_get_card_texture_path(c))
 	foundation_card.get_node("FrontFace/TextureRect").texture = front_texture
 	foundation_card.get_node("BackFace/TextureRect").texture = load("res://card_assets/cardBack_blue2.png")
+	
+	# Add click handler for foundation cards
+	foundation_card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_on_foundation_card_pressed(c, foundation_index)
+	)
 	
 	add_child(foundation_card)
 
@@ -430,6 +436,19 @@ func _on_test_card_pressed(card: SolitaireCard):
 				if game.move_tableau_to_tableau(from_pile_index, to_pile_index, card_count):
 					render()
 					return
+
+func _on_foundation_card_pressed(card: SolitaireCard, foundation_index: int) -> void:
+	"""Handle clicking on a foundation card - try to move it back to tableau"""
+	print("Foundation card clicked: ", card.short_name(), " from foundation ", foundation_index)
+	
+	# Try to move the card to any valid tableau pile
+	for tableau_index in range(7):
+		if game.move_foundation_to_tableau(foundation_index, tableau_index):
+			print("Moved ", card.short_name(), " from foundation ", foundation_index, " to tableau ", tableau_index)
+			render()
+			return
+	
+	print("Cannot move ", card.short_name(), " from foundation to any tableau pile")
 
 func _create_drop_zone(zone_name: String, pos: Vector2) -> void:
 	var drop_zone = ColorRect.new()
