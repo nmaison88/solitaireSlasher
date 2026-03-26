@@ -88,6 +88,11 @@ func _ready() -> void:
 	
 	_setup_main_menu()
 	_show_main_menu()
+	
+	# Connect to NetworkManager signals for disconnect handling
+	if NetworkManager:
+		NetworkManager.multiplayer.server_disconnected.connect(_on_server_disconnected)
+		NetworkManager.player_disconnected.connect(_on_player_disconnected)
 
 func _setup_main_menu() -> void:
 	# Add blue background for menu
@@ -398,6 +403,15 @@ func _show_new_game_button():
 	new_game_button.position = Vector2(900, top_padding)  # Moved left and down for safe area
 	new_game_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
 	
+	# Make button background transparent
+	var new_game_transparent_style = StyleBoxFlat.new()
+	new_game_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
+	new_game_transparent_style.draw_center = false  # Don't draw background
+	new_game_button.add_theme_stylebox_override("normal", new_game_transparent_style)
+	new_game_button.add_theme_stylebox_override("hover", new_game_transparent_style)
+	new_game_button.add_theme_stylebox_override("pressed", new_game_transparent_style)
+	new_game_button.add_theme_stylebox_override("disabled", new_game_transparent_style)
+	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
 	print("Creating game button - is_multiplayer: ", is_multiplayer_mode)
 	
@@ -483,6 +497,15 @@ func _show_new_game_button():
 	menu_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
+	
+	# Make button background transparent
+	var menu_transparent_style = StyleBoxFlat.new()
+	menu_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
+	menu_transparent_style.draw_center = false  # Don't draw background
+	menu_button.add_theme_stylebox_override("normal", menu_transparent_style)
+	menu_button.add_theme_stylebox_override("hover", menu_transparent_style)
+	menu_button.add_theme_stylebox_override("pressed", menu_transparent_style)
+	menu_button.add_theme_stylebox_override("disabled", menu_transparent_style)
 	
 	# Add FontAwesome icon as child
 	var menu_icon = FontAwesome.new()
@@ -576,9 +599,9 @@ func _cleanup_game_state() -> void:
 	# Hide status label
 	_status_label.visible = false
 	
-	# Hide and remove game control buttons
+	# Hide and remove game control buttons (including leave game button)
 	for child in get_children():
-		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
+		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button" or child.name == "leave_game_button"):
 			child.visible = false
 			child.queue_free()
 	
@@ -594,6 +617,45 @@ func _cleanup_game_state() -> void:
 	# Hide player status label
 	if _player_status_label and is_instance_valid(_player_status_label):
 		_player_status_label.visible = false
+
+func _on_server_disconnected() -> void:
+	"""Handle when host closes the server (host left the game)"""
+	print("Host has left the game - returning to main menu")
+	
+	# Show notification
+	if _status_label:
+		_status_label.text = "Host left the game"
+		_status_label.visible = true
+	
+	# Clean up and return to menu
+	_cleanup_game_state()
+	_show_main_menu()
+
+func _on_player_disconnected(player_id: int) -> void:
+	"""Handle when a client disconnects (player dropped out)"""
+	if NetworkManager and NetworkManager.is_host:
+		print("Player ", player_id, " dropped out of the game")
+		# Update player status display if visible
+		_update_player_status_display()
+	# Note: Clients will get server_disconnected if host leaves, not this signal
+
+func _on_leave_game_pressed() -> void:
+	"""Handle leave game button press during multiplayer"""
+	print("Leave game pressed")
+	
+	if NetworkManager and is_instance_valid(NetworkManager):
+		if NetworkManager.is_host:
+			# Host is leaving - close the server and disconnect all clients
+			print("Host leaving game - closing server")
+			NetworkManager.leave_game()
+		else:
+			# Client is leaving - just disconnect from host
+			print("Client leaving game")
+			NetworkManager.leave_game()
+	
+	# Clean up and return to menu
+	_cleanup_game_state()
+	_show_main_menu()
 
 func _on_back_to_menu_pressed() -> void:
 	# Clean up game state
@@ -774,6 +836,38 @@ func _setup_multiplayer_ui() -> void:
 	_player_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_player_status_label.text = "Race in progress..."
 	add_child(_player_status_label)
+	
+	# Leave game button (top right) - FontAwesome times-circle icon
+	var leave_button = Button.new()
+	leave_button.name = "leave_game_button"
+	var top_padding = 0
+	if DisplayServer.get_name() == "iOS":
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_padding = safe_area.position.y
+	leave_button.position = Vector2(get_viewport().get_visible_rect().size.x - 110, top_padding)
+	leave_button.size = Vector2(100, 100)
+	leave_button.tooltip_text = "Leave Game"
+	leave_button.pressed.connect(_on_leave_game_pressed)
+	
+	# Make button background transparent
+	var leave_transparent_style = StyleBoxFlat.new()
+	leave_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
+	leave_transparent_style.draw_center = false  # Don't draw background
+	leave_button.add_theme_stylebox_override("normal", leave_transparent_style)
+	leave_button.add_theme_stylebox_override("hover", leave_transparent_style)
+	leave_button.add_theme_stylebox_override("pressed", leave_transparent_style)
+	leave_button.add_theme_stylebox_override("disabled", leave_transparent_style)
+	
+	# Add FontAwesome times-circle icon
+	var leave_icon = FontAwesome.new()
+	leave_icon.icon_name = "times-circle"
+	leave_icon.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))  # Red color
+	leave_icon.icon_size = 64
+	leave_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	leave_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	leave_button.add_child(leave_icon)
+	
+	add_child(leave_button)
 
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
