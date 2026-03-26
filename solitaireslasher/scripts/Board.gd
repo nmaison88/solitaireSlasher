@@ -3,8 +3,9 @@ class_name Board
 
 const CARD_SIZE = Vector2(120, 180)  # Increased size for better readability
 const PILE_GAP_X = 22.0
-const TABLEAU_GAP_Y = 45.0  # Increased spacing to show suit and rank on stacked cards
+const TABLEAU_GAP_Y = 65.0  # Increased spacing to show suit and rank on stacked cards (was 45.0)
 const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
+const FACE_DOWN_GAP_Y = 30.0  # Spacing for face-down cards (was hardcoded 10.0)
 
 signal stock_clicked
 
@@ -378,7 +379,7 @@ func _draw_tableau_column(pile: Array, origin: Vector2, max_h: float, column_ind
 		if c.face_up:
 			y += TABLEAU_GAP_Y
 		else:
-			y += 10.0
+			y += FACE_DOWN_GAP_Y
 
 func _on_test_card_pressed(card: SolitaireCard):
 	# Try to move to foundation first - use card's suit to determine correct foundation
