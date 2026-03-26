@@ -1009,38 +1009,72 @@ func _show_leave_confirmation_dialog() -> void:
 	dialog.get_ok_button().text = "Leave"
 	dialog.get_cancel_button().text = "Stay"
 	
+	# Make dialog much larger for iPhone
+	var viewport_size = get_viewport().get_visible_rect().size
+	var dialog_width = min(viewport_size.x * 0.8, 400)  # 80% of screen width, max 400px
+	var dialog_height = min(viewport_size.y * 0.3, 250)  # 30% of screen height, max 250px
+	
+	dialog.set_size(Vector2(dialog_width, dialog_height))
+	
 	# Style the dialog for mobile-friendly appearance
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.2, 0.2, 0.2, 0.95)  # Dark semi-transparent background
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.border_width_top = 2
-	style.border_width_bottom = 2
+	style.corner_radius_top_left = 16  # Larger rounded corners
+	style.corner_radius_top_right = 16
+	style.corner_radius_bottom_left = 16
+	style.corner_radius_bottom_right = 16
+	style.border_width_left = 3  # Thicker borders
+	style.border_width_right = 3
+	style.border_width_top = 3
+	style.border_width_bottom = 3
 	style.border_color = Color(0.5, 0.5, 0.5)
 	dialog.add_theme_stylebox_override("panel", style)
 	
-	# Style buttons for better visibility
+	# Make title and text larger for mobile
+	dialog.add_theme_font_size_override("title_font_size", 28)
+	dialog.add_theme_font_size_override("font_size", 20)
+	
+	# Style buttons for better mobile visibility
+	var ok_button = dialog.get_ok_button()
+	var cancel_button = dialog.get_cancel_button()
+	
+	# Make buttons much larger
+	var button_width = dialog_width * 0.35  # 35% of dialog width
+	var button_height = 60  # 60px tall for easy tapping
+	ok_button.custom_minimum_size = Vector2(button_width, button_height)
+	cancel_button.custom_minimum_size = Vector2(button_width, button_height)
+	
+	# Style OK button (Leave)
 	var ok_style = StyleBoxFlat.new()
 	ok_style.bg_color = Color(0.8, 0.3, 0.3)  # Red for leave action
-	ok_style.corner_radius_top_left = 4
-	ok_style.corner_radius_top_right = 4
-	ok_style.corner_radius_bottom_left = 4
-	ok_style.corner_radius_bottom_right = 4
-	dialog.get_ok_button().add_theme_stylebox_override("normal", ok_style)
-	dialog.get_ok_button().add_theme_color_override("font_color", Color.WHITE)
+	ok_style.corner_radius_top_left = 12  # Larger rounded corners
+	ok_style.corner_radius_top_right = 12
+	ok_style.corner_radius_bottom_left = 12
+	ok_style.corner_radius_bottom_right = 12
+	ok_style.border_width_left = 2
+	ok_style.border_width_right = 2
+	ok_style.border_width_top = 2
+	ok_style.border_width_bottom = 2
+	ok_style.border_color = Color(0.6, 0.2, 0.2)  # Darker red border
+	ok_button.add_theme_stylebox_override("normal", ok_style)
+	ok_button.add_theme_color_override("font_color", Color.WHITE)
+	ok_button.add_theme_font_size_override("font_size", 22)  # Larger button text
 	
+	# Style Cancel button (Stay)
 	var cancel_style = StyleBoxFlat.new()
 	cancel_style.bg_color = Color(0.3, 0.3, 0.3)  # Gray for cancel
-	cancel_style.corner_radius_top_left = 4
-	cancel_style.corner_radius_top_right = 4
-	cancel_style.corner_radius_bottom_left = 4
-	cancel_style.corner_radius_bottom_right = 4
-	dialog.get_cancel_button().add_theme_stylebox_override("normal", cancel_style)
-	dialog.get_cancel_button().add_theme_color_override("font_color", Color.WHITE)
+	cancel_style.corner_radius_top_left = 12
+	cancel_style.corner_radius_top_right = 12
+	cancel_style.corner_radius_bottom_left = 12
+	cancel_style.corner_radius_bottom_right = 12
+	cancel_style.border_width_left = 2
+	cancel_style.border_width_right = 2
+	cancel_style.border_width_top = 2
+	cancel_style.border_width_bottom = 2
+	cancel_style.border_color = Color(0.2, 0.2, 0.2)  # Darker gray border
+	cancel_button.add_theme_stylebox_override("normal", cancel_style)
+	cancel_button.add_theme_color_override("font_color", Color.WHITE)
+	cancel_button.add_theme_font_size_override("font_size", 22)  # Larger button text
 	
 	# Connect the confirmed signal to actually leave the game
 	dialog.confirmed.connect(_on_leave_game_pressed)
