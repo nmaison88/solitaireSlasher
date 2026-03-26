@@ -30,6 +30,9 @@ var camera_display: TextureRect
 var camera_panel: Panel
 var close_camera_button: Button
 var is_scanning: bool = false
+var settings_label: Label
+var game_type_container: HBoxContainer
+var difficulty_container: HBoxContainer
 
 func _ready() -> void:
 	# Load and setup IP helper
@@ -49,20 +52,14 @@ func _ready() -> void:
 	native_camera = NativeCamera.new()
 	native_camera.name = "NativeCamera"
 	add_child(native_camera)
-	print("NativeCamera node added to scene tree")
 	
 	# Wait for ready
 	await get_tree().process_frame
 	
 	# Connect signals
-	if native_camera.camera_permission_granted.connect(_on_camera_permission_granted) == OK:
-		print("camera_permission_granted signal connected")
-	if native_camera.camera_permission_denied.connect(_on_camera_permission_denied) == OK:
-		print("camera_permission_denied signal connected")
-	if native_camera.frame_available.connect(_on_camera_frame_available) == OK:
-		print("frame_available signal connected")
-	else:
-		print("ERROR: Failed to connect frame_available signal!")
+	native_camera.camera_permission_granted.connect(_on_camera_permission_granted)
+	native_camera.camera_permission_denied.connect(_on_camera_permission_denied)
+	native_camera.frame_available.connect(_on_camera_frame_available)
 	
 	_create_ui()
 	_connect_signals()
@@ -71,100 +68,116 @@ func _create_ui() -> void:
 	# Main container
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 50)
-	margin.add_theme_constant_override("margin_right", 50)
-	margin.add_theme_constant_override("margin_top", 50)
-	margin.add_theme_constant_override("margin_bottom", 50)
+	margin.add_theme_constant_override("margin_left", 80)
+	margin.add_theme_constant_override("margin_right", 80)
+	margin.add_theme_constant_override("margin_top", 80)
+	margin.add_theme_constant_override("margin_bottom", 80)
 	add_child(margin)
 	
 	# Add scroll container to ensure all content is accessible
 	var scroll_outer = ScrollContainer.new()
+	scroll_outer.name = "ScrollOuter"
 	scroll_outer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_child(scroll_outer)
 	
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 20)
+	vbox.name = "VBoxContainer"
+	vbox.add_theme_constant_override("separation", 40)
 	vbox.size_flags_horizontal = Control.SIZE_FILL
 	scroll_outer.add_child(vbox)
 	
 	# Title
 	var title = Label.new()
 	title.text = "Multiplayer Lobby"
-	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_font_size_override("font_size", 64)
 	vbox.add_child(title)
 	
 	# Host/Join status
 	host_label = Label.new()
-	host_label.add_theme_font_size_override("font_size", 20)
+	host_label.add_theme_font_size_override("font_size", 40)
 	vbox.add_child(host_label)
 	
 	# Status label
 	status_label = Label.new()
 	status_label.text = "Waiting for players..."
+	status_label.add_theme_font_size_override("font_size", 32)
 	vbox.add_child(status_label)
 	
 	# IP Entry section (for joining)
-	var ip_section = HBoxContainer.new()
-	ip_section.add_theme_constant_override("separation", 10)
+	var ip_section = VBoxContainer.new()
+	ip_section.add_theme_constant_override("separation", 20)
 	vbox.add_child(ip_section)
 	
 	var ip_label = Label.new()
 	ip_label.text = "Host IP:"
+	ip_label.add_theme_font_size_override("font_size", 36)
 	ip_section.add_child(ip_label)
 	
 	ip_input = LineEdit.new()
-	ip_input.placeholder_text = "Enter host IP (LAN: 192.168.x.x or Internet: public IP)"
-	ip_input.custom_minimum_size = Vector2(400, 0)
+	ip_input.placeholder_text = "Enter host IP"
+	ip_input.custom_minimum_size = Vector2(800, 100)
+	ip_input.add_theme_font_size_override("font_size", 32)
 	ip_section.add_child(ip_input)
+	
+	# Button row
+	var button_row = HBoxContainer.new()
+	button_row.add_theme_constant_override("separation", 20)
+	ip_section.add_child(button_row)
 	
 	# Scan QR Code button
 	scan_button = Button.new()
 	scan_button.text = "Scan QR Code"
-	scan_button.custom_minimum_size = Vector2(150, 0)
+	scan_button.custom_minimum_size = Vector2(350, 100)
+	scan_button.add_theme_font_size_override("font_size", 32)
 	scan_button.pressed.connect(_on_scan_qr_pressed)
-	ip_section.add_child(scan_button)
+	button_row.add_child(scan_button)
 	
 	join_button = Button.new()
 	join_button.text = "Join Game"
+	join_button.custom_minimum_size = Vector2(350, 100)
+	join_button.add_theme_font_size_override("font_size", 32)
 	join_button.pressed.connect(_on_join_pressed)
-	ip_section.add_child(join_button)
+	button_row.add_child(join_button)
 	
 	# Game settings (only visible for host)
-	var settings_label = Label.new()
+	settings_label = Label.new()
 	settings_label.name = "SettingsLabel"
 	settings_label.text = "Game Settings:"
-	settings_label.add_theme_font_size_override("font_size", 20)
+	settings_label.add_theme_font_size_override("font_size", 40)
 	settings_label.visible = false
 	vbox.add_child(settings_label)
 	
 	# Game type selection
-	var game_type_container = HBoxContainer.new()
+	game_type_container = HBoxContainer.new()
 	game_type_container.name = "GameTypeContainer"
+	game_type_container.add_theme_constant_override("separation", 20)
 	game_type_container.visible = false
 	vbox.add_child(game_type_container)
 	
 	var game_type_label = Label.new()
 	game_type_label.text = "Game Type:"
-	game_type_label.add_theme_font_size_override("font_size", 18)
+	game_type_label.add_theme_font_size_override("font_size", 36)
 	game_type_container.add_child(game_type_label)
 	
 	game_type_option = OptionButton.new()
 	game_type_option.add_item("Solitaire")
 	game_type_option.add_item("Sudoku")
 	game_type_option.select(0)
-	game_type_option.custom_minimum_size = Vector2(200, 40)
+	game_type_option.custom_minimum_size = Vector2(400, 80)
+	game_type_option.add_theme_font_size_override("font_size", 32)
 	game_type_option.item_selected.connect(_on_game_type_changed)
 	game_type_container.add_child(game_type_option)
 	
 	# Difficulty selection
-	var difficulty_container = HBoxContainer.new()
+	difficulty_container = HBoxContainer.new()
 	difficulty_container.name = "DifficultyContainer"
+	difficulty_container.add_theme_constant_override("separation", 20)
 	difficulty_container.visible = false
 	vbox.add_child(difficulty_container)
 	
 	var difficulty_label = Label.new()
 	difficulty_label.text = "Difficulty:"
-	difficulty_label.add_theme_font_size_override("font_size", 18)
+	difficulty_label.add_theme_font_size_override("font_size", 36)
 	difficulty_container.add_child(difficulty_label)
 	
 	difficulty_option = OptionButton.new()
@@ -172,36 +185,42 @@ func _create_ui() -> void:
 	difficulty_option.add_item("Medium")
 	difficulty_option.add_item("Hard")
 	difficulty_option.select(1)
-	difficulty_option.custom_minimum_size = Vector2(200, 40)
+	difficulty_option.custom_minimum_size = Vector2(400, 80)
+	difficulty_option.add_theme_font_size_override("font_size", 32)
 	difficulty_option.item_selected.connect(_on_difficulty_changed)
 	difficulty_container.add_child(difficulty_option)
 	
 	# Player list
 	var players_label = Label.new()
 	players_label.text = "Players:"
-	players_label.add_theme_font_size_override("font_size", 20)
+	players_label.add_theme_font_size_override("font_size", 40)
 	vbox.add_child(players_label)
 	
 	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 200)
+	scroll.custom_minimum_size = Vector2(0, 300)
 	vbox.add_child(scroll)
 	
 	player_list = VBoxContainer.new()
+	player_list.add_theme_constant_override("separation", 15)
 	scroll.add_child(player_list)
 	
 	# Buttons
 	var button_box = HBoxContainer.new()
-	button_box.add_theme_constant_override("separation", 10)
+	button_box.add_theme_constant_override("separation", 20)
 	vbox.add_child(button_box)
 	
 	start_button = Button.new()
 	start_button.text = "Start Game"
+	start_button.custom_minimum_size = Vector2(350, 100)
+	start_button.add_theme_font_size_override("font_size", 36)
 	start_button.pressed.connect(_on_start_pressed)
 	start_button.visible = false
 	button_box.add_child(start_button)
 	
 	leave_button = Button.new()
 	leave_button.text = "Leave Lobby"
+	leave_button.custom_minimum_size = Vector2(350, 100)
+	leave_button.add_theme_font_size_override("font_size", 36)
 	leave_button.pressed.connect(_on_leave_pressed)
 	button_box.add_child(leave_button)
 
@@ -217,17 +236,17 @@ func setup_as_host(player_name: String) -> void:
 	host_label.text = "You are hosting"
 	
 	# Show game settings for host
-	var settings_label = get_node_or_null("ScrollOuter/VBoxContainer/SettingsLabel")
 	if settings_label:
 		settings_label.visible = true
+		print("Settings label made visible")
 	
-	var game_type_container = get_node_or_null("ScrollOuter/VBoxContainer/GameTypeContainer")
 	if game_type_container:
 		game_type_container.visible = true
+		print("Game type container made visible")
 	
-	var difficulty_container = get_node_or_null("ScrollOuter/VBoxContainer/DifficultyContainer")
 	if difficulty_container:
 		difficulty_container.visible = true
+		print("Difficulty container made visible")
 	
 	# Create IP info section for host
 	var ip_info_container = VBoxContainer.new()
@@ -236,7 +255,7 @@ func setup_as_host(player_name: String) -> void:
 	# Local IP (for LAN play)
 	local_ip_label = Label.new()
 	local_ip_label.text = "Local IP (LAN): " + ip_helper.get_local_ip() + " | Port: 7777"
-	local_ip_label.add_theme_font_size_override("font_size", 16)
+	local_ip_label.add_theme_font_size_override("font_size", 32)
 	ip_info_container.add_child(local_ip_label)
 	
 	# Generate QR code for local IP
@@ -246,13 +265,13 @@ func setup_as_host(player_name: String) -> void:
 	# Public IP (for internet play) - will be fetched
 	public_ip_label = Label.new()
 	public_ip_label.text = "Public IP (Internet): Fetching..."
-	public_ip_label.add_theme_font_size_override("font_size", 16)
+	public_ip_label.add_theme_font_size_override("font_size", 32)
 	ip_info_container.add_child(public_ip_label)
 	
 	# Port forwarding instructions
 	port_forward_label = Label.new()
 	port_forward_label.text = "For internet play: Forward port 7777 (TCP/UDP) on your router"
-	port_forward_label.add_theme_font_size_override("font_size", 14)
+	port_forward_label.add_theme_font_size_override("font_size", 28)
 	port_forward_label.modulate = Color(1.0, 0.8, 0.0)  # Yellow warning color
 	ip_info_container.add_child(port_forward_label)
 	
@@ -283,11 +302,22 @@ func setup_as_client(player_name: String) -> void:
 
 func _on_client_connected() -> void:
 	"""Called after successfully connecting to host"""
-	host_label.text = "Connected as client"
-	status_label.text = "Connected to host"
+	is_host = false
+	
+	# Show the connected host IP
+	var connected_ip = ip_input.text
+	host_label.text = "Connected to Host: " + connected_ip
+	status_label.text = "Waiting for host to start game..."
+	status_label.visible = true
+	
+	# Hide join UI elements
 	ip_input.visible = false
 	join_button.visible = false
-	scan_button.visible = false  # Hide scan button after connecting
+	scan_button.visible = false
+	
+	# Show leave button
+	leave_button.visible = true
+	start_button.visible = false
 
 func _on_public_ip_received(ip: String) -> void:
 	"""Called when public IP is successfully fetched"""
@@ -312,6 +342,7 @@ func _get_local_ip() -> String:
 func _add_player(player_id: int, player_name: String) -> void:
 	var player_label = Label.new()
 	player_label.text = "• " + player_name
+	player_label.add_theme_font_size_override("font_size", 32)
 	player_label.name = "player_" + str(player_id)
 	player_list.add_child(player_label)
 
@@ -418,22 +449,22 @@ func update_player_list(players: Dictionary) -> void:
 func _generate_qr_code(ip_address: String, container: VBoxContainer) -> void:
 	"""Generate and display QR code for IP address"""
 	if qr_node:
-		# Generate QR code texture
-		var qr_texture = qr_node.generate_qr_texture(ip_address, 256, Color.BLACK, Color.WHITE)
+		# Generate QR code texture - much larger for easier scanning
+		var qr_texture = qr_node.generate_qr_texture(ip_address, 512, Color.BLACK, Color.WHITE)
 		
 		if qr_texture:
-			# Create TextureRect to display QR code
-			qr_texture_rect = TextureRect.new()
-			qr_texture_rect.texture = qr_texture
-			qr_texture_rect.custom_minimum_size = Vector2(256, 256)
-			qr_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			qr_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			
 			# Add label
 			var qr_label = Label.new()
 			qr_label.text = "Scan QR Code to Join:"
-			qr_label.add_theme_font_size_override("font_size", 16)
+			qr_label.add_theme_font_size_override("font_size", 36)
 			container.add_child(qr_label)
+			
+			# Create TextureRect to display QR code
+			qr_texture_rect = TextureRect.new()
+			qr_texture_rect.texture = qr_texture
+			qr_texture_rect.custom_minimum_size = Vector2(600, 600)
+			qr_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			qr_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			
 			container.add_child(qr_texture_rect)
 		else:
@@ -481,10 +512,7 @@ func _on_qr_scan_failed(error) -> void:
 func _create_camera_overlay() -> void:
 	"""Create camera overlay UI for scanning"""
 	if camera_panel:
-		print("Camera overlay already exists")
 		return  # Already created
-	
-	print("Creating camera overlay UI...")
 	
 	# Create full-screen panel for camera
 	camera_panel = Panel.new()
@@ -492,7 +520,6 @@ func _create_camera_overlay() -> void:
 	camera_panel.z_index = 100  # On top of everything
 	camera_panel.visible = false
 	add_child(camera_panel)
-	print("Camera panel created, z_index: ", camera_panel.z_index)
 	
 	# Create camera display
 	camera_display = TextureRect.new()
@@ -500,26 +527,24 @@ func _create_camera_overlay() -> void:
 	camera_display.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	camera_display.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	camera_panel.add_child(camera_display)
-	print("Camera display TextureRect created")
 	
-	# Create close button
+	# Create close button - much larger and easier to tap
 	close_camera_button = Button.new()
 	close_camera_button.text = "Close Camera"
-	close_camera_button.custom_minimum_size = Vector2(200, 80)
-	close_camera_button.position = Vector2(50, 50)
+	close_camera_button.custom_minimum_size = Vector2(400, 120)
+	close_camera_button.add_theme_font_size_override("font_size", 36)
+	close_camera_button.position = Vector2(100, 100)
 	close_camera_button.pressed.connect(_on_close_camera_pressed)
 	camera_panel.add_child(close_camera_button)
-	print("Close camera button created")
 	
-	# Add instruction label
+	# Add instruction label - larger and more visible
 	var instruction_label = Label.new()
 	instruction_label.text = "Point camera at QR code"
-	instruction_label.add_theme_font_size_override("font_size", 32)
+	instruction_label.add_theme_font_size_override("font_size", 48)
 	instruction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	instruction_label.position = Vector2(0, 150)
-	instruction_label.size = Vector2(get_viewport().size.x, 50)
+	instruction_label.position = Vector2(0, 250)
+	instruction_label.size = Vector2(get_viewport().size.x, 100)
 	camera_panel.add_child(instruction_label)
-	print("Camera overlay UI created successfully")
 
 func _on_close_camera_pressed() -> void:
 	"""Close camera and stop scanning"""
@@ -532,75 +557,46 @@ func _close_camera() -> void:
 	
 	if native_camera:
 		native_camera.stop()
-		print("Camera stopped")
 	
 	if camera_panel:
 		camera_panel.visible = false
 
 func _start_camera_feed() -> void:
 	"""Start the native camera feed"""
-	print("Starting native camera feed...")
+	print("Starting camera for QR scanning...")
 	status_label.text = "Opening camera..."
 	
 	# Create camera UI overlay
 	_create_camera_overlay()
 	
-	# Get available cameras first
+	# Get available cameras and select the first one
 	var cameras = native_camera.get_all_cameras()
-	print("Available cameras: ", cameras.size())
-	for i in range(cameras.size()):
-		var cam = cameras[i]
-		print("  Camera ", i, ": ", cam)
-	
-	# Create feed request with lower frames_to_skip for more frequent updates
 	var feed_request = FeedRequest.new()
 	
-	# Try to set the camera ID to the first available camera
+	# Set camera ID if available
 	if cameras.size() > 0:
 		var camera_id = cameras[0].get_camera_id()
 		feed_request.set_camera_id(camera_id)
-		print("Setting camera ID to: ", camera_id)
+		print("Using camera: ", camera_id)
 	
+	# Configure feed request
 	feed_request.set_width(1280)
 	feed_request.set_height(720)
-	feed_request.set_frames_to_skip(5)  # Only skip 5 frames instead of 40
-	feed_request.set_rotation(90)  # Portrait mode
+	feed_request.set_frames_to_skip(5)
+	feed_request.set_rotation(90)
 	feed_request.set_grayscale(false)
-	print("Feed request created:")
-	print("  - Width: 1280")
-	print("  - Height: 720")
-	print("  - Frames to skip: 5")
-	print("  - Rotation: 90")
-	print("  - Grayscale: false")
-	print("  - Feed request data: ", feed_request.get_raw_data())
 	
-	# Check if native_camera has the plugin singleton
-	if native_camera._plugin_singleton:
-		print("NativeCamera plugin singleton is initialized")
-	else:
-		print("ERROR: NativeCamera plugin singleton is NULL!")
-	
-	# Start camera with request
-	print("Calling native_camera.start()...")
+	# Start camera
 	native_camera.start(feed_request)
-	print("Camera start() called - waiting for frames...")
 	
 	# Show camera overlay
-	if camera_panel:
-		camera_panel.visible = true
-		print("Camera panel set to visible: ", camera_panel.visible)
-		print("Camera panel position: ", camera_panel.position)
-		print("Camera panel size: ", camera_panel.size)
-	else:
-		print("ERROR: camera_panel is null!")
-	
+	camera_panel.visible = true
 	is_scanning = true
 	
-	print("Native camera feed started, is_scanning: ", is_scanning)
+	print("Camera started")
 
 func _on_camera_permission_granted() -> void:
 	"""Called when camera permission is granted"""
-	print("Camera permission granted!")
 	status_label.text = "Camera permission granted"
 	_start_camera_feed()
 
@@ -611,24 +607,17 @@ func _on_camera_permission_denied() -> void:
 
 func _on_camera_frame_available(frame_info: FrameInfo) -> void:
 	"""Called when a new camera frame is available"""
-	print("Frame received! is_scanning: ", is_scanning)
-	
 	if not is_scanning:
-		print("Not scanning, ignoring frame")
 		return
 	
 	# Get image from frame
 	var img = frame_info.get_image()
-	print("Frame image size: ", img.get_size() if img else "null")
 	
 	if img and img.get_size().x > 0:
 		# Display the frame
 		if camera_display:
 			var texture = ImageTexture.create_from_image(img)
 			camera_display.texture = texture
-			print("Frame displayed in camera_display, texture size: ", texture.get_size())
-		else:
-			print("ERROR: camera_display is null!")
 		
 		# Scan the image for QR codes
 		qr_node.scan_qr_image(img)

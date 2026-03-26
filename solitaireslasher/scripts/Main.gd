@@ -246,6 +246,9 @@ func _on_game_type_changed(index: int) -> void:
 	print("Game type changed to: ", _current_game_type)
 
 func _on_single_player() -> void:
+	# Clean up any existing game state
+	_cleanup_game_state()
+	
 	_hide_main_menu()
 	
 	if _current_game_type == "Solitaire":
@@ -522,8 +525,43 @@ func _on_card_moved(_from_pile: String, _to_pile: String, _card_count: int) -> v
 	# Update undo button state after any card move
 	_update_undo_button_state()
 
+func _cleanup_game_state() -> void:
+	"""Clean up all game state before starting a new game or returning to menu"""
+	# Clear the boards
+	_board.set_game(null)
+	_board.render()
+	
+	# Hide both boards
+	_board.visible = false
+	_sudoku_board.visible = false
+	
+	# Hide status label
+	_status_label.visible = false
+	
+	# Hide and remove game control buttons
+	for child in get_children():
+		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
+			child.visible = false
+			child.queue_free()
+	
+	# Hide multiplayer lobby if visible
+	if _multiplayer_lobby and is_instance_valid(_multiplayer_lobby):
+		_multiplayer_lobby.visible = false
+	
+	# Hide any ready notifications
+	if _last_standing_notification and is_instance_valid(_last_standing_notification):
+		_last_standing_notification.queue_free()
+		_last_standing_notification = null
+	
+	# Hide player status label
+	if _player_status_label and is_instance_valid(_player_status_label):
+		_player_status_label.visible = false
+
 func _on_back_to_menu_pressed() -> void:
-	# Clean up network connections
+	# Clean up game state
+	_cleanup_game_state()
+	
+	# Disconnect from multiplayer if connected
 	if NetworkManager and is_instance_valid(NetworkManager):
 		if NetworkManager.multiplayer_peer:
 			NetworkManager.multiplayer_peer.close()
@@ -532,12 +570,6 @@ func _on_back_to_menu_pressed() -> void:
 			multiplayer.multiplayer_peer = null
 		NetworkManager.is_host = false
 		NetworkManager.players.clear()
-	
-	# Hide and remove game control buttons
-	for child in get_children():
-		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
-			child.visible = false  # Hide immediately
-			child.queue_free()  # Schedule for deletion
 	
 	# Show main menu
 	_show_main_menu()
@@ -548,7 +580,28 @@ func _on_back_to_menu_pressed() -> void:
 
 func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
 	# Hide main menu
-	_hide_main_menu()
+	if _menu_container:
+		_menu_container.visible = false
+	
+	# Hide menu background
+	var menu_bg = get_node_or_null("MenuBackground")
+	if menu_bg:
+		menu_bg.visible = false
+	
+	# IMPORTANT: Hide all game boards when showing lobby
+	_board.visible = false
+	_sudoku_board.visible = false
+	_status_label.visible = false
+	
+	# Hide game background
+	var game_bg = get_node_or_null("GameBackground")
+	if game_bg:
+		game_bg.visible = false
+	
+	# Hide any game control buttons
+	for child in get_children():
+		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
+			child.visible = false
 	
 	# Create and show lobby UI
 	if _multiplayer_lobby:
@@ -582,6 +635,9 @@ func _on_lobby_closed() -> void:
 	_show_main_menu()
 
 func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void:
+	# Clean up any previous game state
+	_cleanup_game_state()
+	
 	# Hide lobby
 	if _multiplayer_lobby:
 		_multiplayer_lobby.visible = false
@@ -608,6 +664,9 @@ func _setup_multiplayer_sudoku() -> void:
 	"""Setup multiplayer Sudoku game"""
 	print("Setting up multiplayer Sudoku...")
 	
+	# Set game type in MultiplayerGameManager
+	MultiplayerGameManager.current_game_type = "Sudoku"
+	
 	# Clear status label
 	_status_label.text = ""
 	
@@ -630,6 +689,16 @@ func _setup_multiplayer_sudoku() -> void:
 		_sudoku_game.puzzle_completed.connect(_on_multiplayer_sudoku_completed)
 	if not _sudoku_game.game_over.is_connected(_on_multiplayer_sudoku_game_over):
 		_sudoku_game.game_over.connect(_on_multiplayer_sudoku_game_over)
+	
+	# Connect multiplayer signals
+	if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
+		MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
+	if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
+		MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
+	if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
+		MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
+	if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
+		MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
 	
 	# Hide menu buttons
 	_hide_menu_buttons()

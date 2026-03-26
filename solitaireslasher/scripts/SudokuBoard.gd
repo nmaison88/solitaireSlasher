@@ -555,6 +555,11 @@ func _on_game_over():
 	"""Handle game over - disable input and show overlay"""
 	print("Sudoku game over - no lives remaining!")
 	
+	# Notify multiplayer if in multiplayer mode
+	if MultiplayerGameManager and MultiplayerGameManager.is_multiplayer:
+		print("Notifying multiplayer that player lost all lives")
+		MultiplayerGameManager.forfeit_player()
+	
 	# Show game over overlay
 	if game_over_overlay:
 		game_over_overlay.visible = true

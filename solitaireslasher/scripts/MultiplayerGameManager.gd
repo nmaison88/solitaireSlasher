@@ -139,6 +139,10 @@ func _on_race_completed(player_id: int, time: float) -> void:
 
 func _end_multiplayer_race(winner_id: int) -> void:
 	"""End the multiplayer race for all players and show ready screen"""
+	# Broadcast to all clients if we're the host
+	if network_manager.is_host:
+		network_manager.broadcast_race_ended(winner_id)
+	
 	# Signal to Main.gd to show ready screen
 	race_ended.emit(winner_id, "", 0.0)
 
@@ -262,9 +266,10 @@ func _check_last_player_standing() -> void:
 	if playing_count == 1 and last_playing_id == network_manager.local_player_id:
 		last_player_standing.emit(last_playing_id)
 	
-	# If no players are still playing (all jammed or completed), end the round
-	if playing_count == 0:
-		print("All players are jammed or completed - ending round")
+	# Only host should end the round when all players are done
+	# Clients should wait for host to end the race
+	if playing_count == 0 and network_manager.is_host:
+		print("All players are jammed or completed - host ending round")
 		_end_multiplayer_race(-1)  # -1 means no winner (all jammed)
 
 func forfeit_player() -> void:

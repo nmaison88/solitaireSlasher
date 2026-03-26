@@ -30,7 +30,8 @@ enum MessageType {
 	SESSION_INFO,
 	PLAYER_STATUS,
 	PLAYER_READY,
-	GAME_SETTINGS
+	GAME_SETTINGS,
+	RACE_ENDED
 }
 
 func _ready() -> void:
@@ -218,6 +219,12 @@ func broadcast_player_ready(player_id: int, ready: bool) -> void:
 		"ready": ready
 	})
 
+func broadcast_race_ended(winner_id: int) -> void:
+	"""Broadcast that the race has ended to all players"""
+	_broadcast_message(MessageType.RACE_ENDED, {
+		"winner_id": winner_id
+	})
+
 func _broadcast_message(message_type: MessageType, data: Dictionary) -> void:
 	var message = {
 		"type": message_type,
@@ -257,6 +264,8 @@ func receive_message(message: Dictionary) -> void:
 			_handle_player_status(data)
 		MessageType.PLAYER_READY:
 			_handle_player_ready(data)
+		MessageType.RACE_ENDED:
+			_handle_race_ended(data)
 
 func _handle_player_join(data: Dictionary) -> void:
 	var player_id = data.player_id
@@ -316,6 +325,15 @@ func _handle_player_ready(data: Dictionary) -> void:
 	# Forward to MultiplayerGameManager
 	if MultiplayerGameManager:
 		MultiplayerGameManager.receive_player_ready(player_id, ready)
+
+func _handle_race_ended(data: Dictionary) -> void:
+	"""Handle race ended notification from host"""
+	var winner_id = data.winner_id
+	print("Received race ended notification - winner: ", winner_id)
+	
+	# Forward to MultiplayerGameManager to trigger ready screen
+	if MultiplayerGameManager:
+		MultiplayerGameManager._end_multiplayer_race(winner_id)
 
 func _on_peer_connected(id: int) -> void:
 	print("✓ Peer connected: ", id)
