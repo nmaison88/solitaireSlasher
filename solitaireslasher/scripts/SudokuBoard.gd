@@ -19,8 +19,9 @@ var erase_button: Button  # Erase button for incorrect values
 var theme_colors: Dictionary = {}
 
 const GRID_SIZE = 9
-const CELL_SIZE = 80  # Sized for 1366px viewport
-const NUMBER_BUTTON_SIZE = 80
+var cell_size: float  # Dynamic cell size calculated based on screen
+var number_button_size: float  # Dynamic button size
+var spacing: int = 2  # Grid spacing
 
 signal game_completed
 
@@ -54,19 +55,34 @@ func _ready():
 
 func _create_ui():
 	print("=== SudokuBoard._create_ui() called ===")
+	
+	# SECTION 1: Dynamic sizing calculation
+	var viewport_rect = get_viewport_rect()
+	var screen_width = viewport_rect.size.x
+	var screen_height = viewport_rect.size.y
+	
+	# Compute board size using the formula
+	var board_size = min(screen_width, screen_height * 0.6)
+	
+	# Compute cell size
+	cell_size = (board_size - spacing * (GRID_SIZE - 1)) / GRID_SIZE
+	number_button_size = cell_size
+	
+	print("Dynamic sizing - Screen: ", Vector2(screen_width, screen_height), " Board size: ", board_size, " Cell size: ", cell_size)
+	
 	# Hearts container (lives) - positioned above the Sudoku grid
-	# Grid is at y=320, so hearts at y=220 with 100px height leaves padding
 	hearts_container = HBoxContainer.new()
-	hearts_container.position = Vector2(0, 220)  # Above grid at y=320
 	hearts_container.custom_minimum_size = Vector2(0, 90)  # Height for hearts
 	hearts_container.add_theme_constant_override("separation", 20)
 	hearts_container.alignment = BoxContainer.ALIGNMENT_CENTER  # Center horizontally
 	
-	# Use anchors to center horizontally across screen width
+	# SECTION 5: Make hearts responsive
 	hearts_container.anchor_left = 0.0
 	hearts_container.anchor_right = 1.0
 	hearts_container.offset_left = 0
 	hearts_container.offset_right = 0
+	hearts_container.offset_top = screen_height * 0.05
+	hearts_container.offset_bottom = hearts_container.offset_top + 80
 	
 	add_child(hearts_container)
 	print("Hearts container added above grid at y=220")
@@ -163,19 +179,33 @@ func _create_ui():
 	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
 	# Screen width: 1024px, center: (1024 - 736) / 2 = 144px
 	# Board height: 9 cells * 80px + 8 gaps * 2px = 736px
-	# Grid starts at y=320 (below hearts and top buttons)
+	# SECTION 2: Make grid_container responsive
+	var grid_width = cell_size * GRID_SIZE + spacing * (GRID_SIZE - 1)
+	
 	grid_container = GridContainer.new()
 	grid_container.columns = GRID_SIZE
-	grid_container.position = Vector2(144, 320)  # Centered horizontally, below hearts
-	grid_container.add_theme_constant_override("h_separation", 2)
-	grid_container.add_theme_constant_override("v_separation", 2)
+	
+	# Set position to center horizontally and place near top
+	var grid_x = (screen_width - grid_width) / 2
+	var grid_y = screen_height * 0.15
+	grid_container.position = Vector2(grid_x, grid_y)
+	
+	grid_container.add_theme_constant_override("h_separation", spacing)
+	grid_container.add_theme_constant_override("v_separation", spacing)
 	add_child(grid_container)
 	
-	# Erase button (above number selector)
-	# Position at y=1140 (above number selector at y=1240)
+	print("Grid positioned at: ", Vector2(grid_x, grid_y), " with width: ", grid_width)
+	
+	# SECTION 6: Make erase button responsive
 	erase_button = Button.new()
-	erase_button.custom_minimum_size = Vector2(100, 80)
-	erase_button.position = Vector2(462, 1140)  # Centered: (1024 - 100) / 2 = 462
+	var button_width = 100
+	var button_height = 80
+	erase_button.custom_minimum_size = Vector2(button_width, button_height)
+	
+	# Place it below the grid
+	var erase_x = (screen_width - button_width) / 2
+	var erase_y = grid_container.position.y + grid_width + 20
+	erase_button.position = Vector2(erase_x, erase_y)
 	erase_button.disabled = true  # Start disabled
 	erase_button.pressed.connect(_on_erase_pressed)
 	
@@ -190,31 +220,35 @@ func _create_ui():
 	erase_button.add_child(erase_icon)
 	add_child(erase_button)
 	
-	# Number selector at bottom
-	# Grid ends at: 320 + 736 = 1056
-	# Undo button area: y=1050, height=180, ends at y=1230
-	# Number selector: 9 buttons * 80px + 8 gaps * 8px = 720 + 64 = 784px width
-	# Center: (1024 - 784) / 2 = 120px
-	# Position at y=1240 (below undo button area)
+	# SECTION 7: Make number selector responsive
 	number_selector = GridContainer.new()
 	number_selector.columns = 9
-	number_selector.position = Vector2(120, 1240)  # Bottom of 1366px viewport
+	
+	# Align horizontally with the grid
+	var selector_x = (screen_width - grid_width) / 2
+	
+	# Place vertically below erase button
+	var selector_y = erase_button.position.y + 100
+	number_selector.position = Vector2(selector_x, selector_y)
 	number_selector.add_theme_constant_override("h_separation", 8)
 	add_child(number_selector)
 	
-	# Create number buttons 1-9
+	print("Number selector positioned at: ", Vector2(selector_x, selector_y))
+	
+	# Create number buttons 1-9 with responsive sizing
 	for i in range(1, 10):
 		var btn = Button.new()
 		btn.text = str(i)
-		btn.custom_minimum_size = Vector2(NUMBER_BUTTON_SIZE, NUMBER_BUTTON_SIZE)
-		btn.add_theme_font_size_override("font_size", 48)
+		btn.custom_minimum_size = Vector2(number_button_size, number_button_size)
+		var font_size = int(number_button_size * 0.5)
+		btn.add_theme_font_size_override("font_size", font_size)
 		btn.pressed.connect(_on_number_selected.bind(i))
 		number_selector.add_child(btn)
 	
-	# Create border overlay for 3x3 subgrids (drawn on top of everything)
+	# SECTION 4: Fix border overlay scaling
 	border_overlay = Control.new()
-	border_overlay.position = Vector2(144, 320)  # Match grid_container position
-	border_overlay.size = Vector2(CELL_SIZE * 9 + 16, CELL_SIZE * 9 + 16)  # 9 cells + gaps
+	border_overlay.position = grid_container.position  # Match grid_container position
+	border_overlay.size = Vector2(grid_width, grid_width)  # Match grid size
 	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass through clicks
 	border_overlay.z_index = 100  # Draw on top of everything
 	border_overlay.draw.connect(_draw_border_overlay)
@@ -225,28 +259,20 @@ func _draw_border_overlay():
 	if not border_overlay:
 		return
 	
-	var border_color = Color(0.0, 0.0, 0.0)  # Black borders
-	var thick_width = 4.0
+	# Use the dynamic spacing value
+	var gap_size = spacing
 	
-	# Draw vertical lines (every 3 columns)
-	for i in range(4):  # 0, 1, 2, 3 (4 vertical lines for 3 sections)
-		var x = i * (CELL_SIZE * 3 + 6)  # 3 cells + 3 gaps of 2px
-		border_overlay.draw_line(
-			Vector2(x, 0),
-			Vector2(x, CELL_SIZE * 9 + 16),
-			border_color,
-			thick_width
-		)
+	# Draw thick borders for 3x3 subgrids using computed values
+	var step = cell_size * 3 + gap_size * 3  # 3 cells + 3 gaps
+	var full_size = cell_size * 9 + gap_size * 8  # 9 cells + 8 gaps
 	
-	# Draw horizontal lines (every 3 rows)
-	for i in range(4):  # 0, 1, 2, 3 (4 horizontal lines for 3 sections)
-		var y = i * (CELL_SIZE * 3 + 6)  # 3 cells + 3 gaps of 2px
-		border_overlay.draw_line(
-			Vector2(0, y),
-			Vector2(CELL_SIZE * 9 + 16, y),
-			border_color,
-			thick_width
-		)
+	# Vertical lines (at x = step and x = step * 2)
+	border_overlay.draw_rect(Rect2(step - 2, 0, 4, full_size), theme_colors["border"])
+	border_overlay.draw_rect(Rect2(step * 2 - 2, 0, 4, full_size), theme_colors["border"])
+	
+	# Horizontal lines (at y = step and y = step * 2)
+	border_overlay.draw_rect(Rect2(0, step - 2, full_size, 4), theme_colors["border"])
+	border_overlay.draw_rect(Rect2(0, step * 2 - 2, full_size, 4), theme_colors["border"])
 
 func set_game(sudoku_game: SudokuGame):
 	game = sudoku_game
@@ -300,8 +326,9 @@ func render():
 
 func _create_cell_button(row: int, col: int) -> Button:
 	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(CELL_SIZE, CELL_SIZE)
-	btn.add_theme_font_size_override("font_size", 48)  # Font size for 80px cells
+	btn.custom_minimum_size = Vector2(cell_size, cell_size)
+	var font_size = int(cell_size * 0.6)
+	btn.add_theme_font_size_override("font_size", font_size)
 	
 	var value = game.get_cell_value(row, col)
 	if value != 0:
