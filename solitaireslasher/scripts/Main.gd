@@ -688,19 +688,28 @@ func _on_sudoku_game_over() -> void:
 
 func _hide_menu_buttons():
 	for child in get_children():
-		if child is Button and child.name.begins_with("menu_"):
+		if child is Button and (child.name.begins_with("menu_") or child.name == "leave_game_button"):
+			child.visible = false
+		elif child is Label and child.name == "PlayerStatusLabel":
 			child.visible = false
 
 func _show_new_game_button():
 	# Remove existing game control buttons if any (immediate removal to prevent duplicates)
 	var buttons_to_remove = []
+	var labels_to_remove = []
 	for child in get_children():
-		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
+		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button" or child.name == "leave_game_button"):
 			buttons_to_remove.append(child)
+		elif child is Label and child.name == "PlayerStatusLabel":
+			labels_to_remove.append(child)
 	
 	for button in buttons_to_remove:
 		remove_child(button)
 		button.queue_free()
+	
+	for label in labels_to_remove:
+		remove_child(label)
+		label.queue_free()
 	
 	# Clear undo button reference
 	_undo_button = null
@@ -809,7 +818,15 @@ func _show_new_game_button():
 	# Menu button (top left) - FontAwesome icon
 	var menu_button = Button.new()
 	menu_button.name = "menu_button"
-	menu_button.position = Vector2(10, top_padding)  # Use safe area padding
+	
+	# Adjust position for Sudoku to avoid number selector overlap
+	var menu_x = 10
+	var menu_y = top_padding
+	if _current_game_type == "Sudoku":
+		# In Sudoku mode, position menu button higher to avoid number selector
+		menu_y = top_padding - 50  # Move up higher
+	
+	menu_button.position = Vector2(menu_x, menu_y)
 	menu_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
@@ -912,12 +929,16 @@ func _cleanup_game_state() -> void:
 	_board.visible = false
 	_sudoku_board.visible = false
 	
-	# Hide status label
+	# Hide and clear status label
 	_status_label.visible = false
+	_status_label.text = ""
 	
 	# Hide and remove game control buttons (including leave game button)
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button" or child.name == "leave_game_button"):
+			child.visible = false
+			child.queue_free()
+		elif child is Label and child.name == "PlayerStatusLabel":
 			child.visible = false
 			child.queue_free()
 	
@@ -930,9 +951,11 @@ func _cleanup_game_state() -> void:
 		_last_standing_notification.queue_free()
 		_last_standing_notification = null
 	
-	# Hide player status label
+	# Hide and clear player status label
 	if _player_status_label and is_instance_valid(_player_status_label):
 		_player_status_label.visible = false
+		_player_status_label.queue_free()
+	_player_status_label = null
 
 func _on_server_disconnected() -> void:
 	"""Handle when host closes the server (host left the game)"""
@@ -972,6 +995,59 @@ func _on_leave_game_pressed() -> void:
 	# Clean up and return to menu
 	_cleanup_game_state()
 	_show_main_menu()
+
+func _on_leave_game_button_pressed() -> void:
+	"""Show confirmation dialog before leaving multiplayer game"""
+	_show_leave_confirmation_dialog()
+
+func _show_leave_confirmation_dialog() -> void:
+	"""Create and show a confirmation dialog for leaving the game"""
+	# Create dialog panel
+	var dialog = ConfirmationDialog.new()
+	dialog.title = "Leave Game?"
+	dialog.dialog_text = "Are you sure you want to leave the game? Your progress will be lost."
+	dialog.get_ok_button().text = "Leave"
+	dialog.get_cancel_button().text = "Stay"
+	
+	# Style the dialog for mobile-friendly appearance
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.2, 0.95)  # Dark semi-transparent background
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.5, 0.5, 0.5)
+	dialog.add_theme_stylebox_override("panel", style)
+	
+	# Style buttons for better visibility
+	var ok_style = StyleBoxFlat.new()
+	ok_style.bg_color = Color(0.8, 0.3, 0.3)  # Red for leave action
+	ok_style.corner_radius_top_left = 4
+	ok_style.corner_radius_top_right = 4
+	ok_style.corner_radius_bottom_left = 4
+	ok_style.corner_radius_bottom_right = 4
+	dialog.get_ok_button().add_theme_stylebox_override("normal", ok_style)
+	dialog.get_ok_button().add_theme_color_override("font_color", Color.WHITE)
+	
+	var cancel_style = StyleBoxFlat.new()
+	cancel_style.bg_color = Color(0.3, 0.3, 0.3)  # Gray for cancel
+	cancel_style.corner_radius_top_left = 4
+	cancel_style.corner_radius_top_right = 4
+	cancel_style.corner_radius_bottom_left = 4
+	cancel_style.corner_radius_bottom_right = 4
+	dialog.get_cancel_button().add_theme_stylebox_override("normal", cancel_style)
+	dialog.get_cancel_button().add_theme_color_override("font_color", Color.WHITE)
+	
+	# Connect the confirmed signal to actually leave the game
+	dialog.confirmed.connect(_on_leave_game_pressed)
+	
+	# Add to scene and show
+	add_child(dialog)
+	dialog.popup_centered()
 
 func _on_back_to_menu_pressed() -> void:
 	# Clean up game state
@@ -1153,7 +1229,7 @@ func _setup_multiplayer_ui() -> void:
 	_player_status_label.text = "Race in progress..."
 	add_child(_player_status_label)
 	
-	# Leave game button (bottom left) - FontAwesome times-circle icon
+	# Leave game button (top right, next to menu button) - FontAwesome times-circle icon
 	var leave_button = Button.new()
 	leave_button.name = "leave_game_button"
 	var bottom_padding = 0
@@ -1162,10 +1238,20 @@ func _setup_multiplayer_ui() -> void:
 		var safe_area = DisplayServer.get_display_safe_area()
 		bottom_padding = safe_area.size.y - get_viewport().get_visible_rect().size.y
 		left_padding = safe_area.position.x
-	leave_button.position = Vector2(10 + left_padding, get_viewport().get_visible_rect().size.y - 110 - bottom_padding)
+	# Position leave button to the right of the menu button (top area)
+	var top_padding = 10
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_padding = max(10, safe_area.position.y)
+	
+	# Position to the right of the menu button (which is at 10, top_padding with size 100x100)
+	var leave_x = 120 + left_padding  # Right of menu button (10 + 100 + 10 spacing)
+	var leave_y = top_padding  # Same vertical level as menu button
+	
+	leave_button.position = Vector2(leave_x, leave_y)
 	leave_button.size = Vector2(100, 100)
 	leave_button.tooltip_text = "Leave Game"
-	leave_button.pressed.connect(_on_leave_game_pressed)
+	leave_button.pressed.connect(_on_leave_game_button_pressed)
 	
 	# Make button background transparent
 	var leave_transparent_style = StyleBoxFlat.new()
