@@ -18,8 +18,8 @@ var ip_helper: Node
 var local_ip_label: Label
 var public_ip_label: Label
 var port_forward_label: Label
-var game_type_option: OptionButton
-var difficulty_option: OptionButton
+var game_type_carousel: Carousel
+var difficulty_carousel: Carousel
 var selected_game_type: String = "Solitaire"
 var selected_difficulty: String = "Medium"
 var qr_node: QR
@@ -147,48 +147,103 @@ func _create_ui() -> void:
 	settings_label.visible = false
 	vbox.add_child(settings_label)
 	
-	# Game type selection
+	# Game type selection with Carousel
 	game_type_container = HBoxContainer.new()
 	game_type_container.name = "GameTypeContainer"
 	game_type_container.add_theme_constant_override("separation", 20)
 	game_type_container.visible = false
 	vbox.add_child(game_type_container)
 	
+	var game_type_vbox = VBoxContainer.new()
+	game_type_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	game_type_container.add_child(game_type_vbox)
+	
 	var game_type_label = Label.new()
-	game_type_label.text = "Game Type:"
+	game_type_label.text = "Game Type"
+	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	game_type_label.add_theme_font_size_override("font_size", 36)
-	game_type_container.add_child(game_type_label)
+	game_type_vbox.add_child(game_type_label)
 	
-	game_type_option = OptionButton.new()
-	game_type_option.add_item("Solitaire")
-	game_type_option.add_item("Sudoku")
-	game_type_option.select(0)
-	game_type_option.custom_minimum_size = Vector2(400, 80)
-	game_type_option.add_theme_font_size_override("font_size", 32)
-	game_type_option.item_selected.connect(_on_game_type_changed)
-	game_type_container.add_child(game_type_option)
+	# Create carousel container - LARGE and prominent
+	game_type_carousel = Carousel.new()
+	game_type_carousel.custom_minimum_size = Vector2(800, 400)
+	game_type_carousel.item_size = Vector2(350, 350)
+	game_type_carousel.item_seperation = 100
+	game_type_carousel.carousel_angle = 0  # Horizontal
+	game_type_carousel.allow_loop = true
+	game_type_carousel.display_loop = true
+	game_type_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	game_type_carousel.can_drag = true
+	game_type_carousel.manual_end.connect(_on_game_carousel_changed)
+	game_type_carousel.snap_end.connect(_on_game_carousel_changed)
 	
-	# Difficulty selection
+	# Add game icons as TextureRect children
+	var solitaire_icon = TextureRect.new()
+	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
+	solitaire_icon.custom_minimum_size = Vector2(350, 350)
+	solitaire_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	solitaire_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	solitaire_icon.name = "Solitaire"
+	game_type_carousel.add_child(solitaire_icon)
+	
+	var sudoku_icon = TextureRect.new()
+	sudoku_icon.texture = load("res://game icons/sudoku_icon.png")
+	sudoku_icon.custom_minimum_size = Vector2(350, 350)
+	sudoku_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	sudoku_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sudoku_icon.name = "Sudoku"
+	game_type_carousel.add_child(sudoku_icon)
+	
+	game_type_vbox.add_child(game_type_carousel)
+	
+	# Difficulty selection with Carousel
 	difficulty_container = HBoxContainer.new()
 	difficulty_container.name = "DifficultyContainer"
 	difficulty_container.add_theme_constant_override("separation", 20)
 	difficulty_container.visible = false
 	vbox.add_child(difficulty_container)
 	
-	var difficulty_label = Label.new()
-	difficulty_label.text = "Difficulty:"
-	difficulty_label.add_theme_font_size_override("font_size", 36)
-	difficulty_container.add_child(difficulty_label)
+	var difficulty_vbox = VBoxContainer.new()
+	difficulty_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	difficulty_container.add_child(difficulty_vbox)
 	
-	difficulty_option = OptionButton.new()
-	difficulty_option.add_item("Easy")
-	difficulty_option.add_item("Medium")
-	difficulty_option.add_item("Hard")
-	difficulty_option.select(1)
-	difficulty_option.custom_minimum_size = Vector2(400, 80)
-	difficulty_option.add_theme_font_size_override("font_size", 32)
-	difficulty_option.item_selected.connect(_on_difficulty_changed)
-	difficulty_container.add_child(difficulty_option)
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty"
+	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.add_theme_font_size_override("font_size", 36)
+	difficulty_vbox.add_child(difficulty_label)
+	
+	# Create vertical carousel for difficulty
+	difficulty_carousel = Carousel.new()
+	difficulty_carousel.custom_minimum_size = Vector2(400, 250)
+	difficulty_carousel.item_size = Vector2(300, 60)
+	difficulty_carousel.item_seperation = 20
+	difficulty_carousel.carousel_angle = 90  # Vertical
+	difficulty_carousel.allow_loop = true
+	difficulty_carousel.display_loop = true
+	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	difficulty_carousel.can_drag = true
+	difficulty_carousel.starting_index = 1  # Default to Medium
+	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_changed)
+	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_changed)
+	
+	# Add difficulty labels as children
+	for i in range(3):
+		var diff = ["Easy", "Medium", "Hard"][i]
+		var diff_label = Label.new()
+		diff_label.text = diff
+		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		diff_label.custom_minimum_size = Vector2(300, 60)
+		# Selected item (Medium at index 1) starts larger
+		if i == 1:
+			diff_label.add_theme_font_size_override("font_size", 56)
+		else:
+			diff_label.add_theme_font_size_override("font_size", 36)
+		diff_label.name = diff
+		difficulty_carousel.add_child(diff_label)
+	
+	difficulty_vbox.add_child(difficulty_carousel)
 	
 	# Player list
 	var players_label = Label.new()
@@ -404,25 +459,32 @@ func _on_game_settings_received(settings: Dictionary) -> void:
 		selected_difficulty = settings["difficulty"]
 	print("Updated lobby settings - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty)
 
-func _on_game_type_changed(index: int) -> void:
-	"""Handle game type selection change"""
-	match index:
-		0:
-			selected_game_type = "Solitaire"
-		1:
-			selected_game_type = "Sudoku"
-	print("Multiplayer game type changed to: ", selected_game_type)
+func _on_game_carousel_changed():
+	"""Handle game type carousel change"""
+	if game_type_carousel and game_type_carousel.get_child_count() > 0:
+		var current_index = game_type_carousel.get_current_carousel_index()
+		var game_names = ["Solitaire", "Sudoku"]
+		if current_index >= 0 and current_index < game_names.size():
+			selected_game_type = game_names[current_index]
+			print("Multiplayer game type changed to: ", selected_game_type)
 
-func _on_difficulty_changed(index: int) -> void:
-	"""Handle difficulty selection change"""
-	match index:
-		0:
-			selected_difficulty = "Easy"
-		1:
-			selected_difficulty = "Medium"
-		2:
-			selected_difficulty = "Hard"
-	print("Multiplayer difficulty changed to: ", selected_difficulty)
+func _on_difficulty_carousel_changed():
+	"""Handle difficulty carousel change"""
+	if difficulty_carousel and difficulty_carousel.get_child_count() > 0:
+		var current_index = difficulty_carousel.get_current_carousel_index()
+		var difficulties = ["Easy", "Medium", "Hard"]
+		if current_index >= 0 and current_index < difficulties.size():
+			selected_difficulty = difficulties[current_index]
+			print("Multiplayer difficulty changed to: ", selected_difficulty)
+			
+			# Update font sizes - make selected item larger
+			for i in range(difficulty_carousel.get_child_count()):
+				var label = difficulty_carousel.get_child(i)
+				if label is Label:
+					if i == current_index:
+						label.add_theme_font_size_override("font_size", 56)  # Selected
+					else:
+						label.add_theme_font_size_override("font_size", 36)  # Not selected
 
 func _on_leave_pressed() -> void:
 	NetworkManager.leave_game()

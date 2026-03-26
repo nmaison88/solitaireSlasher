@@ -1066,14 +1066,16 @@ func _setup_multiplayer_ui() -> void:
 	_player_status_label.text = "Race in progress..."
 	add_child(_player_status_label)
 	
-	# Leave game button (top right) - FontAwesome times-circle icon
+	# Leave game button (bottom left) - FontAwesome times-circle icon
 	var leave_button = Button.new()
 	leave_button.name = "leave_game_button"
-	var top_padding = 0
+	var bottom_padding = 0
+	var left_padding = 0
 	if DisplayServer.get_name() == "iOS":
 		var safe_area = DisplayServer.get_display_safe_area()
-		top_padding = safe_area.position.y
-	leave_button.position = Vector2(get_viewport().get_visible_rect().size.x - 110, top_padding)
+		bottom_padding = safe_area.size.y - get_viewport().get_visible_rect().size.y
+		left_padding = safe_area.position.x
+	leave_button.position = Vector2(10 + left_padding, get_viewport().get_visible_rect().size.y - 110 - bottom_padding)
 	leave_button.size = Vector2(100, 100)
 	leave_button.tooltip_text = "Leave Game"
 	leave_button.pressed.connect(_on_leave_game_pressed)
@@ -1087,9 +1089,9 @@ func _setup_multiplayer_ui() -> void:
 	leave_button.add_theme_stylebox_override("pressed", leave_transparent_style)
 	leave_button.add_theme_stylebox_override("disabled", leave_transparent_style)
 	
-	# Add FontAwesome times-circle icon
+	# Add FontAwesome circle-xmark icon (FontAwesome 6 naming)
 	var leave_icon = FontAwesome.new()
-	leave_icon.icon_name = "times-circle"
+	leave_icon.icon_name = "circle-xmark"
 	leave_icon.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))  # Red color
 	leave_icon.icon_size = 64
 	leave_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
