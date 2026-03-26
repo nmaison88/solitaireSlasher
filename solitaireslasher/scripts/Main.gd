@@ -104,7 +104,7 @@ func _setup_main_menu() -> void:
 	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
 	add_child(menu_background)
 	
-	# Create centered menu container (2x larger)
+	# Create centered menu container
 	_menu_container = VBoxContainer.new()
 	_menu_container.name = "MainMenuContainer"
 	_menu_container.set_anchors_preset(Control.PRESET_CENTER)
@@ -112,105 +112,329 @@ func _setup_main_menu() -> void:
 	_menu_container.anchor_top = 0.5
 	_menu_container.anchor_right = 0.5
 	_menu_container.anchor_bottom = 0.5
-	_menu_container.offset_left = -200  # 2x larger: was -100
-	_menu_container.offset_top = -300  # 2x larger: was -150
-	_menu_container.offset_right = 200  # 2x larger: was 100
-	_menu_container.offset_bottom = 300  # 2x larger: was 150
+	_menu_container.offset_left = -250
+	_menu_container.offset_top = -350
+	_menu_container.offset_right = 250
+	_menu_container.offset_bottom = 350
 	_menu_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_menu_container.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_menu_container)
 	
-	# Add title (2x larger font)
+	# Add title
 	var title = Label.new()
 	title.text = "Solitaire Slasher"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)  # 2x larger: was 32
+	title.add_theme_font_size_override("font_size", 64)
 	_menu_container.add_child(title)
 	
-	# Add spacing (2x larger)
+	# Add spacing
 	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
+	spacer1.custom_minimum_size = Vector2(0, 60)
 	_menu_container.add_child(spacer1)
 	
-	# Game type selection (2x larger font)
-	var game_type_label = Label.new()
-	game_type_label.text = "Game Type:"
-	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game_type_label.add_theme_font_size_override("font_size", 40)  # 2x larger: was 20
-	_menu_container.add_child(game_type_label)
-	
-	_game_type_option = OptionButton.new()
-	_game_type_option.add_item("Solitaire")
-	_game_type_option.add_item("Sudoku")
-	_game_type_option.select(0)  # Default to Solitaire
-	_game_type_option.custom_minimum_size = Vector2(400, 80)  # 2x larger: was 200x40
-	_game_type_option.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
-	_game_type_option.item_selected.connect(_on_game_type_changed)
-	
-	# Style the popup menu items to be larger (2x)
-	var game_type_popup = _game_type_option.get_popup()
-	game_type_popup.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
-	game_type_popup.add_theme_constant_override("v_separation", 20)  # 2x larger: was 10
-	
-	_menu_container.add_child(_game_type_option)
-	
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
-	_menu_container.add_child(spacer2)
-	
-	# Difficulty selection
-	var difficulty_label = Label.new()
-	difficulty_label.text = "Difficulty:"
-	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	difficulty_label.add_theme_font_size_override("font_size", 40)  # 2x larger: was 20
-	_menu_container.add_child(difficulty_label)
-	
-	_difficulty_option = OptionButton.new()
-	_difficulty_option.add_item("Easy")
-	_difficulty_option.add_item("Medium")
-	_difficulty_option.add_item("Hard")
-	_difficulty_option.select(1)  # Default to Medium
-	_difficulty_option.custom_minimum_size = Vector2(400, 80)  # 2x larger: was 200x40
-	_difficulty_option.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
-	_difficulty_option.item_selected.connect(_on_difficulty_changed)
-	
-	# Style the popup menu items to be larger (2x)
-	var difficulty_popup = _difficulty_option.get_popup()
-	difficulty_popup.add_theme_font_size_override("font_size", 36)  # 2x larger: was 18
-	difficulty_popup.add_theme_constant_override("v_separation", 20)  # 2x larger: was 10
-	
-	_menu_container.add_child(_difficulty_option)
-	
-	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 40)  # 2x larger: was 20
-	_menu_container.add_child(spacer3)
-	
-	# Create menu buttons (2x larger)
+	# Create main menu buttons
 	var single_button = Button.new()
 	single_button.name = "menu_single"
 	single_button.text = "Single Player"
-	single_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
-	single_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
-	single_button.pressed.connect(_on_single_player)
+	single_button.custom_minimum_size = Vector2(400, 100)
+	single_button.add_theme_font_size_override("font_size", 36)
+	single_button.pressed.connect(_on_show_single_player_menu)
 	_menu_container.add_child(single_button)
 	
-	var host_button = Button.new()
-	host_button.name = "menu_host"
-	host_button.text = "Host Multiplayer"
-	host_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
-	host_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
-	host_button.pressed.connect(_on_host_game)
-	_menu_container.add_child(host_button)
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 20)
+	_menu_container.add_child(spacer2)
 	
+	var multiplayer_button = Button.new()
+	multiplayer_button.name = "menu_multiplayer"
+	multiplayer_button.text = "Multiplayer"
+	multiplayer_button.custom_minimum_size = Vector2(400, 100)
+	multiplayer_button.add_theme_font_size_override("font_size", 36)
+	multiplayer_button.pressed.connect(_on_show_multiplayer_menu)
+	_menu_container.add_child(multiplayer_button)
+	
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 20)
+	_menu_container.add_child(spacer3)
+	
+	var settings_button = Button.new()
+	settings_button.name = "menu_settings"
+	settings_button.text = "Settings"
+	settings_button.custom_minimum_size = Vector2(400, 100)
+	settings_button.add_theme_font_size_override("font_size", 36)
+	settings_button.disabled = true  # Will implement later
+	_menu_container.add_child(settings_button)
+
+func _on_show_single_player_menu() -> void:
+	"""Show single player submenu with carousels for game type and difficulty"""
+	# Hide main menu
+	_menu_container.visible = false
+	
+	# Create single player menu container - wider to accommodate larger carousel
+	var sp_menu = VBoxContainer.new()
+	sp_menu.name = "SinglePlayerMenu"
+	sp_menu.set_anchors_preset(Control.PRESET_CENTER)
+	sp_menu.anchor_left = 0.5
+	sp_menu.anchor_top = 0.5
+	sp_menu.anchor_right = 0.5
+	sp_menu.anchor_bottom = 0.5
+	sp_menu.offset_left = -450  # Wider to fit 800px carousel
+	sp_menu.offset_top = -400
+	sp_menu.offset_right = 450
+	sp_menu.offset_bottom = 400
+	add_child(sp_menu)
+	
+	# Title
+	var title = Label.new()
+	title.text = "Single Player"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 56)
+	sp_menu.add_child(title)
+	
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 40)
+	sp_menu.add_child(spacer1)
+	
+	# Game Type Carousel (Horizontal) with Icons using FreeControl
+	var game_type_label = Label.new()
+	game_type_label.text = "Game Type"
+	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	game_type_label.add_theme_font_size_override("font_size", 36)
+	sp_menu.add_child(game_type_label)
+	
+	# Create carousel container - MUCH LARGER and more prominent
+	var game_carousel = Carousel.new()
+	game_carousel.custom_minimum_size = Vector2(800, 400)
+	game_carousel.item_size = Vector2(350, 350)
+	game_carousel.item_seperation = 100
+	game_carousel.carousel_angle = 0  # Horizontal
+	game_carousel.allow_loop = true
+	game_carousel.display_loop = true
+	game_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	game_carousel.can_drag = true
+	game_carousel.manual_end.connect(_on_game_carousel_changed)
+	game_carousel.snap_end.connect(_on_game_carousel_changed)
+	
+	# Add game icons as TextureRect children - LARGER
+	var solitaire_icon = TextureRect.new()
+	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
+	solitaire_icon.custom_minimum_size = Vector2(350, 350)
+	solitaire_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	solitaire_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	solitaire_icon.name = "Solitaire"
+	game_carousel.add_child(solitaire_icon)
+	
+	var sudoku_icon = TextureRect.new()
+	sudoku_icon.texture = load("res://game icons/sudoku_icon.png")
+	sudoku_icon.custom_minimum_size = Vector2(350, 350)
+	sudoku_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	sudoku_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sudoku_icon.name = "Sudoku"
+	game_carousel.add_child(sudoku_icon)
+	
+	sp_menu.add_child(game_carousel)
+	
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 40)
+	sp_menu.add_child(spacer2)
+	
+	# Difficulty Carousel (Vertical) using FreeControl
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty"
+	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.add_theme_font_size_override("font_size", 36)
+	sp_menu.add_child(difficulty_label)
+	
+	# Create vertical carousel for difficulty
+	var difficulty_carousel = Carousel.new()
+	difficulty_carousel.custom_minimum_size = Vector2(400, 250)
+	difficulty_carousel.item_size = Vector2(300, 60)
+	difficulty_carousel.item_seperation = 20
+	difficulty_carousel.carousel_angle = 90  # Vertical
+	difficulty_carousel.allow_loop = true
+	difficulty_carousel.display_loop = true
+	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	difficulty_carousel.can_drag = true
+	difficulty_carousel.starting_index = 1  # Default to Medium
+	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_changed)
+	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_changed)
+	
+	# Add difficulty labels as children
+	for i in range(3):
+		var diff = ["Easy", "Medium", "Hard"][i]
+		var diff_label = Label.new()
+		diff_label.text = diff
+		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		diff_label.custom_minimum_size = Vector2(300, 60)
+		# Selected item (Medium at index 1) starts larger
+		if i == 1:
+			diff_label.add_theme_font_size_override("font_size", 56)
+		else:
+			diff_label.add_theme_font_size_override("font_size", 36)
+		diff_label.name = diff
+		difficulty_carousel.add_child(diff_label)
+	
+	sp_menu.add_child(difficulty_carousel)
+	
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 40)
+	sp_menu.add_child(spacer3)
+	
+	# Start button
+	var start_button = Button.new()
+	start_button.text = "Start Game"
+	start_button.custom_minimum_size = Vector2(400, 80)
+	start_button.add_theme_font_size_override("font_size", 36)
+	start_button.pressed.connect(_on_single_player_start)
+	sp_menu.add_child(start_button)
+	
+	var spacer4 = Control.new()
+	spacer4.custom_minimum_size = Vector2(0, 20)
+	sp_menu.add_child(spacer4)
+	
+	# Back button
+	var back_button = Button.new()
+	back_button.text = "Back"
+	back_button.custom_minimum_size = Vector2(400, 80)
+	back_button.add_theme_font_size_override("font_size", 36)
+	back_button.pressed.connect(_on_single_player_back)
+	sp_menu.add_child(back_button)
+
+func _on_show_multiplayer_menu() -> void:
+	"""Show multiplayer submenu with Host/Join buttons"""
+	# Hide main menu
+	_menu_container.visible = false
+	
+	# Create multiplayer menu container
+	var mp_menu = VBoxContainer.new()
+	mp_menu.name = "MultiplayerMenu"
+	mp_menu.set_anchors_preset(Control.PRESET_CENTER)
+	mp_menu.anchor_left = 0.5
+	mp_menu.anchor_top = 0.5
+	mp_menu.anchor_right = 0.5
+	mp_menu.anchor_bottom = 0.5
+	mp_menu.offset_left = -250
+	mp_menu.offset_top = -250
+	mp_menu.offset_right = 250
+	mp_menu.offset_bottom = 250
+	add_child(mp_menu)
+	
+	# Title
+	var title = Label.new()
+	title.text = "Multiplayer"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 56)
+	mp_menu.add_child(title)
+	
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 60)
+	mp_menu.add_child(spacer1)
+	
+	# Host button
+	var host_button = Button.new()
+	host_button.text = "Host Multiplayer"
+	host_button.custom_minimum_size = Vector2(400, 100)
+	host_button.add_theme_font_size_override("font_size", 36)
+	host_button.pressed.connect(_on_host_game)
+	mp_menu.add_child(host_button)
+	
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 20)
+	mp_menu.add_child(spacer2)
+	
+	# Join button
 	var join_button = Button.new()
-	join_button.name = "menu_join"
 	join_button.text = "Join Multiplayer"
-	join_button.custom_minimum_size = Vector2(400, 100)  # 2x larger: was 200x50
-	join_button.add_theme_font_size_override("font_size", 36)  # 2x larger font
+	join_button.custom_minimum_size = Vector2(400, 100)
+	join_button.add_theme_font_size_override("font_size", 36)
 	join_button.pressed.connect(_on_join_game)
-	_menu_container.add_child(join_button)
+	mp_menu.add_child(join_button)
+	
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 60)
+	mp_menu.add_child(spacer3)
+	
+	# Back button
+	var back_button = Button.new()
+	back_button.text = "Back"
+	back_button.custom_minimum_size = Vector2(400, 80)
+	back_button.add_theme_font_size_override("font_size", 36)
+	back_button.pressed.connect(_on_multiplayer_back)
+	mp_menu.add_child(back_button)
+
+func _on_game_carousel_changed():
+	# Get the current index from the carousel
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		for child in sp_menu.get_children():
+			if child is Carousel and child.get_child_count() > 0:
+				var first_child = child.get_child(0)
+				if first_child.name == "Solitaire" or first_child.name == "Sudoku":
+					var current_index = child.get_current_carousel_index()
+					var game_names = ["Solitaire", "Sudoku"]
+					if current_index >= 0 and current_index < game_names.size():
+						_current_game_type = game_names[current_index]
+						print("Game type changed to: ", _current_game_type)
+					break
+
+func _on_difficulty_carousel_changed():
+	# Get the current index from the difficulty carousel
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		for child in sp_menu.get_children():
+			if child is Carousel and child.get_child_count() > 0:
+				var first_child = child.get_child(0)
+				if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
+					var current_index = child.get_current_carousel_index()
+					var difficulties = ["Easy", "Medium", "Hard"]
+					if current_index >= 0 and current_index < difficulties.size():
+						_current_difficulty = difficulties[current_index]
+						print("Difficulty changed to: ", _current_difficulty)
+						
+						# Update font sizes - make selected item larger
+						for i in range(child.get_child_count()):
+							var label = child.get_child(i)
+							if label is Label:
+								if i == current_index:
+									label.add_theme_font_size_override("font_size", 56)  # Selected
+								else:
+									label.add_theme_font_size_override("font_size", 36)  # Not selected
+					break
+
+func _on_single_player_start():
+	# Remove single player menu
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		sp_menu.queue_free()
+	
+	# Start the game
+	_on_single_player()
+
+func _on_single_player_back():
+	# Remove single player menu
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		sp_menu.queue_free()
+	
+	# Show main menu
+	_menu_container.visible = true
+
+func _on_multiplayer_back():
+	# Remove multiplayer menu
+	var mp_menu = get_node_or_null("MultiplayerMenu")
+	if mp_menu:
+		mp_menu.queue_free()
+	
+	# Show main menu
+	_menu_container.visible = true
 
 func _on_host_game() -> void:
+	# Hide multiplayer menu
+	var mp_menu = get_node_or_null("MultiplayerMenu")
+	if mp_menu:
+		mp_menu.queue_free()
+	
 	var player_name = "Player" + str(randi() % 1000)
 	if NetworkManager.host_game(player_name):
 		print("Hosting multiplayer game")
@@ -219,6 +443,11 @@ func _on_host_game() -> void:
 		print("Failed to host game")
 
 func _on_join_game() -> void:
+	# Hide multiplayer menu
+	var mp_menu = get_node_or_null("MultiplayerMenu")
+	if mp_menu:
+		mp_menu.queue_free()
+	
 	# Show lobby with manual IP entry
 	_show_multiplayer_lobby(false, "Player" + str(randi() % 1000))
 
