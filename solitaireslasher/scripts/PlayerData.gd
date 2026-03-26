@@ -3,6 +3,7 @@ extends Node
 const SAVE_FILE_PATH = "user://player_data.json"
 
 var player_name: String = "Player"
+var theme: String = "dark"
 var stats: Dictionary = {
 	"games_played": 0,
 	"games_won": 0,
@@ -19,6 +20,7 @@ func save_data() -> void:
 	"""Save player data to JSON file"""
 	var data = {
 		"player_name": player_name,
+		"theme": theme,
 		"stats": stats
 	}
 	
@@ -49,6 +51,10 @@ func load_data() -> void:
 			var data = json.data
 			if data.has("player_name"):
 				player_name = data.player_name
+				
+			if data.has("theme"):
+				theme = data.theme
+				
 			if data.has("stats"):
 				stats = data.stats
 			print("Player data loaded: ", player_name)
@@ -81,3 +87,13 @@ func increment_stat(stat_name: String, amount = 1) -> void:
 func get_stat(stat_name: String):
 	"""Get a specific stat value"""
 	return stats.get(stat_name, 0)
+
+func get_theme() -> String:
+	"""Get current theme"""
+	return theme
+
+func set_theme(new_theme: String) -> void:
+	"""Set theme and save"""
+	theme = new_theme
+	save_data()
+

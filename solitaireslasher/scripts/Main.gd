@@ -28,6 +28,10 @@ var _game_type_option: OptionButton
 var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
 func _ready() -> void:
+	# Get current theme from PlayerData
+	var theme_found = PlayerData.get_theme()
+	print("Current theme: ", theme_found)
+	
 	# Force portrait orientation on mobile devices
 	if OS.has_feature("mobile"):
 		print("=== FORCING PORTRAIT ORIENTATION ===")
@@ -56,10 +60,15 @@ func _ready() -> void:
 		# Offset StatusLabel to avoid notch and buttons
 		_status_label.offset_top = 48 + top_padding + 120
 	
-	# Add blue background for both Solitaire and Sudoku
+	# Add background for both Solitaire and Sudoku
 	var game_background = ColorRect.new()
 	game_background.name = "GameBackground"
-	game_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	# Set background color based on theme
+	var current_theme = PlayerData.get_theme()
+	if current_theme == "light":
+		game_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	else:
+		game_background.color = Color(0.1, 0.1, 0.1)  # Dark gray background
 	game_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	game_background.z_index = -1  # Behind everything
 	game_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
@@ -95,10 +104,15 @@ func _ready() -> void:
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
 
 func _setup_main_menu() -> void:
-	# Add blue background for menu
+	# Add background for menu
 	var menu_background = ColorRect.new()
 	menu_background.name = "MenuBackground"
-	menu_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	# Set background color based on theme
+	var current_theme = PlayerData.get_theme()
+	if current_theme == "light":
+		menu_background.color = Color(0.2, 0.4, 0.7)  # Blue background
+	else:
+		menu_background.color = Color(0.1, 0.1, 0.1)  # Dark gray background
 	menu_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_background.z_index = -2  # Behind game background
 	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
@@ -162,7 +176,7 @@ func _setup_main_menu() -> void:
 	settings_button.text = "Settings"
 	settings_button.custom_minimum_size = Vector2(400, 100)
 	settings_button.add_theme_font_size_override("font_size", 36)
-	settings_button.disabled = true  # Will implement later
+	settings_button.pressed.connect(_on_settings_button_pressed)
 	_menu_container.add_child(settings_button)
 
 func _on_show_single_player_menu() -> void:
@@ -1322,3 +1336,149 @@ func _update_player_status_display() -> void:
 				completed += 1
 	
 	_player_status_label.text = "Playing: %d | Jammed: %d | Completed: %d" % [playing, jammed, completed]
+
+func _on_settings_button_pressed() -> void:
+	"""Show settings menu with player name and theme toggle"""
+	# Hide main menu
+	_menu_container.visible = false
+	
+	# Create settings menu container
+	var settings_menu = VBoxContainer.new()
+	settings_menu.name = "SettingsMenu"
+	settings_menu.set_anchors_preset(Control.PRESET_CENTER)
+	settings_menu.anchor_left = 0.5
+	settings_menu.anchor_top = 0.5
+	settings_menu.anchor_right = 0.5
+	settings_menu.anchor_bottom = 0.5
+	settings_menu.offset_left = -300
+	settings_menu.offset_top = -250
+	settings_menu.offset_right = 300
+	settings_menu.offset_bottom = 250
+	add_child(settings_menu)
+	
+	# Title
+	var title = Label.new()
+	title.text = "Settings"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 56)
+	settings_menu.add_child(title)
+	
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 40)
+	settings_menu.add_child(spacer1)
+	
+	# Player Name section
+	var player_name_label = Label.new()
+	player_name_label.text = "Player Name"
+	player_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	player_name_label.add_theme_font_size_override("font_size", 24)
+	settings_menu.add_child(player_name_label)
+	
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 10)
+	settings_menu.add_child(spacer2)
+	
+	# Player name input container (horizontal)
+	var name_container = HBoxContainer.new()
+	name_container.add_theme_constant_override("separation", 10)
+	
+	var player_name_input = LineEdit.new()
+	player_name_input.placeholder_text = "Enter your name"
+	player_name_input.text = PlayerData.get_player_name()
+	player_name_input.custom_minimum_size = Vector2(250, 40)
+	player_name_input.add_theme_font_size_override("font_size", 20)
+	name_container.add_child(player_name_input)
+	
+	var save_name_button = Button.new()
+	save_name_button.text = "Save"
+	save_name_button.custom_minimum_size = Vector2(80, 40)
+	save_name_button.add_theme_font_size_override("font_size", 16)
+	save_name_button.pressed.connect(_on_save_player_name.bind(player_name_input))
+	name_container.add_child(save_name_button)
+	
+	settings_menu.add_child(name_container)
+	
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 30)
+	settings_menu.add_child(spacer3)
+	
+	# Theme section
+	var theme_label = Label.new()
+	theme_label.text = "Theme"
+	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	theme_label.add_theme_font_size_override("font_size", 24)
+	settings_menu.add_child(theme_label)
+	
+	var spacer4 = Control.new()
+	spacer4.custom_minimum_size = Vector2(0, 10)
+	settings_menu.add_child(spacer4)
+	
+	# Dark mode toggle container
+	var theme_container = HBoxContainer.new()
+	theme_container.add_theme_constant_override("separation", 20)
+	
+	var dark_mode_label = Label.new()
+	dark_mode_label.text = "Dark Mode"
+	dark_mode_label.custom_minimum_size = Vector2(100, 40)
+	dark_mode_label.add_theme_font_size_override("font_size", 20)
+	theme_container.add_child(dark_mode_label)
+	
+	var dark_mode_toggle = CheckBox.new()
+	var current_theme = PlayerData.get_theme()
+	dark_mode_toggle.button_pressed = (current_theme == "dark")
+	dark_mode_toggle.custom_minimum_size = Vector2(40, 40)
+	dark_mode_toggle.toggled.connect(_on_dark_mode_toggled)
+	theme_container.add_child(dark_mode_toggle)
+	
+	settings_menu.add_child(theme_container)
+	
+	var spacer5 = Control.new()
+	spacer5.custom_minimum_size = Vector2(0, 60)
+	settings_menu.add_child(spacer5)
+	
+	# Back button
+	var back_button = Button.new()
+	back_button.text = "Back"
+	back_button.custom_minimum_size = Vector2(400, 80)
+	back_button.add_theme_font_size_override("font_size", 36)
+	back_button.pressed.connect(_on_settings_back)
+	settings_menu.add_child(back_button)
+
+func _on_save_player_name(name_input: LineEdit) -> void:
+	"""Save player name from input field"""
+	var new_name = name_input.text.strip_edges()
+	if new_name != "":
+		PlayerData.set_player_name(new_name)
+		print("Player name saved: ", new_name)
+		# Could add a "Saved!" notification here
+
+func _on_dark_mode_toggled(toggled_on: bool) -> void:
+	"""Handle dark mode toggle"""
+	var new_theme = "dark" if toggled_on else "light"
+	PlayerData.set_theme(new_theme)
+	
+	# Update backgrounds immediately
+	var game_bg = get_node_or_null("GameBackground")
+	var menu_bg = get_node_or_null("MenuBackground")
+	
+	if game_bg:
+		game_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
+	
+	if menu_bg:
+		menu_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
+	
+	# Update Sudoku board theme if it exists
+	if _sudoku_board:
+		_sudoku_board.update_theme()
+	
+	print("Theme changed to: ", new_theme)
+
+func _on_settings_back() -> void:
+	"""Handle settings back button"""
+	# Remove settings menu
+	var settings_menu = get_node_or_null("SettingsMenu")
+	if settings_menu:
+		settings_menu.queue_free()
+	
+	# Show main menu
+	_show_main_menu()

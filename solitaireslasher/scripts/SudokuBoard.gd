@@ -15,14 +15,41 @@ var win_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
 var erase_button: Button  # Erase button for incorrect values
 
+# Theme colors
+var theme_colors: Dictionary = {}
+
 const GRID_SIZE = 9
 const CELL_SIZE = 80  # Sized for 1366px viewport
 const NUMBER_BUTTON_SIZE = 80
 
 signal game_completed
 
+func _init_theme_colors() -> void:
+	"""Initialize theme colors based on player settings"""
+	var theme_mode = PlayerData.get_theme()
+	
+	if theme_mode == "light":
+		theme_colors = {
+			"cell": Color(0.75, 0.80, 0.90),  # Light blue-gray
+			"text": Color(0.0, 0.0, 0.0),  # Black text
+			"user_text": Color(0.0, 0.0, 1.0),  # Blue text for user input
+			"highlight_row": Color(0.85, 0.90, 1.0),  # Bright blue
+			"highlight_match": Color(0.60, 0.70, 1.0),  # Darker blue
+			"selected": Color(0.7, 0.85, 1.0)  # Light blue highlight
+		}
+	else:  # dark mode
+		theme_colors = {
+			"cell": Color(0.2, 0.2, 0.2),  # Dark gray cells
+			"text": Color(1.0, 1.0, 1.0),  # White text
+			"user_text": Color(0.0, 0.0, 1.0),  # Blue text for user input
+			"highlight_row": Color(0, 0.1, 0.2, 0.5),  # Dark blue highlight
+			"highlight_match": Color(0.1, 0.2, 0.4),  # Darker blue
+			"selected": Color(0.3, 0.4, 0.6)  # Medium blue
+		}
+
 func _ready():
 	print("=== SudokuBoard._ready() called ===")
+	_init_theme_colors()
 	_create_ui()
 
 func _create_ui():
@@ -286,14 +313,14 @@ func _create_cell_button(row: int, col: int) -> Button:
 	# Set background color and text color based on whether it's editable
 	if not game.is_cell_editable(row, col):
 		# Pre-filled cells - can be selected but not edited
-		stylebox.bg_color = Color(0.75, 0.80, 0.90)  # Light blue-gray
-		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0))  # Black text
+		stylebox.bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
+		btn.add_theme_color_override("font_color", theme_colors.get("text", Color(1,1,1)))
 		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))  # Allow selection
 	else:
 		# Editable cells - can be selected and edited
-		stylebox.bg_color = Color(0.75, 0.80, 0.90)  # Light blue-gray
+		stylebox.bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
 		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
-		btn.add_theme_color_override("font_color", Color(0.0, 0.0, 1.0))  # Blue text for user input
+		btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 1.0)))
 	
 	# Add thicker borders for 3x3 subgrids (every 3rd row/column)
 	# Normal borders: 1px, Subgrid borders: 4px
@@ -352,17 +379,17 @@ func _highlight_selected_cell():
 				var stylebox = StyleBoxFlat.new()
 				
 				# Determine background color based on highlighting rules
-				var bg_color = Color(0.75, 0.80, 0.90)  # Default light blue-gray
+				var bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
 				
 				# Check if this cell should be highlighted
 				if selected_cell != Vector2i(-1, -1):
 					# Highlight row and column (brighter highlight)
 					if row_idx == selected_cell.x or col_idx == selected_cell.y:
-						bg_color = Color(0.85, 0.90, 1.0)  # Bright blue for row/column
+						bg_color = theme_colors.get("highlight_row", Color(0, 0.1, 0.2, 0.5))
 					
 					# Highlight matching numbers (even darker highlight) - overrides row/column
 					if selected_value > 0 and btn.text == str(selected_value):
-						bg_color = Color(0.60, 0.70, 1.0)  # Darker blue for matching numbers
+						bg_color = theme_colors.get("highlight_match", Color(0.60, 0.70, 1.0))
 				
 				stylebox.bg_color = bg_color
 				stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black borders
@@ -397,7 +424,7 @@ func _highlight_selected_cell():
 	if selected_cell != Vector2i(-1, -1):
 		var btn = grid_buttons[selected_cell.x][selected_cell.y]
 		var stylebox = StyleBoxFlat.new()
-		stylebox.bg_color = Color(0.7, 0.85, 1.0)  # Light blue highlight
+		stylebox.bg_color = theme_colors.get("selected", Color(0.7, 0.85, 1.0))
 		stylebox.border_color = Color(0.0, 0.0, 0.0)
 		stylebox.draw_center = true
 		
@@ -535,6 +562,11 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	btn.add_theme_stylebox_override("normal", stylebox)
 	btn.add_theme_stylebox_override("hover", stylebox)
 	btn.add_theme_stylebox_override("pressed", stylebox)
+
+func update_theme() -> void:
+	"""Update theme colors and refresh display"""
+	_init_theme_colors()
+	_highlight_selected_cell()
 
 func _on_life_lost(remaining_lives: int):
 	"""Update hearts display when a life is lost"""
