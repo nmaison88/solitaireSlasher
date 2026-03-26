@@ -501,7 +501,9 @@ func _on_host_game() -> void:
 	if mp_menu:
 		mp_menu.queue_free()
 	
-	var player_name = "Player" + str(randi() % 1000)
+	var player_name = PlayerData.get_player_name()
+	if player_name == "":
+		player_name = "Player" + str(randi() % 1000)  # Fallback to random if no name set
 	if NetworkManager.host_game(player_name):
 		print("Hosting multiplayer game")
 		_show_multiplayer_lobby(true, player_name)
@@ -515,7 +517,10 @@ func _on_join_game() -> void:
 		mp_menu.queue_free()
 	
 	# Show lobby with manual IP entry
-	_show_multiplayer_lobby(false, "Player" + str(randi() % 1000))
+	var player_name = PlayerData.get_player_name()
+	if player_name == "":
+		player_name = "Player" + str(randi() % 1000)  # Fallback to random if no name set
+	_show_multiplayer_lobby(false, player_name)
 
 func _show_main_menu() -> void:
 	if _menu_container:

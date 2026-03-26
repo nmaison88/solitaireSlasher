@@ -177,35 +177,52 @@ func _draw_slot(pos: Vector2) -> void:
 	add_child(bg)
 
 func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
-	# Use suite logo placeholder images from card-framework reference
-	# suit_index: 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+	# Create a Card Framework card for foundation indicator
+	var foundation_indicator = preload("res://addons/card-framework/card.tscn").instantiate()
+	foundation_indicator.position = pos
+	foundation_indicator.card_size = CARD_SIZE
+	foundation_indicator.show_front = true
+	foundation_indicator.can_be_interacted_with = false  # Disable Card Framework's interaction system
+	
+	# Disable Card Framework's built-in mouse handling
+	foundation_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Try to load the foundation spot image from card framework
 	var suit_names = ["club", "diamond", "heart", "spade"]
 	var placeholder_path = "res://addons/card-framework/freecell/assets/images/spots/foundation_%s_spot.png" % suit_names[suit_index]
 	
-	# Create white border first
-	var border = Panel.new()
-	border.position = pos
-	border.size = CARD_SIZE
-	
-	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
-	stylebox.border_color = Color(1.0, 1.0, 1.0)  # White border
-	stylebox.border_width_left = 2
-	stylebox.border_width_right = 2
-	stylebox.border_width_top = 2
-	stylebox.border_width_bottom = 2
-	border.add_theme_stylebox_override("panel", stylebox)
-	add_child(border)
-	
-	# Create a TextureRect to display the placeholder image
-	var placeholder = TextureRect.new()
-	placeholder.position = pos
-	placeholder.size = CARD_SIZE
-	placeholder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	
 	if FileAccess.file_exists(placeholder_path):
-		placeholder.texture = load(placeholder_path)
-		add_child(placeholder)
+		# Use the card framework foundation spot image
+		var front_texture = load(placeholder_path)
+		foundation_indicator.get_node("FrontFace/TextureRect").texture = front_texture
+	else:
+		# Fallback: create a simple card with suit symbol using card framework structure
+		# Create a simple texture with the suit symbol
+		var suit_symbols = ["♣", "♦", "♥", "♠"]
+		var suit_colors = [Color.BLACK, Color.RED, Color.RED, Color.BLACK]
+		
+		# Create a white card texture with suit symbol
+		var image = Image.new()
+		image.create(CARD_SIZE.x, CARD_SIZE.y, false, Image.FORMAT_RGBA8)
+		image.fill(Color.WHITE)
+		
+		# Add the suit symbol text (simple approach)
+		# For now, use the card back as a placeholder that shows the suit
+		foundation_indicator.get_node("FrontFace/TextureRect").texture = load("res://card_assets/cardBack_blue2.png")
+		
+		# Add a label with the suit symbol on top
+		var suit_label = Label.new()
+		suit_label.text = suit_symbols[suit_index]
+		suit_label.add_theme_font_size_override("font_size", 48)
+		suit_label.add_theme_color_override("font_color", suit_colors[suit_index])
+		suit_label.position = Vector2(CARD_SIZE.x / 2 - 24, CARD_SIZE.y / 2 - 24)
+		suit_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		foundation_indicator.add_child(suit_label)
+	
+	# Set back texture
+	foundation_indicator.get_node("BackFace/TextureRect").texture = load("res://card_assets/cardBack_blue2.png")
+	
+	add_child(foundation_indicator)
 	# No fallback needed - white border already added
 
 func _draw_stock(pos: Vector2) -> void:
