@@ -63,17 +63,14 @@ func _ready() -> void:
 	# Add background for both Solitaire and Sudoku
 	var game_background = ColorRect.new()
 	game_background.name = "GameBackground"
-	# Set background color based on theme
+	# Set default background color (will be updated based on game type)
 	var current_theme = PlayerData.get_theme()
-	if current_theme == "light":
-		game_background.color = Color(0.2, 0.4, 0.7)  # Blue background
-	else:
-		game_background.color = Color(0.1, 0.1, 0.1)  # Dark gray background
+	game_background.color = Color(0.2, 0.4, 0.7) if current_theme == "light" else Color(0.1, 0.1, 0.1)
 	game_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	game_background.z_index = -1  # Behind everything
 	game_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
-	game_background.visible = false
 	add_child(game_background)
+	game_background.visible = false
 	
 	# Create Sudoku game and board
 	_sudoku_game = SudokuGame.new()
@@ -543,6 +540,29 @@ func _on_difficulty_carousel_selection_changed(index: int = -1) -> void:
 	else:
 		print("DEBUG: Invalid index: ", index)
 
+func _update_game_background(game_type: String) -> void:
+	"""Update background color based on game type and theme"""
+	var game_bg = get_node_or_null("GameBackground")
+	if not game_bg:
+		return
+	
+	var current_theme = PlayerData.get_theme()
+	
+	if game_type == "Solitaire":
+		# Traditional green for Solitaire in light mode
+		if current_theme == "light":
+			game_bg.color = Color(0.0, 0.5, 0.2)  # Traditional green
+		else:
+			game_bg.color = Color(0.05, 0.2, 0.1)  # Darker green for dark mode
+	else:  # Sudoku
+		# Sky blue for light mode, original dark for dark mode
+		if current_theme == "light":
+			game_bg.color = Color(0.33, 0.41, 1.0)  # Sky blue
+		else:
+			game_bg.color = Color(0.1, 0.1, 0.1)  # Original dark gray
+	
+	print("Updated ", game_type, " background to: ", game_bg.color)
+
 func _on_single_player_start(game_type: String) -> void:
 	"""Handle single player start for specific game"""
 	# Remove game menu
@@ -552,6 +572,9 @@ func _on_single_player_start(game_type: String) -> void:
 	
 	# Set the game type
 	_current_game_type = game_type
+	
+	# Update background based on game type
+	_update_game_background(game_type)
 	
 	# Hide settings button when game starts
 	var settings_button = get_node_or_null("settings_button")
@@ -892,6 +915,9 @@ func _on_single_player_start_legacy():
 	
 	# Hide main menu
 	_hide_main_menu()
+	
+	# Update background based on current game type
+	_update_game_background(_current_game_type)
 	
 	# Hide settings button when game starts
 	var settings_button = get_node_or_null("settings_button")
@@ -2005,6 +2031,21 @@ func _update_player_status_display() -> void:
 
 func _on_settings_button_pressed() -> void:
 	"""Show professional settings menu with enhanced styling"""
+	# Clean up any existing settings menu first
+	var existing_settings = get_node_or_null("SettingsMenu")
+	if existing_settings:
+		existing_settings.queue_free()
+	
+	# Also clean up any background panels
+	for child in get_children():
+		if child is Panel and child.get_child_count() > 0:
+			var grandchild = child.get_child(0)
+			if grandchild is MarginContainer and grandchild.get_child_count() > 0:
+				var settings = grandchild.get_child(0)
+				if settings.name == "SettingsMenu":
+					child.queue_free()
+					break
+	
 	# Hide main menu
 	_menu_container.visible = false
 	
@@ -2034,7 +2075,7 @@ func _on_settings_button_pressed() -> void:
 	
 	# Style the background panel
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.95, 0.95, 0.95) if PlayerData.get_theme() == "light" else Color(0.15, 0.15, 0.15)
+	panel_style.bg_color = Color(0.2, 0.4, 0.7) if PlayerData.get_theme() == "light" else Color(0.15, 0.15, 0.15)
 	panel_style.corner_radius_top_left = 20
 	panel_style.corner_radius_top_right = 20
 	panel_style.corner_radius_bottom_left = 20
@@ -2043,7 +2084,7 @@ func _on_settings_button_pressed() -> void:
 	panel_style.border_width_right = 2
 	panel_style.border_width_top = 2
 	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
+	panel_style.border_color = Color(0.1, 0.3, 0.6) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
 	background_panel.add_theme_stylebox_override("panel", panel_style)
 	
 	# Add margin to settings menu
@@ -2053,8 +2094,6 @@ func _on_settings_button_pressed() -> void:
 	margin.add_theme_constant_override("margin_top", 40)
 	margin.add_theme_constant_override("margin_bottom", 40)
 	background_panel.add_child(margin)
-	margin.add_child(settings_menu)
-	background_panel.remove_child(settings_menu)  # Remove from panel, add to margin
 	margin.add_child(settings_menu)
 	
 	# Title with professional styling
@@ -2086,7 +2125,7 @@ func _on_settings_button_pressed() -> void:
 	player_name_label.text = "Player Name"
 	player_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	player_name_label.add_theme_font_size_override("font_size", 28)
-	player_name_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	player_name_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
 	player_name_section.add_child(player_name_label)
 	
 	# Player name input container with better styling
@@ -2112,6 +2151,10 @@ func _on_settings_button_pressed() -> void:
 	input_style.border_width_bottom = 2
 	input_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
 	player_name_input.add_theme_stylebox_override("normal", input_style)
+	
+	# Add text color styling for the input field
+	player_name_input.add_theme_color_override("font_color", Color.BLACK if PlayerData.get_theme() == "light" else Color.WHITE)
+	player_name_input.add_theme_color_override("font_placeholder_color", Color(0.5, 0.5, 0.5) if PlayerData.get_theme() == "light" else Color(0.7, 0.7, 0.7))
 	
 	name_container.add_child(player_name_input)
 	
@@ -2161,7 +2204,7 @@ func _on_settings_button_pressed() -> void:
 	theme_label.text = "Appearance"
 	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	theme_label.add_theme_font_size_override("font_size", 28)
-	theme_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	theme_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
 	theme_section.add_child(theme_label)
 	
 	# Dark mode toggle container with larger toggle
@@ -2173,7 +2216,7 @@ func _on_settings_button_pressed() -> void:
 	dark_mode_label.text = "Dark Mode"
 	dark_mode_label.custom_minimum_size = Vector2(120, 60)
 	dark_mode_label.add_theme_font_size_override("font_size", 24)
-	dark_mode_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	dark_mode_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
 	dark_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	theme_container.add_child(dark_mode_label)
 	
@@ -2250,12 +2293,64 @@ func _on_dark_mode_toggled(toggled_on: bool) -> void:
 	
 	print("Updating backgrounds...")
 	if game_bg:
-		game_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
+		# Update game background based on current game type
+		if _current_game_type != "":
+			_update_game_background(_current_game_type)
+		else:
+			# No game type set, use default
+			game_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
 		print("Game background updated to: ", game_bg.color)
 	
 	if menu_bg:
 		menu_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
 		print("Menu background updated to: ", menu_bg.color)
+	
+	# Also update the settings panel background color in real-time
+	print("DEBUG: Looking for settings panel... Total children: ", get_child_count())
+	# Look for any Panel that might be the settings background
+	for child in get_children():
+		print("DEBUG: Found child: ", child.name, " type: ", child.get_class())
+		if child is Panel:
+			print("DEBUG: Found Panel, checking children...")
+			# Check if this panel contains a settings menu (direct child or grandchild)
+			var is_settings_panel = false
+			for grandchild in child.get_children():
+				print("DEBUG: Panel grandchild: ", grandchild.name, " type: ", grandchild.get_class())
+				# Check if this grandchild is the SettingsMenu
+				if grandchild.name == "SettingsMenu":
+					print("DEBUG: FOUND SETTINGS MENU as direct grandchild!")
+					is_settings_panel = true
+					break
+				# Check if this grandchild is a MarginContainer that contains SettingsMenu
+				elif grandchild is MarginContainer:
+					print("DEBUG: Found MarginContainer, checking children...")
+					for great_grandchild in grandchild.get_children():
+						print("DEBUG: MarginContainer child: ", great_grandchild.name, " type: ", great_grandchild.get_class())
+						if great_grandchild.name == "SettingsMenu":
+							print("DEBUG: FOUND SETTINGS MENU in MarginContainer!")
+							is_settings_panel = true
+							break
+					if is_settings_panel:
+						break
+			
+			if is_settings_panel:
+				print("DEBUG: This is the settings panel, updating style...")
+				var panel_style = StyleBoxFlat.new()
+				panel_style.bg_color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.15, 0.15, 0.15)
+				panel_style.corner_radius_top_left = 20
+				panel_style.corner_radius_top_right = 20
+				panel_style.corner_radius_bottom_left = 20
+				panel_style.corner_radius_bottom_right = 20
+				panel_style.border_width_left = 2
+				panel_style.border_width_right = 2
+				panel_style.border_width_top = 2
+				panel_style.border_width_bottom = 2
+				panel_style.border_color = Color(0.1, 0.3, 0.6) if new_theme == "light" else Color(0.5, 0.5, 0.5)
+				child.add_theme_stylebox_override("panel", panel_style)
+				print("Settings panel background updated for theme: ", new_theme)
+				break
+			else:
+				print("DEBUG: This Panel is not the settings panel")
 	
 	# Update Sudoku board theme if it exists
 	if _sudoku_board:
@@ -2266,20 +2361,70 @@ func _on_dark_mode_toggled(toggled_on: bool) -> void:
 
 func _on_settings_back() -> void:
 	"""Handle settings back button"""
+	print("DEBUG: Settings back button PRESSED!")
+	
 	# Remove settings menu and its background panel
-	var settings_menu = get_node_or_null("SettingsMenu")
-	if settings_menu:
-		# Find and remove the background panel (parent of settings_menu)
-		var background_panel = settings_menu.get_parent()
-		if background_panel and background_panel is Panel:
-			background_panel.queue_free()
-		else:
-			settings_menu.queue_free()
+	# Look for settings menu in the nested structure
+	var settings_menu = null
+	var background_panel = null
+	
+	print("DEBUG: Back button - looking for settings menu... Total children: ", get_child_count())
+	# Search through all children to find the settings structure
+	for child in get_children():
+		print("DEBUG: Back button - found child: ", child.name, " type: ", child.get_class())
+		if child is Panel:
+			print("DEBUG: Back button - found Panel, checking children...")
+			# This might be our background panel
+			for grandchild in child.get_children():
+				print("DEBUG: Back button - panel grandchild: ", grandchild.name, " type: ", grandchild.get_class())
+				# Check if this grandchild is the SettingsMenu (direct child)
+				if grandchild.name == "SettingsMenu":
+					print("DEBUG: Back button - FOUND SETTINGS MENU as direct grandchild!")
+					settings_menu = grandchild
+					background_panel = child
+					print("DEBUG: Found settings menu in nested structure")
+					break
+				# Check if this grandchild is a MarginContainer that contains SettingsMenu
+				elif grandchild is MarginContainer:
+					print("DEBUG: Back button - found MarginContainer, checking children...")
+					for great_grandchild in grandchild.get_children():
+						print("DEBUG: Back button - margin child: ", great_grandchild.name, " type: ", great_grandchild.get_class())
+						if great_grandchild.name == "SettingsMenu":
+							print("DEBUG: Back button - FOUND SETTINGS MENU in MarginContainer!")
+							settings_menu = great_grandchild
+							background_panel = child
+							print("DEBUG: Found settings menu in nested structure")
+							break
+					if settings_menu:
+						break
+			if settings_menu:
+				break
+	
+	if settings_menu and background_panel:
+		print("DEBUG: Found settings menu, removing background panel...")
+		background_panel.queue_free()
+	elif settings_menu:
+		print("DEBUG: Found settings menu, removing directly...")
+		settings_menu.queue_free()
+	else:
+		print("DEBUG: No settings menu found!")
 	
 	# Show settings button again
 	var settings_button = get_node_or_null("settings_button")
 	if settings_button:
 		settings_button.visible = true
+		print("DEBUG: Settings button made visible")
 	
 	# Show main menu (this will update the background to current theme)
+	print("DEBUG: Settings back - calling _show_main_menu")
 	_show_main_menu()
+	
+	# Force update menu background to ensure theme change is visible
+	var menu_bg = get_node_or_null("MenuBackground")
+	if menu_bg:
+		var current_theme = PlayerData.get_theme()
+		menu_bg.color = Color(0.2, 0.4, 0.7) if current_theme == "light" else Color(0.1, 0.1, 0.1)
+		menu_bg.visible = true
+		print("DEBUG: Menu background updated to: ", menu_bg.color, " visible: ", menu_bg.visible)
+	
+	print("DEBUG: Settings back function completed")
