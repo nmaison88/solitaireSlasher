@@ -33,6 +33,7 @@ var is_scanning: bool = false
 var settings_label: Label
 var game_type_container: HBoxContainer
 var difficulty_container: HBoxContainer
+var main_vbox: VBoxContainer  # Store reference to main vbox
 
 func _ready() -> void:
 	# Load and setup IP helper
@@ -85,6 +86,7 @@ func _create_ui() -> void:
 	vbox.add_theme_constant_override("separation", 40)
 	vbox.size_flags_horizontal = Control.SIZE_FILL
 	scroll_outer.add_child(vbox)
+	main_vbox = vbox  # Store reference for later use
 	
 	# Title
 	var title = Label.new()
@@ -311,12 +313,157 @@ func _connect_signals() -> void:
 		NetworkManager.game_started.connect(_on_network_game_started)
 		NetworkManager.game_settings_received.connect(_on_game_settings_received)
 
+func _create_game_settings_display() -> void:
+	"""Create a professional game settings display with clickable values"""
+	var settings_container = VBoxContainer.new()
+	settings_container.name = "GameSettingsContainer"
+	
+	# Game type display
+	var game_type_row = HBoxContainer.new()
+	var game_type_label = Label.new()
+	game_type_label.text = "Game:"
+	game_type_label.add_theme_font_size_override("font_size", 32)
+	game_type_label.custom_minimum_size = Vector2(150, 50)
+	game_type_row.add_child(game_type_label)
+	
+	var game_type_value = Button.new()
+	game_type_value.text = selected_game_type
+	game_type_value.add_theme_font_size_override("font_size", 32)
+	game_type_value.custom_minimum_size = Vector2(200, 50)
+	game_type_value.add_theme_color_override("font_color", Color(0.2, 0.6, 1.0))  # Blue clickable text
+	# Make it look like a label, not a button
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color.TRANSPARENT
+	style.draw_center = false
+	game_type_value.add_theme_stylebox_override("normal", style)
+	game_type_value.add_theme_stylebox_override("hover", style)
+	game_type_value.pressed.connect(_on_game_type_value_clicked)
+	game_type_row.add_child(game_type_value)
+	settings_container.add_child(game_type_row)
+	
+	# Difficulty display
+	var difficulty_row = HBoxContainer.new()
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty:"
+	difficulty_label.add_theme_font_size_override("font_size", 32)
+	difficulty_label.custom_minimum_size = Vector2(150, 50)
+	difficulty_row.add_child(difficulty_label)
+	
+	var difficulty_value = Button.new()
+	difficulty_value.text = selected_difficulty
+	difficulty_value.add_theme_font_size_override("font_size", 32)
+	difficulty_value.custom_minimum_size = Vector2(200, 50)
+	difficulty_value.add_theme_color_override("font_color", Color(0.2, 0.6, 1.0))  # Blue clickable text
+	# Make it look like a label, not a button
+	difficulty_value.add_theme_stylebox_override("normal", style)
+	difficulty_value.add_theme_stylebox_override("hover", style)
+	difficulty_value.pressed.connect(_on_difficulty_value_clicked)
+	difficulty_row.add_child(difficulty_value)
+	settings_container.add_child(difficulty_row)
+	
+	# Add to main vbox before the player list
+	if main_vbox:
+		var player_list_index = -1
+		for i in range(main_vbox.get_child_count()):
+			if main_vbox.get_child(i).name == "PlayerList":
+				player_list_index = i
+				break
+		
+		if player_list_index >= 0:
+			main_vbox.add_child(settings_container)
+			main_vbox.move_child(settings_container, player_list_index)
+		else:
+			main_vbox.add_child(settings_container)
+
+
+func _on_game_type_value_clicked() -> void:
+	"""Show game type carousel when game type value is clicked"""
+	if game_type_container:
+		game_type_container.visible = not game_type_container.visible
+		if game_type_container.visible:
+			print("Game type carousel shown")
+		else:
+			print("Game type carousel hidden")
+
+func _on_difficulty_value_clicked() -> void:
+	"""Show difficulty carousel when difficulty value is clicked"""
+	if difficulty_container:
+		difficulty_container.visible = not difficulty_container.visible
+		if difficulty_container.visible:
+			print("Difficulty carousel shown")
+		else:
+			print("Difficulty carousel hidden")
+
+func _update_game_settings_display() -> void:
+	"""Update the displayed values in the game settings"""
+	var settings_container = null
+	if main_vbox:
+		settings_container = main_vbox.get_node_or_null("GameSettingsContainer")
+	if not settings_container:
+		return
+	
+	# Update game type value
+	var game_type_row = settings_container.get_child(0)
+	if game_type_row and game_type_row.get_child_count() >= 2:
+		var game_type_value = game_type_row.get_child(1)
+		if game_type_value is Button:
+			game_type_value.text = selected_game_type
+	
+	# Update difficulty value  
+	var difficulty_row = settings_container.get_child(1)
+	if difficulty_row and difficulty_row.get_child_count() >= 2:
+		var difficulty_value = difficulty_row.get_child(1)
+		if difficulty_value is Button:
+			difficulty_value.text = selected_difficulty
+	
+	print("Updated game settings display - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty)
+
+func _create_qr_section() -> void:
+	"""Create QR code section positioned above the buttons"""
+	var local_ip = ip_helper.get_local_ip()
+	
+	# Create QR container
+	var qr_container = VBoxContainer.new()
+	qr_container.name = "QRContainer"
+	qr_container.alignment = VBoxContainer.ALIGNMENT_CENTER
+	
+	# QR Title
+	var qr_title = Label.new()
+	qr_title.text = "Scan to Join (Local Network)"
+	qr_title.add_theme_font_size_override("font_size", 28)
+	qr_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	qr_container.add_child(qr_title)
+	
+	# Generate QR code
+	_generate_qr_code(local_ip, qr_container)
+	
+	# IP Address text
+	var ip_text = Label.new()
+	ip_text.text = "Local IP: " + local_ip + " | Port: 7777"
+	ip_text.add_theme_font_size_override("font_size", 24)
+	ip_text.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	qr_container.add_child(ip_text)
+	
+	# Add to main vbox before the buttons
+	if main_vbox:
+		var button_box_index = -1
+		for i in range(main_vbox.get_child_count()):
+			if main_vbox.get_child(i).name == "ButtonBox":
+				button_box_index = i
+				break
+		
+		if button_box_index >= 0:
+			main_vbox.add_child(qr_container)
+			main_vbox.move_child(qr_container, button_box_index)
+		else:
+			main_vbox.add_child(qr_container)
+
 func setup_as_host(player_name: String) -> void:
 	# Reset state to prevent issues from previous sessions
 	_reset_lobby_state()
 	
 	is_host = true
-	host_label.text = "You are hosting"
+	host_label.text = selected_game_type + " Multiplayer Lobby"
 	
 	# Get the current game type from Main scene
 	var main_scene = get_tree().current_scene
@@ -327,65 +474,26 @@ func setup_as_host(player_name: String) -> void:
 	
 	print("Hosting multiplayer game for: ", selected_game_type)
 	
-	# Show game settings for host
-	if settings_label:
-		settings_label.visible = true
-		print("Settings label made visible")
+	# Create professional game settings display
+	_create_game_settings_display()
 	
-	# Hide game type selection since we already know the game type
+	# Create QR code section above buttons
+	_create_qr_section()
+	
+	# Hide the old settings label and containers
+	if settings_label:
+		settings_label.visible = false
 	if game_type_container:
 		game_type_container.visible = false
-		print("Game type container hidden (game inferred from context)")
-	
 	if difficulty_container:
-		difficulty_container.visible = true
-		print("Difficulty container made visible")
-		
-	# Reset difficulty carousel to default (Medium)
-	if difficulty_carousel:
-		difficulty_carousel.starting_index = 1
-		selected_difficulty = "Medium"
-		print("Difficulty reset to Medium")
+		difficulty_container.visible = false
 	
-	# Create IP info section for host
-	var ip_info_container = VBoxContainer.new()
-	ip_info_container.name = "IPInfoContainer"
-	
-	# Local IP (for LAN play)
-	local_ip_label = Label.new()
-	local_ip_label.text = "Local IP (LAN): " + ip_helper.get_local_ip() + " | Port: 7777"
-	local_ip_label.add_theme_font_size_override("font_size", 32)
-	ip_info_container.add_child(local_ip_label)
-	
-	# Generate QR code for local IP
-	var local_ip = ip_helper.get_local_ip()
-	_generate_qr_code(local_ip, ip_info_container)
-	
-	# Public IP (for internet play) - will be fetched
-	public_ip_label = Label.new()
-	public_ip_label.text = "Public IP (Internet): Fetching..."
-	public_ip_label.add_theme_font_size_override("font_size", 32)
-	ip_info_container.add_child(public_ip_label)
-	
-	# Port forwarding instructions
-	port_forward_label = Label.new()
-	port_forward_label.text = "For internet play: Forward port 7777 (TCP/UDP) on your router"
-	port_forward_label.add_theme_font_size_override("font_size", 28)
-	port_forward_label.modulate = Color(1.0, 0.8, 0.0)  # Yellow warning color
-	ip_info_container.add_child(port_forward_label)
-	
-	# Add to status area (replace status_label)
-	status_label.get_parent().add_child(ip_info_container)
-	status_label.visible = false
-	
+	# Hide join elements for host
 	ip_input.visible = false
 	join_button.visible = false
-	scan_button.visible = false  # Hide scan button for host
+	scan_button.visible = false
 	start_button.visible = true
 	_add_player(NetworkManager.local_player_id, player_name + " (You - Host)")
-	
-	# Fetch public IP
-	ip_helper.get_public_ip()
 
 func setup_as_client(player_name: String) -> void:
 	# Reset state to prevent issues from previous sessions
@@ -535,6 +643,11 @@ func _on_game_carousel_changed():
 		if current_index >= 0 and current_index < game_names.size():
 			selected_game_type = game_names[current_index]
 			print("Multiplayer game type changed to: ", selected_game_type)
+			
+			# Hide carousel and update displayed value
+			if game_type_container:
+				game_type_container.visible = false
+			_update_game_settings_display()
 
 func _on_difficulty_carousel_changed():
 	"""Handle difficulty carousel change"""
@@ -544,6 +657,11 @@ func _on_difficulty_carousel_changed():
 		if current_index >= 0 and current_index < difficulties.size():
 			selected_difficulty = difficulties[current_index]
 			print("Multiplayer difficulty changed to: ", selected_difficulty)
+			
+			# Hide carousel and update displayed value
+			if difficulty_container:
+				difficulty_container.visible = false
+			_update_game_settings_display()
 			
 			# Update font sizes - make selected item larger
 			for i in range(difficulty_carousel.get_child_count()):
