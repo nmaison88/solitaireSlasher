@@ -142,6 +142,9 @@ func _setup_main_menu() -> void:
 	settings_button.add_theme_stylebox_override("hover", transparent_style)
 	settings_button.add_theme_stylebox_override("pressed", transparent_style)
 	
+	# Ensure settings button catches mouse events
+	settings_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	
 	# Add FontAwesome gear icon for settings (FontAwesome 6 naming)
 	var settings_icon = FontAwesome.new()
 	settings_icon.icon_name = "gear"
@@ -152,60 +155,366 @@ func _setup_main_menu() -> void:
 	settings_button.add_child(settings_icon)
 	
 	settings_button.pressed.connect(_on_settings_button_pressed)
-	add_child(settings_button)
+	# Don't add to scene tree yet - will add after menu container
 	
 	# Create centered menu container
 	_menu_container = VBoxContainer.new()
 	_menu_container.name = "MainMenuContainer"
-	_menu_container.set_anchors_preset(Control.PRESET_CENTER)
-	_menu_container.anchor_left = 0.5
-	_menu_container.anchor_top = 0.5
-	_menu_container.anchor_right = 0.5
-	_menu_container.anchor_bottom = 0.5
-	_menu_container.offset_left = -250
-	_menu_container.offset_top = -350
-	_menu_container.offset_right = 250
-	_menu_container.offset_bottom = 350
+	# Make menu container full screen for maximum swipe area
+	_menu_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_menu_container.offset_left = 0
+	_menu_container.offset_top = 0
+	_menu_container.offset_right = 0
+	_menu_container.offset_bottom = 0
 	_menu_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_menu_container.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_menu_container)
 	
+	# Now add settings button on top of everything
+	add_child(settings_button)
+	
 	# Add title
 	var title = Label.new()
-	title.text = "Solitaire Slasher"
+	title.text = "Choose Your Game"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 64)
 	_menu_container.add_child(title)
 	
 	# Add spacing
 	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 60)
+	spacer1.custom_minimum_size = Vector2(0, 40)
 	_menu_container.add_child(spacer1)
 	
-	# Create main menu buttons
-	var single_button = Button.new()
-	single_button.name = "menu_single"
-	single_button.text = "Single Player"
-	single_button.custom_minimum_size = Vector2(400, 100)
-	single_button.add_theme_font_size_override("font_size", 36)
-	single_button.pressed.connect(_on_show_single_player_menu)
-	_menu_container.add_child(single_button)
+	# Create game carousel (taking up most of the screen)
+	var game_carousel = Carousel.new()
+	game_carousel.name = "GameCarousel"
 	
+	# Get actual screen size, not viewport size (more accurate for mobile)
+	var screen_size = DisplayServer.screen_get_size()
+	var max_dimension = min(screen_size.x, screen_size.y)  # Use smaller dimension for square icons
+	
+	# Use full screen dimensions but avoid settings button area
+	game_carousel.custom_minimum_size = Vector2(screen_size.x * 0.9, screen_size.y - 120)  # 90% width, avoid top 120px for settings
+	game_carousel.position = Vector2(0, 120)  # Start below settings button area
+	game_carousel.item_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
+	game_carousel.item_seperation = screen_size.x * 0.1  # 10% of screen width separation
+	
+	# Enable carousel movement and interaction with smooth looping
+	game_carousel.carousel_angle = 0  # Horizontal
+	game_carousel.allow_loop = true
+	game_carousel.display_loop = true
+	game_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	game_carousel.can_drag = true
+	game_carousel.drag_outside = true  # Allow drag outside bounds
+	game_carousel.enforce_border = false  # No hard stops for smooth looping
+	game_carousel.display_range = -1  # Show all items for smoother looping
+	game_carousel.snap_carousel_duration = 0.2  # Slightly longer for smoother loop
+	game_carousel.snap_carousel_transtion_type = Tween.TRANS_CUBIC  # Smoother cubic easing
+	game_carousel.snap_carousel_ease_type = Tween.EASE_IN_OUT  # Symmetrical easing
+	game_carousel.manual_carousel_duration = 0.2  # Same duration for manual navigation
+	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC  # Same smoother easing
+	game_carousel.manual_carousel_ease_type = Tween.EASE_IN_OUT  # Same symmetrical easing
+	
+	# Add game icons as clickable TextureRect children (2/3 screen size)
+	var solitaire_icon = TextureRect.new()
+	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
+	solitaire_icon.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
+	solitaire_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	solitaire_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	solitaire_icon.name = "Solitaire"
+	solitaire_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
+	solitaire_icon.gui_input.connect(_on_solitaire_icon_clicked)
+	game_carousel.add_child(solitaire_icon)
+	
+	var sudoku_icon = TextureRect.new()
+	sudoku_icon.texture = load("res://game icons/sudoku_icon.png")
+	sudoku_icon.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
+	sudoku_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	sudoku_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sudoku_icon.name = "Sudoku"
+	sudoku_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
+	sudoku_icon.gui_input.connect(_on_sudoku_icon_clicked)
+	game_carousel.add_child(sudoku_icon)
+	
+	# Connect to carousel change signals
+	game_carousel.manual_end.connect(_on_game_carousel_selection_changed)
+	game_carousel.snap_end.connect(_on_game_carousel_selection_changed)
+	_menu_container.add_child(game_carousel)
+	
+	# Add spacing
 	var spacer2 = Control.new()
 	spacer2.custom_minimum_size = Vector2(0, 20)
 	_menu_container.add_child(spacer2)
+
+func create_carousel_item(item_name: String) -> Control:
+	"""Create a carousel item with icon and text"""
+	var item = Control.new()
+	item.name = item_name
+	item.custom_minimum_size = Vector2(350, 350)
 	
-	var multiplayer_button = Button.new()
-	multiplayer_button.name = "menu_multiplayer"
-	multiplayer_button.text = "Multiplayer"
-	multiplayer_button.custom_minimum_size = Vector2(400, 100)
-	multiplayer_button.add_theme_font_size_override("font_size", 36)
-	multiplayer_button.pressed.connect(_on_show_multiplayer_menu)
-	_menu_container.add_child(multiplayer_button)
+	# Create vertical container for icon and text
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.alignment = VBoxContainer.ALIGNMENT_CENTER
+	item.add_child(vbox)
 	
+	# Add icon
+	var icon = TextureRect.new()
+	icon.custom_minimum_size = Vector2(200, 200)
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	
+	# Load appropriate icon
+	if item_name == "Solitaire":
+		var solitaire_texture = load("res://game icons/solitaire_icon.png")
+		if solitaire_texture:
+			icon.texture = solitaire_texture
+	elif item_name == "Sudoku":
+		var sudoku_texture = load("res://game icons/sudoku_icon.png")
+		if sudoku_texture:
+			icon.texture = sudoku_texture
+	
+	vbox.add_child(icon)
+	
+	# Add text label
+	var label = Label.new()
+	label.text = item_name
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 36)
+	vbox.add_child(label)
+	
+	return item
+
+func create_difficulty_carousel_item(item_name: String) -> Control:
+	"""Create a difficulty carousel item with medium text"""
+	var item = Control.new()
+	item.name = item_name
+	item.custom_minimum_size = Vector2(300, 60)
+	
+	var label = Label.new()
+	label.text = item_name
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 42)
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	item.add_child(label)
+	
+	return item
+
+func _on_solitaire_icon_clicked(event: InputEvent) -> void:
+	"""Handle clicking on Solitaire icon"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		print("Solitaire icon clicked")
+		_current_game_type = "Solitaire"
+		_on_game_selected()
+
+func _on_sudoku_icon_clicked(event: InputEvent) -> void:
+	"""Handle clicking on Sudoku icon"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		print("Sudoku icon clicked")
+		_current_game_type = "Sudoku"
+		_on_game_selected()
+
+func _on_game_carousel_selection_changed(index: int = -1) -> void:
+	"""Handle game carousel selection change"""
+	# If no index provided, get current index from carousel
+	if index == -1:
+		var game_carousel = get_node_or_null("MainMenuContainer/GameCarousel")
+		if game_carousel and game_carousel.get_child_count() > 0:
+			index = game_carousel.get_current_carousel_index()
+		else:
+			return
+	
+	var games = ["Solitaire", "Sudoku"]
+	if index >= 0 and index < games.size():
+		_current_game_type = games[index]
+		print("Game selected: ", _current_game_type)
+
+func _on_game_selected() -> void:
+	"""Handle game selection from carousel - show game-specific menu"""
+	# Hide main menu
+	_menu_container.visible = false
+	
+	# Hide settings button when in game menu
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
+	# Create game-specific menu
+	_show_game_menu(_current_game_type)
+
+func _show_game_menu(game_type: String) -> void:
+	"""Show game-specific menu with difficulty and multiplayer options"""
+	# Create game menu container
+	var game_menu = VBoxContainer.new()
+	game_menu.name = "GameMenu"
+	game_menu.set_anchors_preset(Control.PRESET_CENTER)
+	game_menu.anchor_left = 0.5
+	game_menu.anchor_top = 0.5
+	game_menu.offset_left = -300
+	game_menu.offset_top = -400
+	game_menu.offset_right = 300
+	game_menu.offset_bottom = 400
+	game_menu.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	game_menu.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(game_menu)
+	
+	# Title
+	var title = Label.new()
+	title.text = game_type
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 56)
+	game_menu.add_child(title)
+	
+	# Add spacing
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 40)
+	game_menu.add_child(spacer1)
+	
+	# Difficulty section
+	var difficulty_label = Label.new()
+	difficulty_label.text = "Difficulty:"
+	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.add_theme_font_size_override("font_size", 36)
+	game_menu.add_child(difficulty_label)
+	
+	# Difficulty carousel using the correct Carousel class
+	var difficulty_carousel = Carousel.new()
+	difficulty_carousel.name = "DifficultyCarousel"
+	difficulty_carousel.custom_minimum_size = Vector2(400, 250)
+	difficulty_carousel.item_size = Vector2(300, 60)
+	difficulty_carousel.item_seperation = 20
+	
+	# Enable carousel movement and interaction (matching old configuration)
+	difficulty_carousel.carousel_angle = 90  # Vertical
+	difficulty_carousel.allow_loop = true
+	difficulty_carousel.display_loop = true
+	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
+	difficulty_carousel.can_drag = true
+	difficulty_carousel.starting_index = 1  # Default to Medium
+	
+	# Add difficulty labels as children (matching old way)
+	for i in range(3):
+		var diff = ["Easy", "Medium", "Hard"][i]
+		var diff_label = Label.new()
+		diff_label.text = diff
+		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		diff_label.custom_minimum_size = Vector2(300, 60)
+		# Selected item (Medium at index 1) starts larger
+		if i == 1:
+			diff_label.add_theme_font_size_override("font_size", 56)
+		else:
+			diff_label.add_theme_font_size_override("font_size", 36)
+		diff_label.name = diff
+		difficulty_carousel.add_child(diff_label)
+	
+	# Connect to carousel change signals
+	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_selection_changed)
+	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_selection_changed)
+	game_menu.add_child(difficulty_carousel)
+	
+	# Add spacing
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 40)
+	game_menu.add_child(spacer2)
+	
+	# Play Single Player button
+	var play_button = Button.new()
+	play_button.text = "Play Single Player"
+	play_button.custom_minimum_size = Vector2(400, 80)
+	play_button.add_theme_font_size_override("font_size", 36)
+	play_button.pressed.connect(_on_single_player_start.bind(game_type))
+	game_menu.add_child(play_button)
+	
+	# Add spacing
 	var spacer3 = Control.new()
 	spacer3.custom_minimum_size = Vector2(0, 20)
-	_menu_container.add_child(spacer3)
+	game_menu.add_child(spacer3)
+	
+	# Multiplayer button
+	var multiplayer_button = Button.new()
+	multiplayer_button.text = "Multiplayer"
+	multiplayer_button.custom_minimum_size = Vector2(400, 80)
+	multiplayer_button.add_theme_font_size_override("font_size", 36)
+	multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
+	game_menu.add_child(multiplayer_button)
+	
+	# Add spacing
+	var spacer4 = Control.new()
+	spacer4.custom_minimum_size = Vector2(0, 40)
+	game_menu.add_child(spacer4)
+	
+	# Back button
+	var back_button = Button.new()
+	back_button.text = "Back"
+	back_button.custom_minimum_size = Vector2(400, 80)
+	back_button.add_theme_font_size_override("font_size", 36)
+	back_button.pressed.connect(_on_game_menu_back)
+	game_menu.add_child(back_button)
+	
+	# Set current difficulty based on carousel
+	_current_difficulty = "Medium"
+
+func _on_difficulty_carousel_selection_changed(index: int = -1) -> void:
+	"""Handle difficulty carousel selection change"""
+	# If no index provided, get current index from carousel
+	if index == -1:
+		var game_menu = get_node_or_null("GameMenu")
+		if game_menu:
+			var difficulty_carousel = game_menu.get_node_or_null("DifficultyCarousel")
+			if difficulty_carousel and difficulty_carousel.get_child_count() > 0:
+				index = difficulty_carousel.get_current_carousel_index()
+			else:
+				return
+		else:
+			return
+	
+	var difficulties = ["Easy", "Medium", "Hard"]
+	if index >= 0 and index < difficulties.size():
+		_current_difficulty = difficulties[index]
+		print("Difficulty selected: ", _current_difficulty)
+
+func _on_single_player_start(game_type: String) -> void:
+	"""Handle single player start for specific game"""
+	# Remove game menu
+	var game_menu = get_node_or_null("GameMenu")
+	if game_menu:
+		game_menu.queue_free()
+	
+	# Set the game type
+	_current_game_type = game_type
+	
+	# Hide settings button when game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+	
+	# Hide menu button when game starts
+	if _menu_button:
+		_menu_button.visible = false
+	
+	# Start game based on selection
+	if game_type == "Solitaire":
+		MultiplayerGameManager.start_local_game(_current_difficulty)
+		_setup_single_player_game()
+	else:  # Sudoku
+		_setup_single_player_sudoku()
+
+func _on_game_menu_back() -> void:
+	"""Handle game menu back button"""
+	# Remove game menu
+	var game_menu = get_node_or_null("GameMenu")
+	if game_menu:
+		game_menu.queue_free()
+	
+	# Show settings button when back to main menu
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = true
+	
+	# Show main menu
+	_menu_container.visible = true
 
 func _on_show_single_player_menu() -> void:
 	"""Show single player submenu with carousels for game type and difficulty"""
@@ -333,7 +642,7 @@ func _on_show_single_player_menu() -> void:
 	start_button.text = "Start Game"
 	start_button.custom_minimum_size = Vector2(400, 80)
 	start_button.add_theme_font_size_override("font_size", 36)
-	start_button.pressed.connect(_on_single_player_start)
+	start_button.pressed.connect(_on_single_player_start_legacy)
 	sp_menu.add_child(start_button)
 	
 	var spacer4 = Control.new()
@@ -358,10 +667,14 @@ func _on_single_player_back() -> void:
 	# Show main menu
 	_show_main_menu()
 
-func _on_show_multiplayer_menu() -> void:
-	"""Show multiplayer submenu with Host/Join buttons"""
-	# Hide main menu
-	_menu_container.visible = false
+func _on_show_multiplayer_menu(game_type: String = "") -> void:
+	"""Show multiplayer submenu with Host/Join buttons for specific game"""
+	# Hide game menu if coming from there, otherwise hide main menu
+	var game_menu = get_node_or_null("GameMenu")
+	if game_menu:
+		game_menu.visible = false
+	else:
+		_menu_container.visible = false
 	
 	# Hide settings button when in multiplayer menu
 	var settings_button = get_node_or_null("settings_button")
@@ -382,9 +695,12 @@ func _on_show_multiplayer_menu() -> void:
 	mp_menu.offset_bottom = 250
 	add_child(mp_menu)
 	
-	# Title
+	# Title - show game type if specified
 	var title = Label.new()
-	title.text = "Multiplayer"
+	if game_type != "":
+		title.text = game_type + " Multiplayer"
+	else:
+		title.text = "Multiplayer"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 56)
 	mp_menu.add_child(title)
@@ -395,10 +711,10 @@ func _on_show_multiplayer_menu() -> void:
 	
 	# Host button
 	var host_button = Button.new()
-	host_button.text = "Host Multiplayer"
+	host_button.text = "Host " + game_type + " Game"
 	host_button.custom_minimum_size = Vector2(400, 100)
 	host_button.add_theme_font_size_override("font_size", 36)
-	host_button.pressed.connect(_on_host_game)
+	host_button.pressed.connect(_on_host_game.bind(game_type))
 	mp_menu.add_child(host_button)
 	
 	var spacer2 = Control.new()
@@ -407,10 +723,10 @@ func _on_show_multiplayer_menu() -> void:
 	
 	# Join button
 	var join_button = Button.new()
-	join_button.text = "Join Multiplayer"
+	join_button.text = "Join " + game_type + " Game"
 	join_button.custom_minimum_size = Vector2(400, 100)
 	join_button.add_theme_font_size_override("font_size", 36)
-	join_button.pressed.connect(_on_join_game)
+	join_button.pressed.connect(_on_join_game.bind(game_type))
 	mp_menu.add_child(join_button)
 	
 	var spacer3 = Control.new()
@@ -464,8 +780,8 @@ func _on_difficulty_carousel_changed():
 									label.add_theme_font_size_override("font_size", 36)  # Not selected
 					break
 
-func _on_single_player_start():
-	"""Handle single player start button"""
+func _on_single_player_start_legacy():
+	"""Handle single player start button (legacy function)"""
 	# Remove single player menu
 	var sp_menu = get_node_or_null("SinglePlayerMenu")
 	if sp_menu:
@@ -486,43 +802,69 @@ func _on_single_player_start():
 	else:  # Sudoku
 		_setup_single_player_sudoku()
 
+func get_current_game_type() -> String:
+	"""Get the currently selected game type"""
+	return _current_game_type
+
 func _on_multiplayer_back():
 	# Remove multiplayer menu
 	var mp_menu = get_node_or_null("MultiplayerMenu")
 	if mp_menu:
 		mp_menu.queue_free()
 	
-	# Show main menu
-	_menu_container.visible = true
+	# Show game menu if it exists, otherwise show main menu
+	var game_menu = get_node_or_null("GameMenu")
+	if game_menu:
+		game_menu.visible = true
+	else:
+		# Show main menu
+		_menu_container.visible = true
+	
+	# Show settings button when back from multiplayer
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = true
 
-func _on_host_game() -> void:
+func _on_host_game(game_type: String) -> void:
 	# Hide multiplayer menu
 	var mp_menu = get_node_or_null("MultiplayerMenu")
 	if mp_menu:
 		mp_menu.queue_free()
+	
+	# Set the current game type for multiplayer
+	_current_game_type = game_type
 	
 	var player_name = PlayerData.get_player_name()
 	if player_name == "":
 		player_name = "Player" + str(randi() % 1000)  # Fallback to random if no name set
 	if NetworkManager.host_game(player_name):
-		print("Hosting multiplayer game")
+		print("Hosting " + game_type + " multiplayer game")
 		_show_multiplayer_lobby(true, player_name)
 	else:
 		print("Failed to host game")
 
-func _on_join_game() -> void:
+func _on_join_game(game_type: String) -> void:
 	# Hide multiplayer menu
 	var mp_menu = get_node_or_null("MultiplayerMenu")
 	if mp_menu:
 		mp_menu.queue_free()
 	
+	# Set the current game type for multiplayer
+	_current_game_type = game_type
+	
 	# Show lobby with manual IP entry
 	var player_name = PlayerData.get_player_name()
 	if player_name == "":
 		player_name = "Player" + str(randi() % 1000)  # Fallback to random if no name set
+	print("Joining " + game_type + " multiplayer game")
 	_show_multiplayer_lobby(false, player_name)
 
 func _show_main_menu() -> void:
+	# Reset game state when returning to main menu
+	_current_game_type = ""
+	_current_difficulty = "Medium"
+	print("Reset game state: game_type='', difficulty='Medium'")
+	
 	if _menu_container:
 		_menu_container.visible = true
 	
@@ -619,6 +961,9 @@ func _start_multiplayer_game() -> void:
 func _setup_single_player_game() -> void:
 	print("Setting up single player game...")
 	
+	# Hide main menu container
+	_hide_main_menu()
+	
 	# Hide settings button when game starts
 	var settings_button = get_node_or_null("settings_button")
 	if settings_button:
@@ -642,6 +987,9 @@ func _setup_single_player_game() -> void:
 
 func _setup_single_player_sudoku() -> void:
 	print("Setting up single player Sudoku...")
+	
+	# Hide main menu container
+	_hide_main_menu()
 	
 	# Hide settings button when game starts
 	var settings_button = get_node_or_null("settings_button")
@@ -858,32 +1206,36 @@ func _show_new_game_button():
 	_menu_button = menu_button
 
 func _setup_multiplayer_game() -> void:
-	var local_game = MultiplayerGameManager.get_local_game()
-	if local_game and is_instance_valid(local_game):
-		_game = local_game
-		_board.set_game(_game)
-		_board.set_multiplayer_manager(MultiplayerGameManager)
-		_board.render()
-		
-		# IMPORTANT: Recreate buttons AFTER is_multiplayer is set to true
-		# This ensures forfeit button is created instead of retry button
-		_show_new_game_button()
-		
-		# Setup multiplayer-specific UI
-		_setup_multiplayer_ui()
-		# Connect to multiplayer signals
-		if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
-			MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
-		if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
-			MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
-		if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
-			MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
-		if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
-			MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
-		if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
-			_game.card_moved.connect(_on_multiplayer_card_moved)
-		
-		print("Multiplayer game setup complete - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
+	# Setup based on current game type
+	if _current_game_type == "Sudoku":
+		_setup_multiplayer_sudoku()
+	else:  # Solitaire
+		var local_game = MultiplayerGameManager.get_local_game()
+		if local_game and is_instance_valid(local_game):
+			_game = local_game
+			_board.set_game(_game)
+			_board.set_multiplayer_manager(MultiplayerGameManager)
+			_board.render()
+			
+			# IMPORTANT: Recreate buttons AFTER is_multiplayer is set to true
+			# This ensures forfeit button is created instead of retry button
+			_show_new_game_button()
+			
+			# Setup multiplayer-specific UI
+			_setup_multiplayer_ui()
+			# Connect to multiplayer signals
+			if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
+				MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
+			if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
+				MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
+			if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
+				MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
+			if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
+				MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
+			if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
+				_game.card_moved.connect(_on_multiplayer_card_moved)
+			
+			print("Multiplayer Solitaire setup complete - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
 
 func _on_new_game_pressed() -> void:
 	# Play retry sound
@@ -954,18 +1306,23 @@ func _cleanup_game_state() -> void:
 	# Hide any ready notifications
 	if _last_standing_notification and is_instance_valid(_last_standing_notification):
 		_last_standing_notification.queue_free()
-		_last_standing_notification = null
 	
-	# Hide and clear player status label
-	if _player_status_label and is_instance_valid(_player_status_label):
-		_player_status_label.visible = false
-		_player_status_label.queue_free()
-	_player_status_label = null
+	# Clean up any game menus that might still be visible
+	var game_menu = get_node_or_null("GameMenu")
+	if game_menu:
+		game_menu.queue_free()
+	
+	var sp_menu = get_node_or_null("SinglePlayerMenu")
+	if sp_menu:
+		sp_menu.queue_free()
+	
+	var mp_menu = get_node_or_null("MultiplayerMenu")
+	if mp_menu:
+		mp_menu.queue_free()
 
 func _on_server_disconnected() -> void:
 	"""Handle when host closes the server (host left the game)"""
 	print("Host has left the game - returning to main menu")
-	
 	# Show notification
 	if _status_label:
 		_status_label.text = "Host left the game"
@@ -1136,7 +1493,11 @@ func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
 	
 	# Create and show lobby UI
 	if _multiplayer_lobby:
+		print("Cleaning up existing lobby before creating new one")
 		_multiplayer_lobby.queue_free()
+		_multiplayer_lobby = null
+		# Wait for cleanup to complete
+		await get_tree().process_frame
 	
 	var lobby_script = load("res://scripts/MultiplayerLobby.gd")
 	_multiplayer_lobby = Control.new()
@@ -1161,6 +1522,9 @@ func _on_lobby_closed() -> void:
 	if _multiplayer_lobby:
 		_multiplayer_lobby.queue_free()
 		_multiplayer_lobby = null
+	
+	# Run full cleanup to ensure everything is properly hidden
+	_cleanup_game_state()
 	
 	# Show main menu again
 	_show_main_menu()

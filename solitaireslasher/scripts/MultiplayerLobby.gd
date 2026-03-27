@@ -279,6 +279,31 @@ func _create_ui() -> void:
 	leave_button.pressed.connect(_on_leave_pressed)
 	button_box.add_child(leave_button)
 
+func _reset_lobby_state() -> void:
+	"""Reset lobby state to prevent issues from previous sessions"""
+	print("Resetting lobby state...")
+	
+	# Clear players dictionary
+	players.clear()
+	
+	# Reset selected values to defaults
+	selected_game_type = "Solitaire"
+	selected_difficulty = "Medium"
+	
+	# Reset carousel indices if they exist
+	if game_type_carousel:
+		game_type_carousel.starting_index = 0
+	
+	if difficulty_carousel:
+		difficulty_carousel.starting_index = 1
+	
+	# Clear any existing IP info containers
+	var existing_ip_info = get_node_or_null("IPInfoContainer")
+	if existing_ip_info:
+		existing_ip_info.queue_free()
+	
+	print("Lobby state reset complete")
+
 func _connect_signals() -> void:
 	if NetworkManager:
 		NetworkManager.player_connected.connect(_on_player_connected)
@@ -287,21 +312,40 @@ func _connect_signals() -> void:
 		NetworkManager.game_settings_received.connect(_on_game_settings_received)
 
 func setup_as_host(player_name: String) -> void:
+	# Reset state to prevent issues from previous sessions
+	_reset_lobby_state()
+	
 	is_host = true
 	host_label.text = "You are hosting"
+	
+	# Get the current game type from Main scene
+	var main_scene = get_tree().current_scene
+	if main_scene and main_scene.has_method("get_current_game_type"):
+		selected_game_type = main_scene.get_current_game_type()
+	elif main_scene and main_scene.has_property("_current_game_type"):
+		selected_game_type = main_scene._current_game_type
+	
+	print("Hosting multiplayer game for: ", selected_game_type)
 	
 	# Show game settings for host
 	if settings_label:
 		settings_label.visible = true
 		print("Settings label made visible")
 	
+	# Hide game type selection since we already know the game type
 	if game_type_container:
-		game_type_container.visible = true
-		print("Game type container made visible")
+		game_type_container.visible = false
+		print("Game type container hidden (game inferred from context)")
 	
 	if difficulty_container:
 		difficulty_container.visible = true
 		print("Difficulty container made visible")
+		
+	# Reset difficulty carousel to default (Medium)
+	if difficulty_carousel:
+		difficulty_carousel.starting_index = 1
+		selected_difficulty = "Medium"
+		print("Difficulty reset to Medium")
 	
 	# Create IP info section for host
 	var ip_info_container = VBoxContainer.new()
@@ -344,10 +388,34 @@ func setup_as_host(player_name: String) -> void:
 	ip_helper.get_public_ip()
 
 func setup_as_client(player_name: String) -> void:
+	# Reset state to prevent issues from previous sessions
+	_reset_lobby_state()
+	
 	is_host = false
 	client_player_name = player_name  # Store the player name for later use
 	host_label.text = "Join Multiplayer Game"
 	status_label.text = "Enter host IP address or scan QR code to connect"
+	
+	# Get the current game type from Main scene
+	var main_scene = get_tree().current_scene
+	if main_scene and main_scene.has_method("get_current_game_type"):
+		selected_game_type = main_scene.get_current_game_type()
+	elif main_scene and main_scene.has_property("_current_game_type"):
+		selected_game_type = main_scene._current_game_type
+	
+	print("Joining multiplayer game for: ", selected_game_type)
+	
+	# Hide game type selection since we already know the game type
+	if game_type_container:
+		game_type_container.visible = false
+		print("Game type container hidden (game inferred from context)")
+	
+	# Reset difficulty carousel to default (Medium)
+	if difficulty_carousel:
+		difficulty_carousel.starting_index = 1
+		selected_difficulty = "Medium"
+		print("Difficulty reset to Medium")
+	
 	# Keep IP input and scan button visible for joining
 	ip_input.visible = true
 	join_button.visible = true
