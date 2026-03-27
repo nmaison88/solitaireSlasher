@@ -226,13 +226,15 @@ func _create_ui():
 	number_selector = GridContainer.new()
 	number_selector.columns = 9
 	
-	# Align horizontally with the grid
+	# Use same spacing as grid to match width exactly
+	number_selector.add_theme_constant_override("h_separation", spacing)
+	
+	# Align horizontally with the grid (same x position)
 	var selector_x = (screen_width - grid_width) / 2
 	
 	# Place vertically below erase button
 	var selector_y = erase_button.position.y + 100
 	number_selector.position = Vector2(selector_x, selector_y)
-	number_selector.add_theme_constant_override("h_separation", 8)
 	add_child(number_selector)
 	
 	print("Number selector positioned at: ", Vector2(selector_x, selector_y))
@@ -241,8 +243,8 @@ func _create_ui():
 	for i in range(1, 10):
 		var btn = Button.new()
 		btn.text = str(i)
-		btn.custom_minimum_size = Vector2(number_button_size, number_button_size)
-		var font_size = int(number_button_size * 0.5)
+		btn.custom_minimum_size = Vector2(number_button_size, number_button_size)  # Back to original size
+		var font_size = int(number_button_size * 0.3)  # Smaller font to fit in original buttons
 		btn.add_theme_font_size_override("font_size", font_size)
 		btn.pressed.connect(_on_number_selected.bind(i))
 		number_selector.add_child(btn)
