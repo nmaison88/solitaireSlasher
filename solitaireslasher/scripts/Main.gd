@@ -371,12 +371,16 @@ func _show_game_menu(game_type: String) -> void:
 	spacer1.custom_minimum_size = Vector2(0, 40)
 	game_menu.add_child(spacer1)
 	
-	# Difficulty section
+	# Difficulty section with label aligned to selected item
+	var difficulty_section = Container.new()
+	difficulty_section.custom_minimum_size = Vector2(600, 250)
+	
+	# Difficulty label positioned to align with centered item
 	var difficulty_label = Label.new()
 	difficulty_label.text = "Difficulty:"
-	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	difficulty_label.add_theme_font_size_override("font_size", 36)
-	game_menu.add_child(difficulty_label)
+	difficulty_label.position = Vector2(50, 95)  # Position to align with centered item
+	difficulty_section.add_child(difficulty_label)
 	
 	# Difficulty carousel using the correct Carousel class
 	var difficulty_carousel = Carousel.new()
@@ -391,8 +395,6 @@ func _show_game_menu(game_type: String) -> void:
 	difficulty_carousel.display_loop = true
 	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
 	difficulty_carousel.can_drag = true
-	difficulty_carousel.starting_index = 1  # Default to Medium
-	
 	# Add difficulty labels as children (matching old way)
 	for i in range(3):
 		var diff = ["Easy", "Medium", "Hard"][i]
@@ -401,18 +403,37 @@ func _show_game_menu(game_type: String) -> void:
 		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		diff_label.custom_minimum_size = Vector2(300, 60)
-		# Selected item (Medium at index 1) starts larger
-		if i == 1:
-			diff_label.add_theme_font_size_override("font_size", 56)
+		# Set initial font sizes based on current difficulty
+		if diff == _current_difficulty:
+			diff_label.add_theme_font_size_override("font_size", 56)  # Selected
+			# Set starting index to match current difficulty
+			difficulty_carousel.starting_index = i
 		else:
-			diff_label.add_theme_font_size_override("font_size", 36)
+			diff_label.add_theme_font_size_override("font_size", 36)  # Not selected
 		diff_label.name = diff
 		difficulty_carousel.add_child(diff_label)
 	
 	# Connect to carousel change signals
+	print("DEBUG: Connecting difficulty carousel signals")
 	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_selection_changed)
 	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_selection_changed)
-	game_menu.add_child(difficulty_carousel)
+	# Try to connect to any available real-time signals
+	if difficulty_carousel.has_signal("item_selected"):
+		difficulty_carousel.item_selected.connect(_on_difficulty_carousel_selection_changed)
+		print("DEBUG: Connected to item_selected signal")
+	elif difficulty_carousel.has_signal("selection_changed"):
+		difficulty_carousel.selection_changed.connect(_on_difficulty_carousel_selection_changed)
+		print("DEBUG: Connected to selection_changed signal")
+	else:
+		print("DEBUG: No real-time signal found, using manual_end and snap_end only")
+	print("DEBUG: Difficulty carousel signals connected")
+	# Position carousel to the right of the label
+	difficulty_carousel.position = Vector2(200, 0)
+	difficulty_section.add_child(difficulty_carousel)
+	game_menu.add_child(difficulty_section)
+	
+	# Force initial font size update
+	_on_difficulty_carousel_selection_changed()
 	
 	# Add spacing
 	var spacer2 = Control.new()
@@ -453,27 +474,74 @@ func _show_game_menu(game_type: String) -> void:
 	back_button.pressed.connect(_on_game_menu_back)
 	game_menu.add_child(back_button)
 	
-	# Set current difficulty based on carousel
-	_current_difficulty = "Medium"
-
+	
 func _on_difficulty_carousel_selection_changed(index: int = -1) -> void:
 	"""Handle difficulty carousel selection change"""
+	print("DEBUG: _on_difficulty_carousel_selection_changed called with index: ", index)
 	# If no index provided, get current index from carousel
 	if index == -1:
 		var game_menu = get_node_or_null("GameMenu")
 		if game_menu:
-			var difficulty_carousel = game_menu.get_node_or_null("DifficultyCarousel")
+			# Look for the difficulty carousel in the difficulty section
+			var difficulty_carousel = null
+			for child in game_menu.get_children():
+				if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
+					for grandchild in child.get_children():
+						if grandchild is Carousel and grandchild.get_child_count() > 0:
+							var first_child = grandchild.get_child(0)
+							if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
+								difficulty_carousel = grandchild
+								break
+					break
+			
 			if difficulty_carousel and difficulty_carousel.get_child_count() > 0:
 				index = difficulty_carousel.get_current_carousel_index()
+				print("DEBUG: Got current index from carousel: ", index)
 			else:
+				print("DEBUG: No difficulty carousel found or empty")
 				return
 		else:
+			print("DEBUG: No game menu found")
 			return
 	
 	var difficulties = ["Easy", "Medium", "Hard"]
 	if index >= 0 and index < difficulties.size():
 		_current_difficulty = difficulties[index]
 		print("Difficulty selected: ", _current_difficulty)
+		
+		# Update font sizes - make selected item larger
+		var game_menu = get_node_or_null("GameMenu")
+		if game_menu:
+			# Look for the difficulty carousel in the difficulty section (same logic as above)
+			var difficulty_carousel = null
+			for child in game_menu.get_children():
+				if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
+					for grandchild in child.get_children():
+						if grandchild is Carousel and grandchild.get_child_count() > 0:
+							var first_child = grandchild.get_child(0)
+							if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
+								difficulty_carousel = grandchild
+								break
+					break
+			
+			if difficulty_carousel:
+				print("DEBUG: Updating font sizes for index ", index)
+				for i in range(difficulty_carousel.get_child_count()):
+					var label = difficulty_carousel.get_child(i)
+					if label is Label:
+						print("DEBUG: Updating font for item ", i, " (target index: ", index, ")")
+						if i == index:
+							label.add_theme_font_size_override("font_size", 56)  # Selected
+							print("DEBUG: Set font size 56 for item ", i)
+						else:
+							label.add_theme_font_size_override("font_size", 36)  # Not selected
+							print("DEBUG: Set font size 36 for item ", i)
+			else:
+				print("DEBUG: Could not find difficulty carousel")
+		else:
+			print("DEBUG: Could not find game menu for font update")
+	else:
+		print("DEBUG: Invalid index: ", index)
 
 func _on_single_player_start(game_type: String) -> void:
 	"""Handle single player start for specific game"""
@@ -594,12 +662,16 @@ func _on_show_single_player_menu() -> void:
 	spacer2.custom_minimum_size = Vector2(0, 40)
 	sp_menu.add_child(spacer2)
 	
-	# Difficulty Carousel (Vertical) using FreeControl
+	# Difficulty section with label aligned to selected item
+	var difficulty_section = Container.new()
+	difficulty_section.custom_minimum_size = Vector2(600, 250)
+	
+	# Difficulty label positioned to align with centered item
 	var difficulty_label = Label.new()
-	difficulty_label.text = "Difficulty"
-	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_label.text = "Difficulty:"
 	difficulty_label.add_theme_font_size_override("font_size", 36)
-	sp_menu.add_child(difficulty_label)
+	difficulty_label.position = Vector2(50, 95)  # Position to align with centered item
+	difficulty_section.add_child(difficulty_label)
 	
 	# Create vertical carousel for difficulty
 	var difficulty_carousel = Carousel.new()
@@ -611,9 +683,19 @@ func _on_show_single_player_menu() -> void:
 	difficulty_carousel.display_loop = true
 	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
 	difficulty_carousel.can_drag = true
-	difficulty_carousel.starting_index = 1  # Default to Medium
+	print("DEBUG: Connecting single player difficulty carousel signals")
 	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_changed)
 	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_changed)
+	# Try to connect to any available real-time signals
+	if difficulty_carousel.has_signal("item_selected"):
+		difficulty_carousel.item_selected.connect(_on_difficulty_carousel_changed)
+		print("DEBUG: Connected to item_selected signal for single player")
+	elif difficulty_carousel.has_signal("selection_changed"):
+		difficulty_carousel.selection_changed.connect(_on_difficulty_carousel_changed)
+		print("DEBUG: Connected to selection_changed signal for single player")
+	else:
+		print("DEBUG: No real-time signal found for single player, using manual_end and snap_end only")
+	print("DEBUG: Single player difficulty carousel signals connected")
 	
 	# Add difficulty labels as children
 	for i in range(3):
@@ -623,15 +705,23 @@ func _on_show_single_player_menu() -> void:
 		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		diff_label.custom_minimum_size = Vector2(300, 60)
-		# Selected item (Medium at index 1) starts larger
-		if i == 1:
-			diff_label.add_theme_font_size_override("font_size", 56)
+		# Set initial font sizes based on current difficulty
+		if diff == _current_difficulty:
+			diff_label.add_theme_font_size_override("font_size", 56)  # Selected
+			# Set starting index to match current difficulty
+			difficulty_carousel.starting_index = i
 		else:
-			diff_label.add_theme_font_size_override("font_size", 36)
+			diff_label.add_theme_font_size_override("font_size", 36)  # Not selected
 		diff_label.name = diff
 		difficulty_carousel.add_child(diff_label)
 	
-	sp_menu.add_child(difficulty_carousel)
+	# Position carousel to the right of the label
+	difficulty_carousel.position = Vector2(200, 0)
+	difficulty_section.add_child(difficulty_carousel)
+	sp_menu.add_child(difficulty_section)
+	
+	# Force initial font size update
+	_on_difficulty_carousel_changed()
 	
 	var spacer3 = Control.new()
 	spacer3.custom_minimum_size = Vector2(0, 40)
@@ -757,28 +847,41 @@ func _on_game_carousel_changed():
 					break
 
 func _on_difficulty_carousel_changed():
+	print("DEBUG: _on_difficulty_carousel_changed called")
 	# Get the current index from the difficulty carousel
 	var sp_menu = get_node_or_null("SinglePlayerMenu")
 	if sp_menu:
+		# Look for the difficulty carousel in the difficulty section
+		var difficulty_carousel = null
 		for child in sp_menu.get_children():
-			if child is Carousel and child.get_child_count() > 0:
-				var first_child = child.get_child(0)
-				if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
-					var current_index = child.get_current_carousel_index()
-					var difficulties = ["Easy", "Medium", "Hard"]
-					if current_index >= 0 and current_index < difficulties.size():
-						_current_difficulty = difficulties[current_index]
-						print("Difficulty changed to: ", _current_difficulty)
-						
-						# Update font sizes - make selected item larger
-						for i in range(child.get_child_count()):
-							var label = child.get_child(i)
-							if label is Label:
-								if i == current_index:
-									label.add_theme_font_size_override("font_size", 56)  # Selected
-								else:
-									label.add_theme_font_size_override("font_size", 36)  # Not selected
-					break
+			if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
+				for grandchild in child.get_children():
+					if grandchild is Carousel and grandchild.get_child_count() > 0:
+						var first_child = grandchild.get_child(0)
+						if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
+							difficulty_carousel = grandchild
+							break
+				break
+		
+		if difficulty_carousel:
+			var current_index = difficulty_carousel.get_current_carousel_index()
+			print("DEBUG: Current carousel index: ", current_index)
+			var difficulties = ["Easy", "Medium", "Hard"]
+			if current_index >= 0 and current_index < difficulties.size():
+				_current_difficulty = difficulties[current_index]
+				print("Difficulty changed to: ", _current_difficulty)
+				
+				# Update font sizes - make selected item larger
+				for i in range(difficulty_carousel.get_child_count()):
+					var label = difficulty_carousel.get_child(i)
+					if label is Label:
+						print("DEBUG: Updating font for item ", i, " (current_index: ", current_index, ")")
+						if i == current_index:
+							label.add_theme_font_size_override("font_size", 56)  # Selected
+							print("DEBUG: Set font size 56 for item ", i)
+						else:
+							label.add_theme_font_size_override("font_size", 36)  # Not selected
+							print("DEBUG: Set font size 36 for item ", i)
 
 func _on_single_player_start_legacy():
 	"""Handle single player start button (legacy function)"""
@@ -1901,7 +2004,7 @@ func _update_player_status_display() -> void:
 	_player_status_label.text = "Playing: %d | Jammed: %d | Completed: %d" % [playing, jammed, completed]
 
 func _on_settings_button_pressed() -> void:
-	"""Show settings menu with player name and theme toggle"""
+	"""Show professional settings menu with enhanced styling"""
 	# Hide main menu
 	_menu_container.visible = false
 	
@@ -1910,7 +2013,7 @@ func _on_settings_button_pressed() -> void:
 	if settings_button:
 		settings_button.visible = false
 	
-	# Create settings menu container
+	# Create settings menu container with professional styling
 	var settings_menu = VBoxContainer.new()
 	settings_menu.name = "SettingsMenu"
 	settings_menu.set_anchors_preset(Control.PRESET_CENTER)
@@ -1918,98 +2021,213 @@ func _on_settings_button_pressed() -> void:
 	settings_menu.anchor_top = 0.5
 	settings_menu.anchor_right = 0.5
 	settings_menu.anchor_bottom = 0.5
-	settings_menu.offset_left = -300
-	settings_menu.offset_top = -250
-	settings_menu.offset_right = 300
-	settings_menu.offset_bottom = 250
-	add_child(settings_menu)
+	settings_menu.offset_left = -350
+	settings_menu.offset_top = -300
+	settings_menu.offset_right = 350
+	settings_menu.offset_bottom = 300
 	
-	# Title
+	# Add background panel for professional look
+	var background_panel = Panel.new()
+	background_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(background_panel)
+	background_panel.add_child(settings_menu)
+	
+	# Style the background panel
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.95, 0.95, 0.95) if PlayerData.get_theme() == "light" else Color(0.15, 0.15, 0.15)
+	panel_style.corner_radius_top_left = 20
+	panel_style.corner_radius_top_right = 20
+	panel_style.corner_radius_bottom_left = 20
+	panel_style.corner_radius_bottom_right = 20
+	panel_style.border_width_left = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
+	background_panel.add_theme_stylebox_override("panel", panel_style)
+	
+	# Add margin to settings menu
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 40)
+	margin.add_theme_constant_override("margin_right", 40)
+	margin.add_theme_constant_override("margin_top", 40)
+	margin.add_theme_constant_override("margin_bottom", 40)
+	background_panel.add_child(margin)
+	margin.add_child(settings_menu)
+	background_panel.remove_child(settings_menu)  # Remove from panel, add to margin
+	margin.add_child(settings_menu)
+	
+	# Title with professional styling
 	var title = Label.new()
 	title.text = "Settings"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1) if PlayerData.get_theme() == "light" else Color(0.9, 0.9, 0.9))
 	settings_menu.add_child(title)
 	
 	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 40)
+	spacer1.custom_minimum_size = Vector2(0, 30)
 	settings_menu.add_child(spacer1)
 	
-	# Player Name section
+	# Add separator line
+	var separator1 = HSeparator.new()
+	separator1.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
+	settings_menu.add_child(separator1)
+	
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 30)
+	settings_menu.add_child(spacer2)
+	
+	# Player Name section with enhanced styling
+	var player_name_section = VBoxContainer.new()
+	player_name_section.add_theme_constant_override("separation", 15)
+	
 	var player_name_label = Label.new()
 	player_name_label.text = "Player Name"
 	player_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	player_name_label.add_theme_font_size_override("font_size", 24)
-	settings_menu.add_child(player_name_label)
+	player_name_label.add_theme_font_size_override("font_size", 28)
+	player_name_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	player_name_section.add_child(player_name_label)
 	
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 10)
-	settings_menu.add_child(spacer2)
-	
-	# Player name input container (horizontal)
+	# Player name input container with better styling
 	var name_container = HBoxContainer.new()
-	name_container.add_theme_constant_override("separation", 10)
+	name_container.add_theme_constant_override("separation", 15)
 	
 	var player_name_input = LineEdit.new()
 	player_name_input.placeholder_text = "Enter your name"
 	player_name_input.text = PlayerData.get_player_name()
-	player_name_input.custom_minimum_size = Vector2(250, 40)
-	player_name_input.add_theme_font_size_override("font_size", 20)
+	player_name_input.custom_minimum_size = Vector2(280, 50)
+	player_name_input.add_theme_font_size_override("font_size", 22)
+	
+	# Style the input field
+	var input_style = StyleBoxFlat.new()
+	input_style.bg_color = Color(0.9, 0.9, 0.9) if PlayerData.get_theme() == "light" else Color(0.2, 0.2, 0.2)
+	input_style.corner_radius_top_left = 8
+	input_style.corner_radius_top_right = 8
+	input_style.corner_radius_bottom_left = 8
+	input_style.corner_radius_bottom_right = 8
+	input_style.border_width_left = 2
+	input_style.border_width_right = 2
+	input_style.border_width_top = 2
+	input_style.border_width_bottom = 2
+	input_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
+	player_name_input.add_theme_stylebox_override("normal", input_style)
+	
 	name_container.add_child(player_name_input)
 	
 	var save_name_button = Button.new()
 	save_name_button.text = "Save"
-	save_name_button.custom_minimum_size = Vector2(80, 40)
-	save_name_button.add_theme_font_size_override("font_size", 16)
+	save_name_button.custom_minimum_size = Vector2(100, 50)
+	save_name_button.add_theme_font_size_override("font_size", 20)
 	save_name_button.pressed.connect(_on_save_player_name.bind(player_name_input))
-	name_container.add_child(save_name_button)
 	
-	settings_menu.add_child(name_container)
+	# Style the save button
+	var save_style = StyleBoxFlat.new()
+	save_style.bg_color = Color(0.2, 0.6, 1.0)
+	save_style.corner_radius_top_left = 8
+	save_style.corner_radius_top_right = 8
+	save_style.corner_radius_bottom_left = 8
+	save_style.corner_radius_bottom_right = 8
+	save_style.border_width_left = 2
+	save_style.border_width_right = 2
+	save_style.border_width_top = 2
+	save_style.border_width_bottom = 2
+	save_style.border_color = Color(0.1, 0.4, 0.8)
+	save_name_button.add_theme_stylebox_override("normal", save_style)
+	save_name_button.add_theme_color_override("font_color", Color.WHITE)
+	
+	name_container.add_child(save_name_button)
+	player_name_section.add_child(name_container)
+	settings_menu.add_child(player_name_section)
 	
 	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 30)
+	spacer3.custom_minimum_size = Vector2(0, 40)
 	settings_menu.add_child(spacer3)
 	
-	# Theme section
-	var theme_label = Label.new()
-	theme_label.text = "Theme"
-	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	theme_label.add_theme_font_size_override("font_size", 24)
-	settings_menu.add_child(theme_label)
+	# Add separator line
+	var separator2 = HSeparator.new()
+	separator2.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
+	settings_menu.add_child(separator2)
 	
 	var spacer4 = Control.new()
-	spacer4.custom_minimum_size = Vector2(0, 10)
+	spacer4.custom_minimum_size = Vector2(0, 30)
 	settings_menu.add_child(spacer4)
 	
-	# Dark mode toggle container
+	# Theme section with enhanced styling
+	var theme_section = VBoxContainer.new()
+	theme_section.add_theme_constant_override("separation", 15)
+	
+	var theme_label = Label.new()
+	theme_label.text = "Appearance"
+	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	theme_label.add_theme_font_size_override("font_size", 28)
+	theme_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	theme_section.add_child(theme_label)
+	
+	# Dark mode toggle container with larger toggle
 	var theme_container = HBoxContainer.new()
-	theme_container.add_theme_constant_override("separation", 20)
+	theme_container.add_theme_constant_override("separation", 25)
+	theme_container.alignment = HBoxContainer.ALIGNMENT_CENTER
 	
 	var dark_mode_label = Label.new()
 	dark_mode_label.text = "Dark Mode"
-	dark_mode_label.custom_minimum_size = Vector2(100, 40)
-	dark_mode_label.add_theme_font_size_override("font_size", 20)
+	dark_mode_label.custom_minimum_size = Vector2(120, 60)
+	dark_mode_label.add_theme_font_size_override("font_size", 24)
+	dark_mode_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2) if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	dark_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	theme_container.add_child(dark_mode_label)
 	
 	var dark_mode_toggle = CheckBox.new()
 	var current_theme = PlayerData.get_theme()
 	dark_mode_toggle.button_pressed = (current_theme == "dark")
-	dark_mode_toggle.custom_minimum_size = Vector2(40, 40)
+	dark_mode_toggle.custom_minimum_size = Vector2(80, 80)  # Much larger toggle
+	dark_mode_toggle.add_theme_font_size_override("font_size", 48)  # Larger checkmark
 	dark_mode_toggle.toggled.connect(_on_dark_mode_toggled)
-	theme_container.add_child(dark_mode_toggle)
 	
-	settings_menu.add_child(theme_container)
+	# Style the toggle for better visibility
+	var toggle_style = StyleBoxFlat.new()
+	toggle_style.bg_color = Color(0.7, 0.7, 0.7) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
+	toggle_style.corner_radius_top_left = 12
+	toggle_style.corner_radius_top_right = 12
+	toggle_style.corner_radius_bottom_left = 12
+	toggle_style.corner_radius_bottom_right = 12
+	toggle_style.border_width_left = 3
+	toggle_style.border_width_right = 3
+	toggle_style.border_width_top = 3
+	toggle_style.border_width_bottom = 3
+	toggle_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
+	dark_mode_toggle.add_theme_stylebox_override("normal", toggle_style)
+	
+	theme_container.add_child(dark_mode_toggle)
+	theme_section.add_child(theme_container)
+	settings_menu.add_child(theme_section)
 	
 	var spacer5 = Control.new()
-	spacer5.custom_minimum_size = Vector2(0, 60)
+	spacer5.custom_minimum_size = Vector2(0, 50)
 	settings_menu.add_child(spacer5)
 	
-	# Back button
+	# Back button with professional styling
 	var back_button = Button.new()
 	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(400, 80)
-	back_button.add_theme_font_size_override("font_size", 36)
+	back_button.custom_minimum_size = Vector2(300, 70)
+	back_button.add_theme_font_size_override("font_size", 32)
 	back_button.pressed.connect(_on_settings_back)
+	
+	# Style the back button
+	var back_style = StyleBoxFlat.new()
+	back_style.bg_color = Color(0.6, 0.6, 0.6) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4)
+	back_style.corner_radius_top_left = 12
+	back_style.corner_radius_top_right = 12
+	back_style.corner_radius_bottom_left = 12
+	back_style.corner_radius_bottom_right = 12
+	back_style.border_width_left = 2
+	back_style.border_width_right = 2
+	back_style.border_width_top = 2
+	back_style.border_width_bottom = 2
+	back_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
+	back_button.add_theme_stylebox_override("normal", back_style)
+	back_button.add_theme_color_override("font_color", Color.WHITE)
+	
 	settings_menu.add_child(back_button)
 
 func _on_save_player_name(name_input: LineEdit) -> void:
@@ -2048,10 +2266,15 @@ func _on_dark_mode_toggled(toggled_on: bool) -> void:
 
 func _on_settings_back() -> void:
 	"""Handle settings back button"""
-	# Remove settings menu
+	# Remove settings menu and its background panel
 	var settings_menu = get_node_or_null("SettingsMenu")
 	if settings_menu:
-		settings_menu.queue_free()
+		# Find and remove the background panel (parent of settings_menu)
+		var background_panel = settings_menu.get_parent()
+		if background_panel and background_panel is Panel:
+			background_panel.queue_free()
+		else:
+			settings_menu.queue_free()
 	
 	# Show settings button again
 	var settings_button = get_node_or_null("settings_button")
