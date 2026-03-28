@@ -4,16 +4,20 @@ class_name CardView
 signal card_clicked(card_view: CardView)
 signal card_drag_started(card_view: CardView)
 signal card_drag_ended(card_view: CardView, target_position: Vector2)
+signal card_drag_moved(card_view: CardView, new_position: Vector2)
 
 @onready var _texture_rect: TextureRect = $TextureRect
 @onready var _card_back: TextureRect = $CardBack
 
 var card: SolitaireCard
 var is_dragging: bool = false
-var drag_offset: Vector2
 var original_position: Vector2
+var drag_offset: Vector2
 var z_index_when_dragging: int = 100
+var mouse_press_position: Vector2
+var drag_threshold: float = 5.0  # Minimum movement to consider as drag
 var _tween: Tween  # For smooth animations
+var _current_touch_index: int = -1  # Track active touch finger for iPhone
 
 func set_card(value: SolitaireCard) -> void:
 	card = value
@@ -29,65 +33,109 @@ func _refresh() -> void:
 	if not is_node_ready() or not card:
 		return
 	
+		
 	if card.face_up:
-		# Show card face using reference project's mapping
+		# Show card face using new card asset format (same as Board.gd)
 		var texture_path = ""
+		# Note: card.stock is only for cards still in stock pile, not for drawn cards
 		if card.stock:
-			texture_path = "res://card_assets/Back1.png"
+			texture_path = "res://card_assets/cardBack_blue2.png"
 		else:
-			# Reference project uses: {value}.{suit}.png where value is 1-13 and suit is 1-4
-			var value = card.rank  # 1-13
-			var suit = 0
+			# Use the correct format for your card assets: card{FullSuit}{Rank}.png
+			var suit_name = ""
 			match card.suit:
-				0: suit = 1  # CLUBS
-				1: suit = 2  # DIAMONDS
-				2: suit = 3  # HEARTS
-				3: suit = 4  # SPADES
+				0: suit_name = "Clubs"  # CLUBS
+				1: suit_name = "Diamonds"  # DIAMONDS
+				2: suit_name = "Hearts"  # HEARTS
+				3: suit_name = "Spades"  # SPADES
 			
-			texture_path = "res://card_assets/%d.%d.png" % [value, suit]
+			var rank_name = ""
+			match card.rank:
+				1: rank_name = "A"
+				11: rank_name = "J"
+				12: rank_name = "Q"
+				13: rank_name = "K"
+				_: rank_name = str(card.rank)
+			
+			texture_path = "res://card_assets/card%s%s.png" % [suit_name, rank_name]
 		
 		var texture = load(texture_path)
 		if texture:
 			_texture_rect.texture = texture
 			_texture_rect.show()
 			_card_back.hide()
+		else:
+			_texture_rect.hide()
+			_card_back.texture = load("res://card_assets/cardBack_blue2.png")
+			_card_back.show()
 	else:
-		# Show card back
+		# Show card back using new format
 		_texture_rect.hide()
-		_card_back.texture = load("res://card_assets/Back1.png")
+		_card_back.texture = load("res://card_assets/cardBack_blue2.png")
 		_card_back.show()
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				_on_card_pressed()
-			else:
-				_on_card_released()
-	elif event is InputEventMouseMotion and is_dragging:
-		_on_card_dragged(event)
+	# Touch events — primary for iPhone. Handle first to block emulated mouse events.
+	if event is InputEventScreenTouch:
+		if event.pressed and _current_touch_index == -1:
+			_current_touch_index = event.index
+			_on_press_started(event.position)
+		elif not event.pressed and event.index == _current_touch_index:
+			_current_touch_index = -1
+			_on_press_ended(event.position)
+		get_viewport().set_input_as_handled()
+		return
+	elif event is InputEventScreenDrag:
+		if event.index == _current_touch_index:
+			_on_motion(event.position)
+		get_viewport().set_input_as_handled()
+		return
 
-func _on_card_pressed() -> void:
+	# Mouse events — only process when no active touch (avoids double-processing emulation)
+	if _current_touch_index != -1:
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_on_press_started(event.global_position)
+		else:
+			_on_press_ended(event.global_position)
+	elif event is InputEventMouseMotion:
+		_on_motion(event.global_position)
+
+func _on_press_started(global_pos: Vector2) -> void:
 	if card and card.face_up and not card.stock:
 		original_position = global_position
-		drag_offset = global_position - get_global_mouse_position()
-		is_dragging = true
-		z_index = z_index_when_dragging
-		card_drag_started.emit(self)
+		drag_offset = global_position - global_pos
+		mouse_press_position = global_pos
 
-func _card_clicked() -> void:
-	card_clicked.emit(self)
-
-func _on_card_released() -> void:
+func _on_press_ended(global_pos: Vector2) -> void:
+	if mouse_press_position == Vector2.ZERO:
+		return
 	if is_dragging:
 		is_dragging = false
 		z_index = 0
-		card_drag_ended.emit(self, get_global_mouse_position())
+		card_drag_ended.emit(self, global_pos)
 	else:
-		_card_clicked()
+		var dist = mouse_press_position.distance_to(global_pos)
+		if dist > drag_threshold:
+			card_drag_ended.emit(self, global_pos)
+		else:
+			card_clicked.emit(self)
+	mouse_press_position = Vector2.ZERO
 
-func _on_card_dragged(_event: InputEventMouseMotion) -> void:
-	global_position = get_global_mouse_position() + drag_offset
+func _on_motion(global_pos: Vector2) -> void:
+	if mouse_press_position == Vector2.ZERO:
+		return
+	if not is_dragging:
+		if mouse_press_position.distance_to(global_pos) > drag_threshold:
+			is_dragging = true
+			card_drag_started.emit(self)
+	if is_dragging:
+		global_position = global_pos + drag_offset
+		card_drag_moved.emit(self, position)
+
+func _card_clicked() -> void:
+	card_clicked.emit(self)
 
 func _on_mouse_entered() -> void:
 	if card:
@@ -101,19 +149,78 @@ func reset_position() -> void:
 	animate_to_position(original_position)
 	z_index = 0
 
-func animate_to_position(target_pos: Vector2, duration: float = 0.2) -> void:
-	"""Smoothly animate card to target position"""
-	# Cancel any existing tween
-	if _tween:
+func animate_to_position(target_pos: Vector2, duration: float = 0.28) -> void:
+	"""Clean card animation using reparent solution for Container interference"""
+	if _tween and _tween.is_valid():
 		_tween.kill()
-	
-	# Create new tween
+
+	var original_parent := get_parent()
+	var scene_root := get_tree().root.get_child(0)
+
+	# Escape the Container layout
+	if original_parent is Container:
+		var saved := global_position
+		original_parent.remove_child(self)
+		scene_root.add_child(self)
+		global_position = saved
+
 	_tween = create_tween()
 	_tween.set_ease(Tween.EASE_OUT)
 	_tween.set_trans(Tween.TRANS_CUBIC)
-	
-	# Animate position
 	_tween.tween_property(self, "global_position", target_pos, duration)
+
+	await _tween.finished
+
+	# Return home
+	if get_parent() == scene_root:
+		scene_root.remove_child(self)
+		original_parent.add_child(self)
+
+func snap_back_to(target_pos: Vector2) -> void:
+	"""For rejected drops — slight overshoot back to origin"""
+	if _tween and _tween.is_valid():
+		_tween.kill()
+
+	var original_parent := get_parent()
+	var scene_root := get_tree().root.get_child(0)
+	if original_parent is Container:
+		var saved := global_position
+		original_parent.remove_child(self)
+		scene_root.add_child(self)
+		global_position = saved
+
+	_tween = create_tween()
+	_tween.set_ease(Tween.EASE_OUT)
+	_tween.set_trans(Tween.TRANS_BACK)  # The overshoot easing
+	_tween.tween_property(self, "global_position", target_pos, 0.3)
+
+	await _tween.finished
+	if get_parent() == scene_root:
+		scene_root.remove_child(self)
+		original_parent.add_child(self)
+
+func flip_to_face_up() -> void:
+	"""Scale-X midpoint swap flip — matches real card turn-over feel"""
+	if _tween and _tween.is_valid():
+		_tween.kill()
+
+	# Squish
+	_tween = create_tween()
+	_tween.set_ease(Tween.EASE_IN)
+	_tween.set_trans(Tween.TRANS_CUBIC)
+	_tween.tween_property(self, "scale:x", 0.0, 0.11)
+	await _tween.finished
+
+	# Swap textures while invisible
+	card.face_up = true
+	_refresh()
+
+	# Expand
+	_tween = create_tween()
+	_tween.set_ease(Tween.EASE_OUT)
+	_tween.set_trans(Tween.TRANS_CUBIC)
+	_tween.tween_property(self, "scale:x", 1.0, 0.11)
+	await _tween.finished
 
 func move_to_position_instant(target_pos: Vector2) -> void:
 	"""Move card instantly without animation (for initial setup)"""

@@ -89,6 +89,7 @@ func draw_from_stock_3() -> void:
 	for _i in range(cards_to_draw):
 		var c = stock.pop_back()
 		c.face_up = true
+		c.stock = false  # Important: card is no longer in stock pile
 		waste.append(c)
 	
 	# Check for auto-win after drawing from stock
@@ -104,6 +105,7 @@ func _recycle_waste_to_stock() -> void:
 	for i in range(waste.size() - 1, -1, -1):
 		var c = waste[i]
 		c.face_up = false
+		c.stock = true  # Important: card is back in stock pile
 		stock.append(c)
 	waste.clear()
 	
