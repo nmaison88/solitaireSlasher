@@ -2,7 +2,7 @@ extends Control
 class_name Board
 
 const CARD_SIZE = Vector2(120, 160)  # Match actual card display size
-const PILE_GAP_X = 24.0  # Tightened slightly so rightmost column stays on screen
+const PILE_GAP_X = 24.0  # Preferred gap; _get_col_gap() reduces this on narrow screens
 const TABLEAU_GAP_Y = 65.0  # Increased spacing to show suit and rank on stacked cards (was 45.0)
 const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
 const FACE_DOWN_GAP_Y = 30.0  # Spacing for face-down cards (was hardcoded 10.0)
@@ -35,16 +35,25 @@ const WIN_MESSAGES = [
 	"YOUR CARDS ARE WILD!", "UNSTOPPABLE!"
 ]
 
+func _get_col_gap() -> float:
+	# Reduce gap from the preferred PILE_GAP_X so the 7-column layout + stock
+	# always fits within the screen width (right edge = size.x - margin).
+	var margin_x = 12.0
+	var max_gap = (size.x - 2.0 * margin_x - 7.0 * CARD_SIZE.x) / 6.0
+	return clampf(max_gap, 8.0, PILE_GAP_X)
+
 func _get_left_x() -> float:
-	var available_w = maxf(0.0, size.x - 18.0 - 18.0)
-	var total_w = (CARD_SIZE.x * 7.0) + (PILE_GAP_X * 6.0)
-	return 18.0 + maxf(0.0, (available_w - total_w) * 0.5)
+	var margin_x = 12.0
+	var col_gap = _get_col_gap()
+	var total_w = 7.0 * CARD_SIZE.x + 6.0 * col_gap
+	var available_w = maxf(0.0, size.x - 2.0 * margin_x)
+	return margin_x + maxf(0.0, (available_w - total_w) * 0.5)
 
 func _get_foundation_pos(foundation_index: int) -> Vector2:
-	return Vector2(_get_left_x() + foundation_index * (CARD_SIZE.x + PILE_GAP_X), 16.0)
+	return Vector2(_get_left_x() + foundation_index * (CARD_SIZE.x + _get_col_gap()), 16.0)
 
 func _get_tableau_card_pos(column: int, card_idx_in_pile: int) -> Vector2:
-	var x = _get_left_x() + column * (CARD_SIZE.x + PILE_GAP_X)
+	var x = _get_left_x() + column * (CARD_SIZE.x + _get_col_gap())
 	var y = 16.0 + CARD_SIZE.y + 44.0
 	for i in range(card_idx_in_pile):
 		if i < game.tableau[column].size() and game.tableau[column][i].face_up:
@@ -260,20 +269,17 @@ func render() -> void:
 	# Clear drop zones dictionary
 	_drop_zones.clear()
 
-	var margin_x = 18.0
-	var margin_right = 18.0  # Symmetric margin — stock aligns with 7th tableau column
 	var top_y = 16.0
 	var bottom_margin = 18.0
-	var available_w = maxf(0.0, size.x - margin_x - margin_right)
 	var available_h = maxf(0.0, size.y - top_y - bottom_margin)
+
+	# Use helpers so render() and all animation helpers share identical positions
+	var col_gap = _get_col_gap()
+	var left_x = _get_left_x()
 
 	var piles_row_y = top_y
 	var tableau_y = piles_row_y + CARD_SIZE.y + 44.0
 	var tableau_h = maxf(0.0, available_h - (CARD_SIZE.y + 26.0))
-
-	var col_gap = PILE_GAP_X
-	var total_tableau_w = (CARD_SIZE.x * 7.0) + (col_gap * 6.0)
-	var left_x = margin_x + maxf(0.0, (available_w - total_tableau_w) * 0.5)
 
 	# Foundations on the left (4 piles)
 	var foundation_start_x = left_x
@@ -310,22 +316,28 @@ func _on_test_button_pressed():
 	print("TEST BUTTON PRESSED! Mouse input works!")
 
 func _draw_slot(pos: Vector2) -> void:
-	# Create white border for empty card slots
-	var border = Panel.new()
-	border.position = pos
-	border.size = CARD_SIZE
-	
-	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.0, 0.0, 0.0, 0.0)  # Transparent background
-	stylebox.border_color = Color(1.0, 1.0, 1.0)  # White border
-	stylebox.border_width_left = 2
-	stylebox.border_width_right = 2
-	stylebox.border_width_top = 2
-	stylebox.border_width_bottom = 2
-	border.add_theme_stylebox_override("panel", stylebox)
-	
-	var bg = border
+	# Use ColorRect instead of Panel — Panel has implicit theme margins that offset content
+	var bg = ColorRect.new()
+	bg.position = pos
+	bg.size = CARD_SIZE
+	bg.color = Color(0.0, 0.0, 0.0, 0.0)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
+
+	# Draw white border as four thin rects (top, bottom, left, right)
+	var bw = 2.0
+	for border_rect in [
+		Rect2(pos, Vector2(CARD_SIZE.x, bw)),                         # top
+		Rect2(pos + Vector2(0, CARD_SIZE.y - bw), Vector2(CARD_SIZE.x, bw)),  # bottom
+		Rect2(pos, Vector2(bw, CARD_SIZE.y)),                          # left
+		Rect2(pos + Vector2(CARD_SIZE.x - bw, 0), Vector2(bw, CARD_SIZE.y))   # right
+	]:
+		var line = ColorRect.new()
+		line.position = border_rect.position
+		line.size = border_rect.size
+		line.color = Color(1.0, 1.0, 1.0, 0.6)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(line)
 
 func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	var foundation_indicator = ColorRect.new()
@@ -335,13 +347,32 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	foundation_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(foundation_indicator)
 
-	var suit_label = Label.new()
-	suit_label.text = ["♣", "♦", "♥", "♠"][suit_index]
-	suit_label.position = pos + Vector2(CARD_SIZE.x * 0.5 - 12, CARD_SIZE.y * 0.5 - 16)
-	suit_label.add_theme_font_size_override("font_size", 32)
-	suit_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 0.7))
-	suit_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(suit_label)
+	# Use the bundled suit icon PNGs, centered in the slot
+	var icon_paths = [
+		"res://card_assets/cloves_icon.png",    # 0 = Clubs
+		"res://card_assets/diamonds_icon.png",  # 1 = Diamonds
+		"res://card_assets/hearts_icon.png",    # 2 = Hearts
+		"res://card_assets/spades_icon.png",    # 3 = Spades
+	]
+	var icon_path = icon_paths[suit_index]
+	if ResourceLoader.exists(icon_path):
+		var icon_w = 48.0
+		var icon_h = 48.0
+		var ix = pos.x + (CARD_SIZE.x - icon_w) * 0.5
+		var iy = pos.y + (CARD_SIZE.y - icon_h) * 0.5
+		var icon = TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.modulate = Color(1.0, 1.0, 1.0, 0.35)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Use offset layout (not size=) — reliable way to force an exact rect
+		# regardless of texture dimensions
+		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		icon.offset_left   = ix
+		icon.offset_top    = iy
+		icon.offset_right  = ix + icon_w
+		icon.offset_bottom = iy + icon_h
+		add_child(icon)
 
 func _draw_stock(pos: Vector2) -> void:
 	if game.stock.is_empty():
@@ -356,23 +387,25 @@ func _draw_stock(pos: Vector2) -> void:
 		add_child(recycle_btn)
 		return
 
-	# Stock has cards — show the card back image as a tappable area
-	var card_back = TextureRect.new()
-	card_back.position = pos
-	card_back.size = CARD_SIZE
-	card_back.texture = load("res://card_assets/cardBack_blue2.png")
-	card_back.stretch_mode = TextureRect.STRETCH_SCALE
-	card_back.mouse_filter = Control.MOUSE_FILTER_STOP
-	card_back.z_index = 10
-	card_back.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	# Stock has cards — use a CardView (same renderer as waste) so Y aligns perfectly
+	var stock_card = SolitaireCard.new()
+	stock_card.face_up = false  # Shows card back via CardView._refresh()
+	stock_card.stock = true
+	var stock_view = preload("res://scenes/CardView.tscn").instantiate()
+	stock_view.card = stock_card
+	stock_view._refresh()
+	stock_view.position = pos
+	stock_view.z_index = 10
+	# Route touch/click to stock handler (card is face-down so CardView won't emit card_clicked)
+	stock_view.gui_input.connect(func(event: InputEvent):
+		if event is InputEventScreenTouch and event.pressed:
 			_on_stock_pressed()
 			get_viewport().set_input_as_handled()
-		elif event is InputEventScreenTouch and event.pressed:
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_on_stock_pressed()
 			get_viewport().set_input_as_handled()
 	)
-	add_child(card_back)
+	add_child(stock_view)
 
 func on_card_pressed(card) -> void:
 	"""Handle Card Framework's native card press callback"""
@@ -930,7 +963,7 @@ func _animate_stock_refresh_with_card(suit: int, rank: int) -> void:
 	anim_view.z_index = 500
 
 	# Use calculated positions relative to Board (local coords)
-	var col_step = CARD_SIZE.x + PILE_GAP_X
+	var col_step = CARD_SIZE.x + _get_col_gap()
 	var lx = _get_left_x()
 	var stock_pos = Vector2(lx + col_step * 6.0, 16.0)
 	var waste_pos = Vector2(lx + col_step * 4.5, 16.0)
