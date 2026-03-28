@@ -10,6 +10,7 @@ var incorrect_player: AudioStreamPlayer
 var place_player: AudioStreamPlayer
 var foundation_player: AudioStreamPlayer
 var restart_deck_player: AudioStreamPlayer
+var music_player: AudioStreamPlayer
 
 func _ready() -> void:
 	_setup_audio_players()
@@ -60,6 +61,13 @@ func _setup_audio_players() -> void:
 	restart_deck_player = AudioStreamPlayer.new()
 	restart_deck_player.name = "RestartDeckPlayer"
 	add_child(restart_deck_player)
+
+	# Background music player
+	music_player = AudioStreamPlayer.new()
+	music_player.name = "MusicPlayer"
+	music_player.volume_db = -6.0
+	add_child(music_player)
+	music_player.finished.connect(_on_music_finished)
 
 func _load_sound_files() -> void:
 	# Try to load sound files from the sounds directory
@@ -138,6 +146,12 @@ func _load_sound_files() -> void:
 			print("Loaded restart deck sound: ", path)
 			break
 
+	# Load background music
+	var music_path = "res://sounds/App_Background_music.wav"
+	if ResourceLoader.exists(music_path):
+		music_player.stream = load(music_path)
+		print("Loaded background music: ", music_path)
+
 func play_card_place() -> void:
 	if card_place_player and card_place_player.stream:
 		card_place_player.play()
@@ -173,6 +187,23 @@ func play_foundation() -> void:
 func play_restart_deck() -> void:
 	if restart_deck_player and restart_deck_player.stream:
 		restart_deck_player.play()
+
+func play_background_music() -> void:
+	if music_player and music_player.stream and not music_player.playing:
+		music_player.play()
+
+func stop_background_music() -> void:
+	if music_player and music_player.playing:
+		music_player.stop()
+	play_restart_deck()
+
+func play_game_start() -> void:
+	stop_background_music()
+
+func _on_music_finished() -> void:
+	# Loop the music when it finishes
+	if music_player and music_player.stream:
+		music_player.play()
 
 # Helper function to load sounds from files
 func load_sounds(card_place_path: String, card_draw_path: String, win_path: String) -> void:

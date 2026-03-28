@@ -2,7 +2,7 @@ extends Control
 class_name Board
 
 const CARD_SIZE = Vector2(120, 160)  # Match actual card display size
-const PILE_GAP_X = 28.0  # Final adjustment - perfect balance
+const PILE_GAP_X = 24.0  # Tightened slightly so rightmost column stays on screen
 const TABLEAU_GAP_Y = 65.0  # Increased spacing to show suit and rank on stacked cards (was 45.0)
 const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
 const FACE_DOWN_GAP_Y = 30.0  # Spacing for face-down cards (was hardcoded 10.0)
@@ -36,7 +36,7 @@ const WIN_MESSAGES = [
 ]
 
 func _get_left_x() -> float:
-	var available_w = maxf(0.0, size.x - 18.0 - 80.0)
+	var available_w = maxf(0.0, size.x - 18.0 - 18.0)
 	var total_w = (CARD_SIZE.x * 7.0) + (PILE_GAP_X * 6.0)
 	return 18.0 + maxf(0.0, (available_w - total_w) * 0.5)
 
@@ -45,7 +45,7 @@ func _get_foundation_pos(foundation_index: int) -> Vector2:
 
 func _get_tableau_card_pos(column: int, card_idx_in_pile: int) -> Vector2:
 	var x = _get_left_x() + column * (CARD_SIZE.x + PILE_GAP_X)
-	var y = 16.0 + CARD_SIZE.y + 26.0
+	var y = 16.0 + CARD_SIZE.y + 44.0
 	for i in range(card_idx_in_pile):
 		if i < game.tableau[column].size() and game.tableau[column][i].face_up:
 			y += TABLEAU_GAP_Y
@@ -261,14 +261,14 @@ func render() -> void:
 	_drop_zones.clear()
 
 	var margin_x = 18.0
-	var margin_right = 80.0  # Extra padding on the right side to accommodate waste card fanning
+	var margin_right = 18.0  # Symmetric margin — stock aligns with 7th tableau column
 	var top_y = 16.0
 	var bottom_margin = 18.0
 	var available_w = maxf(0.0, size.x - margin_x - margin_right)
 	var available_h = maxf(0.0, size.y - top_y - bottom_margin)
 
 	var piles_row_y = top_y
-	var tableau_y = piles_row_y + CARD_SIZE.y + 26.0
+	var tableau_y = piles_row_y + CARD_SIZE.y + 44.0
 	var tableau_h = maxf(0.0, available_h - (CARD_SIZE.y + 26.0))
 
 	var col_gap = PILE_GAP_X
@@ -629,6 +629,10 @@ func _on_card_clicked(card_view: CardView) -> void:
 				if game.move_tableau_to_tableau(source_column, j, card_count):
 					# Animate all stack cards to their new positions simultaneously
 					var dest_start = game.tableau[j].size() - card_count
+					# Raise z_index so animated cards render above destination column cards
+					for sv in stack_views:
+						if is_instance_valid(sv):
+							sv.z_index = 500
 					var tween = create_tween()
 					tween.set_ease(Tween.EASE_OUT)
 					tween.set_trans(Tween.TRANS_CUBIC)

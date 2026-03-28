@@ -1019,6 +1019,10 @@ func _show_main_menu() -> void:
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
 			child.visible = false
 
+	# Start background music when on any menu
+	if SoundManager:
+		SoundManager.play_background_music()
+
 func _hide_main_menu() -> void:
 	if _menu_container:
 		_menu_container.visible = false
@@ -1089,7 +1093,11 @@ func _start_multiplayer_game() -> void:
 
 func _setup_single_player_game() -> void:
 	print("Setting up single player game...")
-	
+
+	# Stop background music when entering a game
+	if SoundManager:
+		SoundManager.play_game_start()
+
 	# Hide main menu container
 	_hide_main_menu()
 	
@@ -1116,7 +1124,11 @@ func _setup_single_player_game() -> void:
 
 func _setup_single_player_sudoku() -> void:
 	print("Setting up single player Sudoku...")
-	
+
+	# Stop background music when entering a game
+	if SoundManager:
+		SoundManager.play_game_start()
+
 	# Hide main menu container
 	_hide_main_menu()
 	
@@ -1335,6 +1347,9 @@ func _show_new_game_button():
 	_menu_button = menu_button
 
 func _setup_multiplayer_game() -> void:
+	# Stop background music when entering a game
+	if SoundManager:
+		SoundManager.play_game_start()
 	# Setup based on current game type
 	if _current_game_type == "Sudoku":
 		_setup_multiplayer_sudoku()

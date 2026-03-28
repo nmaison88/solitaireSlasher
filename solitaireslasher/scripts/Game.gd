@@ -22,6 +22,7 @@ var max_stock_passes: int = -1  # -1 = unlimited, else limited passes
 # Undo state tracking
 var _last_move_state: Dictionary = {}
 var _can_undo: bool = false
+var _auto_winning: bool = false  # Guard against recursive auto-win calls
 
 func set_difficulty(diff: String) -> void:
 	"""Set game difficulty"""
@@ -337,50 +338,32 @@ func _check_completion() -> void:
 	print("Game completed! Moves: ", _moves_count, " Time: ", Time.get_ticks_msec() / 1000.0 - _start_time)
 
 func _check_auto_win() -> void:
-	"""Check if game can be auto-won (all cards flipped, no stock, all cards can go to foundation)"""
-	if _is_completed:
+	"""Auto-win when stock is empty and every tableau card is face-up.
+	At that point the player can always complete the game, so we do it for them."""
+	if _is_completed or _auto_winning:
 		return
-	
-	# Auto-win conditions:
-	# 1. Stock is empty
-	# 2. All tableau cards are face up
-	# 3. All remaining cards can legally move to foundation
-	
+
+	# Condition 1: stock must be empty
 	if not stock.is_empty():
-		return  # Stock still has cards
-	
-	# Check if all tableau cards are face up
+		return
+
+	# Condition 2: all tableau cards must be face-up (no hidden cards remain)
 	for pile in tableau:
 		for card in pile:
 			if not card.face_up:
-				return  # Still have face-down cards
-	
-	# Check if all remaining cards can move to foundation
+				return
+
+	# All cards are visible — auto-complete to foundation
 	var total_cards = 0
-	var can_auto_win = true
-	
-	# Count tableau cards
 	for pile in tableau:
 		total_cards += pile.size()
-		for card in pile:
-			# Check if this card can go to its correct foundation
-			if not can_place_on_foundation(card, card.suit):
-				can_auto_win = false
-				break
-		if not can_auto_win:
-			break
-	
-	# Count waste cards
 	total_cards += waste.size()
-	for card in waste:
-		if not can_place_on_foundation(card, card.suit):
-			can_auto_win = false
-			break
-	
-	# If all cards can go to foundation, auto-win
-	if can_auto_win and total_cards > 0:
+
+	if total_cards > 0:
 		print("Auto-win detected! Moving all ", total_cards, " cards to foundation")
+		_auto_winning = true
 		_auto_move_all_to_foundation()
+		_auto_winning = false
 
 func _auto_move_all_to_foundation() -> void:
 	"""Automatically move all remaining cards to foundation"""
@@ -508,44 +491,67 @@ func get_hint() -> Dictionary:
 
 func _save_state() -> void:
 	"""Save current game state before making a move"""
+	# Must deep-copy each SolitaireCard — pile.duplicate() only copies the array,
+	# leaving the card objects as shared references. Mutating face_up etc. would
+	# otherwise corrupt the saved snapshot.
 	_last_move_state = {
 		"tableau": [],
 		"foundations": [],
-		"stock": stock.duplicate(),
-		"waste": waste.duplicate()
+		"stock": [],
+		"waste": []
 	}
-	
-	# Deep copy tableau
+
+	for card in stock:
+		_last_move_state["stock"].append(card.duplicate())
+	for card in waste:
+		_last_move_state["waste"].append(card.duplicate())
 	for pile in tableau:
-		_last_move_state["tableau"].append(pile.duplicate())
-	
-	# Deep copy foundations
+		var pile_copy = []
+		for card in pile:
+			pile_copy.append(card.duplicate())
+		_last_move_state["tableau"].append(pile_copy)
 	for pile in foundations:
-		_last_move_state["foundations"].append(pile.duplicate())
-	
+		var pile_copy = []
+		for card in pile:
+			pile_copy.append(card.duplicate())
+		_last_move_state["foundations"].append(pile_copy)
+
 	_can_undo = true
 
 func undo() -> bool:
 	"""Undo the last move. Returns true if undo was successful."""
 	if not _can_undo or _last_move_state.is_empty():
 		return false
-	
-	# Restore state
+
+	# Restore tableau (untyped array — fine)
 	tableau = []
 	for pile in _last_move_state["tableau"]:
-		tableau.append(pile.duplicate())
-	
+		var pile_copy = []
+		for card in pile:
+			pile_copy.append(card)
+		tableau.append(pile_copy)
+
+	# Restore foundations (untyped array — fine)
 	foundations = []
 	for pile in _last_move_state["foundations"]:
-		foundations.append(pile.duplicate())
-	
-	stock = _last_move_state["stock"].duplicate()
-	waste = _last_move_state["waste"].duplicate()
-	
+		var pile_copy = []
+		for card in pile:
+			pile_copy.append(card)
+		foundations.append(pile_copy)
+
+	# stock/waste are typed Array[SolitaireCard] — must fill element-by-element,
+	# not assign from an untyped Array (causes crash in Godot 4).
+	stock.clear()
+	for card in _last_move_state["stock"]:
+		stock.append(card as SolitaireCard)
+	waste.clear()
+	for card in _last_move_state["waste"]:
+		waste.append(card as SolitaireCard)
+
 	# Clear undo state - only one undo allowed
 	_can_undo = false
 	_last_move_state = {}
-	
+
 	return true
 
 func can_undo() -> bool:
