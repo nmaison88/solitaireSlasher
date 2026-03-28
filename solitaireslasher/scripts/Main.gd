@@ -27,6 +27,10 @@ var _current_difficulty: String = "Medium"
 var _game_type_option: OptionButton
 var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
+# Carousel swipe vs tap discrimination
+const _TAP_MAX_DISTANCE: float = 20.0
+var _icon_press_pos: Dictionary = {}  # icon name -> Vector2 of press start
+
 func _ready() -> void:
 	# Get current theme from PlayerData
 	var theme_found = PlayerData.get_theme()
@@ -205,12 +209,12 @@ func _setup_main_menu() -> void:
 	game_carousel.drag_outside = true  # Allow drag outside bounds
 	game_carousel.enforce_border = false  # No hard stops for smooth looping
 	game_carousel.display_range = -1  # Show all items for smoother looping
-	game_carousel.snap_carousel_duration = 0.2  # Slightly longer for smoother loop
-	game_carousel.snap_carousel_transtion_type = Tween.TRANS_CUBIC  # Smoother cubic easing
-	game_carousel.snap_carousel_ease_type = Tween.EASE_IN_OUT  # Symmetrical easing
-	game_carousel.manual_carousel_duration = 0.2  # Same duration for manual navigation
-	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC  # Same smoother easing
-	game_carousel.manual_carousel_ease_type = Tween.EASE_IN_OUT  # Same symmetrical easing
+	game_carousel.snap_carousel_duration = 0.35
+	game_carousel.snap_carousel_transtion_type = Tween.TRANS_CUBIC
+	game_carousel.snap_carousel_ease_type = Tween.EASE_OUT
+	game_carousel.manual_carousel_duration = 0.35
+	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC
+	game_carousel.manual_carousel_ease_type = Tween.EASE_OUT
 	
 	# Add game icons as clickable TextureRect children (2/3 screen size)
 	var solitaire_icon = TextureRect.new()
@@ -299,18 +303,50 @@ func create_difficulty_carousel_item(item_name: String) -> Control:
 	return item
 
 func _on_solitaire_icon_clicked(event: InputEvent) -> void:
-	"""Handle clicking on Solitaire icon"""
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		print("Solitaire icon clicked")
-		_current_game_type = "Solitaire"
-		_on_game_selected()
+	var key = "Solitaire"
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Solitaire"
+					_on_game_selected()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Solitaire"
+					_on_game_selected()
 
 func _on_sudoku_icon_clicked(event: InputEvent) -> void:
-	"""Handle clicking on Sudoku icon"""
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		print("Sudoku icon clicked")
-		_current_game_type = "Sudoku"
-		_on_game_selected()
+	var key = "Sudoku"
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Sudoku"
+					_on_game_selected()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Sudoku"
+					_on_game_selected()
 
 func _on_game_carousel_selection_changed(index: int = -1) -> void:
 	"""Handle game carousel selection change"""
