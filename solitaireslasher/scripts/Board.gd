@@ -49,6 +49,13 @@ func _get_left_x() -> float:
 	var available_w = maxf(0.0, size.x - 2.0 * margin_x)
 	return margin_x + maxf(0.0, (available_w - total_w) * 0.5)
 
+func _waste_card_x(anchor_x: float, i: int, card_count: int) -> float:
+	# Mirror the positioning logic in _draw_waste so all helpers agree
+	var total_width = (card_count - 1) * 25.0
+	var center_offset = total_width * 0.5
+	var card_offset = (card_count - 1 - i) * 25.0 - center_offset
+	return anchor_x - card_offset
+
 func _get_foundation_pos(foundation_index: int) -> Vector2:
 	return Vector2(_get_left_x() + foundation_index * (CARD_SIZE.x + _get_col_gap()), 16.0)
 
@@ -218,34 +225,75 @@ func _restart_game() -> void:
 	render()
 
 func _on_stock_pressed() -> void:
-	print("🎯 Stock button clicked! Stock size before: ", game.stock.size())
-	if game == null:
-		print("❌ Game is null, returning")
+	if _animating or game == null:
 		return
-	
-	print("🎯 Drawing from stock...")
-	
-	# Capture the card info BEFORE drawing it
-	var top_card_info = null
-	if not game.stock.is_empty():
-		var top_card = game.stock[-1]
-		top_card_info = {
-			"suit": top_card.suit,
-			"rank": top_card.rank
-		}
-		print("🎯 Captured card info: ", top_card.suit, " ", top_card.rank)
-	
+	_animating = true
+
+	var col_step = CARD_SIZE.x + _get_col_gap()
+	var lx = _get_left_x()
+	var waste_anchor = Vector2(lx + col_step * 4.5, 16.0)
+	var stock_pos    = Vector2(lx + col_step * 6.0,  16.0)
+
+	# --- Snapshot existing waste CardViews before any state change ---
+	var old_waste: Array = game.waste.duplicate()  # shallow copy is fine (card refs)
+	var old_vis_start = max(0, old_waste.size() - 3)
+	var old_views: Dictionary = {}  # SolitaireCard -> CardView
+	for child in get_children():
+		if child is CardView and old_waste.has(child.card):
+			old_views[child.card] = child
+
+	# --- Execute game logic ---
 	game.draw_from_stock_3()
 	stock_clicked.emit()
-	
-	# Add visual animation with the correct card info
-	if top_card_info:
-		_animate_stock_refresh_with_card(top_card_info.suit, top_card_info.rank)
-	
-	# Animation is now complete and seamless
-	print("🎯 Animation complete - rendering immediately!")
-	# Render immediately to show the actual waste cards without delay
-	_render_after_animation()
+
+	# --- Compute new layout ---
+	var new_size      = game.waste.size()
+	var new_vis_start = max(0, new_size - 3)
+	var new_vis_count = new_size - new_vis_start
+	var dur           = 0.38
+
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+
+	# Animate each previously-visible waste card to its new position (or off-screen)
+	for i in range(old_vis_start, old_waste.size()):
+		var card = old_waste[i]
+		if not old_views.has(card):
+			continue
+		var view: CardView = old_views[card]
+		var new_idx = game.waste.find(card)
+		if new_idx == -1 or new_idx < new_vis_start:
+			# Pushed out of the visible window — slide left and fade out
+			tween.tween_property(view, "position:x", waste_anchor.x - 55.0, dur)
+			tween.tween_property(view, "modulate:a", 0.0, dur)
+		else:
+			# Still visible — slide to its new x position
+			var vis_i = new_idx - new_vis_start
+			tween.tween_property(view, "position:x",
+				_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+
+	# Slide newly drawn card(s) in from the stock position
+	var drawn_count = new_size - old_waste.size()
+	for di in range(drawn_count):
+		var wi = old_waste.size() + di
+		if wi < new_vis_start:
+			continue
+		var card = game.waste[wi]
+		var vis_i = wi - new_vis_start
+		var ghost: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		ghost.card = card
+		ghost._refresh()
+		ghost.position = Vector2(stock_pos.x, waste_anchor.y)
+		ghost.z_index  = 100 + di
+		add_child(ghost)
+		tween.tween_property(ghost, "position:x",
+			_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+
+	await tween.finished
+	_animating = false
+	render()
 
 func render() -> void:
 	if game == null:
@@ -620,12 +668,23 @@ func _on_card_clicked(card_view: CardView) -> void:
 				if game.move_to_foundation("waste", -1, foundation_index):
 					await _animate_single_card(card_view, _get_foundation_pos(foundation_index))
 					_animating = false
+					render()
 					return
 			for j in range(7):
 				if not game.tableau[j].is_empty() and game.tableau[j][-1] == card:
+					# Capture face-down card below before state changes
+					var below_flip: SolitaireCard = null
+					if game.tableau[j].size() >= 2 and not game.tableau[j][-2].face_up:
+						below_flip = game.tableau[j][-2]
 					if game.move_to_foundation("tableau", j, foundation_index):
 						await _animate_single_card(card_view, _get_foundation_pos(foundation_index))
+						if below_flip != null:
+							for child in get_children():
+								if child is CardView and child.card == below_flip:
+									await _animate_card_flip(child)
+									break
 						_animating = false
+						render()
 						return
 
 	# Waste to tableau
@@ -635,6 +694,7 @@ func _on_card_clicked(card_view: CardView) -> void:
 				if game.move_waste_to_tableau(j):
 					await _animate_single_card(card_view, _get_tableau_card_pos(j, game.tableau[j].size() - 1))
 					_animating = false
+					render()
 					return
 
 	# Tableau to tableau — move the entire visible stack together
@@ -651,6 +711,10 @@ func _on_card_clicked(card_view: CardView) -> void:
 
 	if source_column != -1:
 		var card_count = game.tableau[source_column].size() - card_index
+		# Record the card just below the dragged stack (may flip after move)
+		var card_to_flip: SolitaireCard = null
+		if card_index > 0 and not game.tableau[source_column][card_index - 1].face_up:
+			card_to_flip = game.tableau[source_column][card_index - 1]
 		# Capture the CardViews for the whole stack NOW, before the move changes game state
 		var stack_solitaire_cards = game.tableau[source_column].slice(card_index)
 		var stack_views: Array = []
@@ -676,14 +740,37 @@ func _on_card_clicked(card_view: CardView) -> void:
 						if is_instance_valid(sv):
 							tween.tween_property(sv, "position", _get_tableau_card_pos(j, dest_start + k), _animation_duration)
 					await tween.finished
+					# Flip the newly revealed card (if any) before re-rendering
+					if card_to_flip != null:
+						for child in get_children():
+							if child is CardView and child.card == card_to_flip:
+								await _animate_card_flip(child)
+								break
 					_animating = false
 					render()
 					return
 
 	_animating = false
 
+func _animate_card_flip(card_view: CardView) -> void:
+	"""Flip a card from face-down to face-up with a scale-X animation."""
+	card_view.pivot_offset = card_view.size * 0.5
+	var t1 = create_tween()
+	t1.set_ease(Tween.EASE_IN)
+	t1.set_trans(Tween.TRANS_QUAD)
+	t1.tween_property(card_view, "scale:x", 0.0, 0.1)
+	await t1.finished
+	# card.face_up is already true (set by game logic); refresh shows face-up texture
+	card_view._refresh()
+	var t2 = create_tween()
+	t2.set_ease(Tween.EASE_OUT)
+	t2.set_trans(Tween.TRANS_QUAD)
+	t2.tween_property(card_view, "scale:x", 1.0, 0.1)
+	await t2.finished
+	card_view.pivot_offset = Vector2.ZERO
+
 func _animate_single_card(card_view: CardView, target_pos: Vector2) -> void:
-	"""Slide a single card to target_pos, then re-render."""
+	"""Slide a single card to target_pos. Caller is responsible for render() afterward."""
 	var temp = preload("res://scenes/CardView.tscn").instantiate()
 	temp.card = card_view.card
 	temp._refresh()
@@ -700,7 +787,6 @@ func _animate_single_card(card_view: CardView, target_pos: Vector2) -> void:
 
 	if is_instance_valid(temp) and not temp.is_queued_for_deletion():
 		temp.queue_free()
-	render()
 
 func _on_card_drag_started(card_view: CardView) -> void:
 	var card = card_view.card
@@ -776,6 +862,17 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 	if _dragged_card_view != card_view or _dragged_cards.is_empty():
 		return
 
+	# Pre-capture the face-down card just below the dragged stack (to flip after a tableau move)
+	var card_to_flip_drag: SolitaireCard = null
+	if not _dragged_cards.is_empty():
+		var first = _dragged_cards[0]
+		for j in range(7):
+			var idx = game.tableau[j].find(first)
+			if idx != -1:
+				if idx > 0 and not game.tableau[j][idx - 1].face_up:
+					card_to_flip_drag = game.tableau[j][idx - 1]
+				break
+
 	var zone_name = _get_drop_zone_at_position(target_position)
 	var moved = false
 
@@ -788,6 +885,12 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 			var tableau_index = zone_name.split("_")[1].to_int()
 			if _try_move_to_tableau(tableau_index):
 				moved = true
+				# Flip the newly revealed card before re-rendering
+				if card_to_flip_drag != null:
+					for child in get_children():
+						if child is CardView and child.card == card_to_flip_drag:
+							await _animate_card_flip(child)
+							break
 
 	if not moved:
 		# Animate all dragged cards back to their original positions simultaneously.
