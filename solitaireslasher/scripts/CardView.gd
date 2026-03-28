@@ -41,23 +41,24 @@ func _refresh() -> void:
 		if card.stock:
 			texture_path = "res://card_assets/cardBack_blue2.png"
 		else:
-			# Use the correct format for your card assets: card{FullSuit}{Rank}.png
-			var suit_name = ""
-			match card.suit:
-				0: suit_name = "Clubs"  # CLUBS
-				1: suit_name = "Diamonds"  # DIAMONDS
-				2: suit_name = "Hearts"  # HEARTS
-				3: suit_name = "Spades"  # SPADES
-			
 			var rank_name = ""
 			match card.rank:
-				1: rank_name = "A"
+				1:  rank_name = "A"
 				11: rank_name = "J"
 				12: rank_name = "Q"
 				13: rank_name = "K"
-				_: rank_name = str(card.rank)
-			
-			texture_path = "res://card_assets/card%s%s.png" % [suit_name, rank_name]
+				_:  rank_name = str(card.rank)
+
+			# Spades files have inconsistent casing: face cards use "Spades",
+			# Ace and number cards use "spades" (lowercase)
+			var suit_name = ""
+			match card.suit:
+				0: suit_name = "Clubs"
+				1: suit_name = "Diamonds"
+				2: suit_name = "Hearts"
+				3: suit_name = "Spades" if card.rank >= 11 else "spades"
+
+			texture_path = "res://card_assets/Alternative-Face-Deck/card%s%s.png" % [suit_name, rank_name]
 		
 		var texture = load(texture_path)
 		if texture:

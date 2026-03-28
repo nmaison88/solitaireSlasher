@@ -1,0 +1,64 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpiderGame.gd" id="1_root"]
+[ext_resource type="Script" path="res://addons/card-framework/card_manager.gd" id="2_manager"]
+[ext_resource type="PackedScene" path="res://addons/card-framework/card.tscn" id="3_card"]
+[ext_resource type="PackedScene" path="res://scenes/SpiderCardFactory.tscn" id="4_factory_scene"]
+[ext_resource type="Texture2D" path="res://assets/cards/cardBack_blue2.png" id="5_back"]
+[ext_resource type="PackedScene" path="res://scenes/SpiderTableau.tscn" id="6_tableau"]
+[ext_resource type="PackedScene" path="res://addons/card-framework/pile.tscn" id="7_pile"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_root")
+
+[node name="CardManager" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("2_manager")
+card_factory_scene = ExtResource("4_factory_scene")
+
+[node name="TableauContainer" type="HBoxContainer" parent="."]
+offset_left = 50.0
+offset_top = 50.0
+offset_right = 1230.0
+offset_bottom = 500.0
+theme_override_constants/separation = 110
+
+[node name="SpiderTableau1" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau2" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau3" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau4" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau5" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau6" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau7" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau8" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau9" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="SpiderTableau10" parent="TableauContainer" instance=ExtResource("6_tableau")]
+layout_mode = 2
+
+[node name="StockPile" parent="." instance=ExtResource("7_pile")]
+offset_left = 50.0
+offset_top = 500.0
+offset_right = 50.0
+offset_bottom = 500.0
+layout = 2
+restrict_to_top_card = true
+card_face_up = false

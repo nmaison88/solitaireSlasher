@@ -74,22 +74,24 @@ const SolitaireCard = preload("res://scripts/Card.gd")
 
 # Helper function to get card texture path from reference project naming
 func _get_card_texture_path(card: SolitaireCard) -> String:
+	var rank_name = ""
+	match card.rank:
+		1:  rank_name = "A"
+		11: rank_name = "J"
+		12: rank_name = "Q"
+		13: rank_name = "K"
+		_:  rank_name = str(card.rank)
+
+	# Spades files have inconsistent casing: face cards use "Spades",
+	# Ace and number cards use "spades" (lowercase)
 	var suit_name = ""
 	match card.suit:
 		0: suit_name = "Clubs"
 		1: suit_name = "Diamonds"
 		2: suit_name = "Hearts"
-		3: suit_name = "Spades"
-	
-	var rank_name = ""
-	match card.rank:
-		1: rank_name = "A"
-		11: rank_name = "J"
-		12: rank_name = "Q"
-		13: rank_name = "K"
-		_: rank_name = str(card.rank)
-	
-	return "res://card_assets/card%s%s.png" % [suit_name, rank_name]
+		3: suit_name = "Spades" if card.rank >= 11 else "spades"
+
+	return "res://card_assets/Alternative-Face-Deck/card%s%s.png" % [suit_name, rank_name]
 
 func _ready() -> void:
 	_stock_count_label = Label.new()
@@ -389,19 +391,35 @@ func _draw_slot(pos: Vector2) -> void:
 		add_child(line)
 
 func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
+	# Dark fill
 	var foundation_indicator = ColorRect.new()
 	foundation_indicator.position = pos
 	foundation_indicator.size = CARD_SIZE
-	foundation_indicator.color = Color(0.2, 0.2, 0.2, 0.3)
+	foundation_indicator.color = Color(0.06, 0.06, 0.06, 0.55)
 	foundation_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(foundation_indicator)
 
-	# Use the bundled suit icon PNGs, centered in the slot
+	# Dark border (four thin rects)
+	var bw = 2.0
+	for border_rect in [
+		Rect2(pos,                                    Vector2(CARD_SIZE.x, bw)),
+		Rect2(pos + Vector2(0, CARD_SIZE.y - bw),     Vector2(CARD_SIZE.x, bw)),
+		Rect2(pos,                                    Vector2(bw, CARD_SIZE.y)),
+		Rect2(pos + Vector2(CARD_SIZE.x - bw, 0),     Vector2(bw, CARD_SIZE.y)),
+	]:
+		var line = ColorRect.new()
+		line.position = border_rect.position
+		line.size = border_rect.size
+		line.color = Color(0.55, 0.55, 0.55, 0.9)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(line)
+
+	# Grayscale suit icon centered in the slot
 	var icon_paths = [
-		"res://card_assets/cloves_icon.png",    # 0 = Clubs
-		"res://card_assets/diamonds_icon.png",  # 1 = Diamonds
-		"res://card_assets/hearts_icon.png",    # 2 = Hearts
-		"res://card_assets/spades_icon.png",    # 3 = Spades
+		"res://card_assets/cloves_icon.png",
+		"res://card_assets/diamonds_icon.png",
+		"res://card_assets/hearts_icon.png",
+		"res://card_assets/spades_icon.png",
 	]
 	var icon_path = icon_paths[suit_index]
 	if ResourceLoader.exists(icon_path):
@@ -412,15 +430,18 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 		var icon = TextureRect.new()
 		icon.texture = load(icon_path)
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.modulate = Color(1.0, 1.0, 1.0, 0.35)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# Use offset layout (not size=) — reliable way to force an exact rect
-		# regardless of texture dimensions
 		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		icon.offset_left   = ix
 		icon.offset_top    = iy
 		icon.offset_right  = ix + icon_w
 		icon.offset_bottom = iy + icon_h
+		# Grayscale via shader (handles any icon colour uniformly)
+		var shader = Shader.new()
+		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tfloat g = dot(c.rgb, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(vec3(g), c.a * 0.45);\n}"
+		var mat = ShaderMaterial.new()
+		mat.shader = shader
+		icon.material = mat
 		add_child(icon)
 
 func _draw_stock(pos: Vector2) -> void:

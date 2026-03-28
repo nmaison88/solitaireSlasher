@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/SpiderTableau.gd" id="1_rbe3t"]
+
+[node name="SpiderTableau" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_rbe3t")
+stack_display_gap = 30
+max_stack_display = 20
+card_face_up = true
+layout = 1
+allow_card_movement = true
+restrict_to_top_card = false
+align_drop_zone_with_top_card = true
