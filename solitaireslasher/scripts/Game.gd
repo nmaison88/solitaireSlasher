@@ -32,11 +32,11 @@ func set_difficulty(diff: String) -> void:
 			draw_count = 1
 			max_stock_passes = -1  # Unlimited
 		"Medium":
-			draw_count = 3
+			draw_count = 2
 			max_stock_passes = -1  # Unlimited
 		"Hard":
 			draw_count = 3
-			max_stock_passes = 3  # Limited to 3 passes
+			max_stock_passes = -1  # Unlimited
 	print("Difficulty set to: ", difficulty, " (Draw: ", draw_count, ", Passes: ", max_stock_passes, ")")
 
 func new_game(seed: int = -1) -> void:

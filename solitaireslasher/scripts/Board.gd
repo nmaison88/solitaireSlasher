@@ -87,6 +87,7 @@ func _get_card_texture_path(card: SolitaireCard) -> String:
 func _ready() -> void:
 	_stock_count_label = Label.new()
 	_stock_count_label.text = ""
+	_stock_count_label.visible = false
 	add_child(_stock_count_label)
 
 	resized.connect(render)
