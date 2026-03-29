@@ -196,7 +196,11 @@ func _setup_main_menu() -> void:
 	var title = Label.new()
 	title.text = "Choose Your Game"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 64)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		title.add_theme_font_size_override("font_size", 80)
+	else:
+		title.add_theme_font_size_override("font_size", 64)
 	_menu_container.add_child(title)
 	
 	# Add spacing
@@ -451,7 +455,11 @@ func _show_game_menu(game_type: String) -> void:
 	var title = Label.new()
 	title.text = game_type
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		title.add_theme_font_size_override("font_size", 72)
+	else:
+		title.add_theme_font_size_override("font_size", 56)
 	game_menu.add_child(title)
 	
 	# Add spacing
@@ -469,8 +477,13 @@ func _show_game_menu(game_type: String) -> void:
 	# Play Single Player button
 	var play_button = Button.new()
 	play_button.text = "Play Single Player"
-	play_button.custom_minimum_size = Vector2(400, 80)
-	play_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		play_button.custom_minimum_size = Vector2(500, 120)
+		play_button.add_theme_font_size_override("font_size", 48)
+	else:
+		play_button.custom_minimum_size = Vector2(400, 80)
+		play_button.add_theme_font_size_override("font_size", 36)
 	play_button.pressed.connect(_on_single_player_start.bind(game_type))
 	game_menu.add_child(play_button)
 	
@@ -483,8 +496,13 @@ func _show_game_menu(game_type: String) -> void:
 	if game_type != "Spider":
 		var multiplayer_button = Button.new()
 		multiplayer_button.text = "Multiplayer"
-		multiplayer_button.custom_minimum_size = Vector2(400, 80)
-		multiplayer_button.add_theme_font_size_override("font_size", 36)
+		# Larger button for iPhone
+		if OS.has_feature("mobile"):
+			multiplayer_button.custom_minimum_size = Vector2(500, 120)
+			multiplayer_button.add_theme_font_size_override("font_size", 48)
+		else:
+			multiplayer_button.custom_minimum_size = Vector2(400, 80)
+			multiplayer_button.add_theme_font_size_override("font_size", 36)
 		multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
 		game_menu.add_child(multiplayer_button)
 
@@ -496,8 +514,13 @@ func _show_game_menu(game_type: String) -> void:
 	# Back button
 	var back_button = Button.new()
 	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(400, 80)
-	back_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		back_button.custom_minimum_size = Vector2(500, 120)
+		back_button.add_theme_font_size_override("font_size", 48)
+	else:
+		back_button.custom_minimum_size = Vector2(400, 80)
+		back_button.add_theme_font_size_override("font_size", 36)
 	back_button.pressed.connect(_on_game_menu_back)
 	game_menu.add_child(back_button)
 	
@@ -513,7 +536,11 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 	var face_label = Label.new()
 	face_label.name = "DifficultyFaceLabel"
 	face_label.text = difficulties[current_index]
-	face_label.add_theme_font_size_override("font_size", 40)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		face_label.add_theme_font_size_override("font_size", 56)
+	else:
+		face_label.add_theme_font_size_override("font_size", 40)
 	face_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	face_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent_vbox.add_child(face_label)
@@ -521,7 +548,11 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 	# Large face icon (centered, under the text)
 	var face_icon = FontAwesome.new()
 	face_icon.name = "DifficultyFaceIcon"
-	face_icon.icon_size = 70
+	# Much larger icon for iPhone (200 as requested)
+	if OS.has_feature("mobile"):
+		face_icon.icon_size = 200
+	else:
+		face_icon.icon_size = 70
 	face_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_set_difficulty_face(face_icon, current_index)
 	parent_vbox.add_child(face_icon)
@@ -533,7 +564,11 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 
 	var easy_label = Label.new()
 	easy_label.text = "Easy"
-	easy_label.add_theme_font_size_override("font_size", 28)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		easy_label.add_theme_font_size_override("font_size", 42)
+	else:
+		easy_label.add_theme_font_size_override("font_size", 28)
 	easy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	slider_row.add_child(easy_label)
 
@@ -544,12 +579,20 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 	slider.step = 1
 	slider.value = current_index
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slider.custom_minimum_size = Vector2(300, 48)
+	# Larger slider for iPhone
+	if OS.has_feature("mobile"):
+		slider.custom_minimum_size = Vector2(500, 80)  # Much larger for iPhone
+	else:
+		slider.custom_minimum_size = Vector2(300, 48)
 	slider_row.add_child(slider)
 
 	var hard_label = Label.new()
 	hard_label.text = "Hard"
-	hard_label.add_theme_font_size_override("font_size", 28)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		hard_label.add_theme_font_size_override("font_size", 42)
+	else:
+		hard_label.add_theme_font_size_override("font_size", 28)
 	hard_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	slider_row.add_child(hard_label)
 
@@ -670,7 +713,11 @@ func _on_show_single_player_menu() -> void:
 	var title = Label.new()
 	title.text = "Single Player"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		title.add_theme_font_size_override("font_size", 72)
+	else:
+		title.add_theme_font_size_override("font_size", 56)
 	sp_menu.add_child(title)
 	
 	var spacer1 = Control.new()
@@ -681,7 +728,11 @@ func _on_show_single_player_menu() -> void:
 	var game_type_label = Label.new()
 	game_type_label.text = "Game Type"
 	game_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	game_type_label.add_theme_font_size_override("font_size", 36)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		game_type_label.add_theme_font_size_override("font_size", 48)
+	else:
+		game_type_label.add_theme_font_size_override("font_size", 36)
 	sp_menu.add_child(game_type_label)
 	
 	# Create carousel container - MUCH LARGER and more prominent
@@ -729,8 +780,13 @@ func _on_show_single_player_menu() -> void:
 	# Start button
 	var start_button = Button.new()
 	start_button.text = "Start Game"
-	start_button.custom_minimum_size = Vector2(400, 80)
-	start_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		start_button.custom_minimum_size = Vector2(500, 120)
+		start_button.add_theme_font_size_override("font_size", 48)
+	else:
+		start_button.custom_minimum_size = Vector2(400, 80)
+		start_button.add_theme_font_size_override("font_size", 36)
 	start_button.pressed.connect(_on_single_player_start_legacy)
 	sp_menu.add_child(start_button)
 	
@@ -741,8 +797,13 @@ func _on_show_single_player_menu() -> void:
 	# Back button
 	var back_button = Button.new()
 	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(400, 80)
-	back_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		back_button.custom_minimum_size = Vector2(500, 120)
+		back_button.add_theme_font_size_override("font_size", 48)
+	else:
+		back_button.custom_minimum_size = Vector2(400, 80)
+		back_button.add_theme_font_size_override("font_size", 36)
 	back_button.pressed.connect(_on_single_player_back)
 	sp_menu.add_child(back_button)
 
@@ -791,7 +852,11 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 	else:
 		title.text = "Multiplayer"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
+	# Larger font for iPhone
+	if OS.has_feature("mobile"):
+		title.add_theme_font_size_override("font_size", 72)
+	else:
+		title.add_theme_font_size_override("font_size", 56)
 	mp_menu.add_child(title)
 	
 	var spacer1 = Control.new()
@@ -801,8 +866,13 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 	# Host button
 	var host_button = Button.new()
 	host_button.text = "Host " + game_type + " Game"
-	host_button.custom_minimum_size = Vector2(400, 100)
-	host_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		host_button.custom_minimum_size = Vector2(500, 120)
+		host_button.add_theme_font_size_override("font_size", 48)
+	else:
+		host_button.custom_minimum_size = Vector2(400, 100)
+		host_button.add_theme_font_size_override("font_size", 36)
 	host_button.pressed.connect(_on_host_game.bind(game_type))
 	mp_menu.add_child(host_button)
 	
@@ -813,8 +883,13 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 	# Join button
 	var join_button = Button.new()
 	join_button.text = "Join " + game_type + " Game"
-	join_button.custom_minimum_size = Vector2(400, 100)
-	join_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		join_button.custom_minimum_size = Vector2(500, 120)
+		join_button.add_theme_font_size_override("font_size", 48)
+	else:
+		join_button.custom_minimum_size = Vector2(400, 100)
+		join_button.add_theme_font_size_override("font_size", 36)
 	join_button.pressed.connect(_on_join_game.bind(game_type))
 	mp_menu.add_child(join_button)
 	
@@ -825,8 +900,13 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 	# Back button
 	var back_button = Button.new()
 	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(400, 80)
-	back_button.add_theme_font_size_override("font_size", 36)
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		back_button.custom_minimum_size = Vector2(500, 120)
+		back_button.add_theme_font_size_override("font_size", 48)
+	else:
+		back_button.custom_minimum_size = Vector2(400, 80)
+		back_button.add_theme_font_size_override("font_size", 36)
 	back_button.pressed.connect(_on_multiplayer_back)
 	mp_menu.add_child(back_button)
 
