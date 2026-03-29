@@ -1,5 +1,18 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Export directory - allow Xcode project but exclude large files
 /export/
-*.ipa
+!/export/solitaireslasher.xcodeproj/
+!/export/solitaireslasher.xcodeproj/**
+!/export/ExportOptions.plist
+!/export/DistributionSummary.plist
+
+# Exclude large libraries and build artifacts
+/export/*.xcframework/
+/export/*.xcarchive/
+/export/*.ipa
+/export/*.pck
+/export/Packaging.log
+/export/.DS_Store
