@@ -9,10 +9,19 @@
 !/export/ExportOptions.plist
 !/export/DistributionSummary.plist
 
+# Allow essential XCFrameworks for iOS builds (but exclude large libgodot.a)
+!/export/MoltenVK.xcframework/
+!/export/solitaireslasher.xcframework/
+!/export/solitaireslasher/dylibs/
+
 # Exclude large libraries and build artifacts
-# /export/*.xcframework/
 /export/*.xcarchive/
 /export/*.ipa
 /export/*.pck
 /export/Packaging.log
 /export/.DS_Store
+
+# Exclude very large libgodot.a files specifically
+/export/solitaireslasher.xcframework/ios-arm64/libgodot.a
+/export/solitaireslasher.xcframework/ios-arm64_x86_64-simulator/libgodot.a
+/export/**/libgodot.a
