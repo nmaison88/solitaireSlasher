@@ -802,15 +802,22 @@ func _on_close_camera_pressed() -> void:
 func _close_camera() -> void:
 	"""Stop camera feed and hide overlay"""
 	is_scanning = false
-	
+
 	if native_camera:
 		native_camera.stop()
-	
+
 	if camera_panel:
 		camera_panel.visible = false
 
+	# Resume lobby music now that the camera is gone
+	if SoundManager:
+		SoundManager.play_background_music()
+
 func _start_camera_feed() -> void:
 	"""Start the native camera feed"""
+	# Stop music before opening camera to avoid iOS audio-session interruption squelch
+	if SoundManager:
+		SoundManager.stop_background_music()
 	print("Starting camera for QR scanning...")
 	status_label.text = "Opening camera..."
 	

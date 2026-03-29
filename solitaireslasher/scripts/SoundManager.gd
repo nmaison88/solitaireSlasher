@@ -195,10 +195,10 @@ func play_background_music() -> void:
 func stop_background_music() -> void:
 	if music_player and music_player.playing:
 		music_player.stop()
-	play_restart_deck()
 
 func play_game_start() -> void:
 	stop_background_music()
+	play_restart_deck()
 
 func _on_music_finished() -> void:
 	# Loop the music when it finishes

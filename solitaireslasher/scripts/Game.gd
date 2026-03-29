@@ -23,6 +23,8 @@ var max_stock_passes: int = -1  # -1 = unlimited, else limited passes
 var _last_move_state: Dictionary = {}
 var _can_undo: bool = false
 var _auto_winning: bool = false  # Guard against recursive auto-win calls
+# Hint used by Board to play a reverse animation when undo is triggered
+var last_move_hint: Dictionary = {}
 
 func set_difficulty(diff: String) -> void:
 	"""Set game difficulty"""
@@ -56,6 +58,7 @@ func new_game(seed: int = -1) -> void:
 	_is_completed = false
 	_can_undo = false
 	_last_move_state = {}
+	last_move_hint = {}
 
 	var idx: int = 0
 	for pile_i in range(7):
@@ -176,7 +179,8 @@ func can_place_on_tableau(card: SolitaireCard, tableau_index: int) -> bool:
 	return card.is_red() != top_card.is_red() and card.rank == top_card.rank - 1
 
 func move_to_foundation(from_pile: String, from_index: int, foundation_index: int) -> bool:
-	# Save state before move
+	last_move_hint = {"type": "to_foundation", "from_pile": from_pile,
+		"from_col": from_index, "foundation_col": foundation_index}
 	_save_state()
 	
 	var card: SolitaireCard
@@ -219,7 +223,8 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 	return true
 
 func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) -> bool:
-	# Save state before move
+	last_move_hint = {"type": "tableau_to_tableau",
+		"from_col": from_index, "to_col": to_index, "card_count": card_count}
 	_save_state()
 	
 	if from_index >= tableau.size() or to_index >= tableau.size():
@@ -297,7 +302,7 @@ func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bo
 	return true
 
 func move_waste_to_tableau(tableau_index: int) -> bool:
-	# Save state before move
+	last_move_hint = {"type": "waste_to_tableau", "to_col": tableau_index}
 	_save_state()
 	
 	if waste.is_empty() or tableau_index >= tableau.size():
@@ -551,6 +556,7 @@ func undo() -> bool:
 	# Clear undo state - only one undo allowed
 	_can_undo = false
 	_last_move_state = {}
+	last_move_hint = {}
 
 	return true
 

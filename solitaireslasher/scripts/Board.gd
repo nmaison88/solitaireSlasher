@@ -6,6 +6,7 @@ const PILE_GAP_X = 24.0  # Preferred gap; _get_col_gap() reduces this on narrow 
 const TABLEAU_GAP_Y = 65.0  # Increased spacing to show suit and rank on stacked cards (was 45.0)
 const WASTE_FAN_X = 35.0  # Increased to show card corners and suit/rank
 const FACE_DOWN_GAP_Y = 30.0  # Spacing for face-down cards (was hardcoded 10.0)
+const WASTE_SPREAD = 42.0  # Horizontal gap between fanned waste cards
 
 signal stock_clicked
 signal stock_count_changed(count: int)
@@ -51,9 +52,9 @@ func _get_left_x() -> float:
 
 func _waste_card_x(anchor_x: float, i: int, card_count: int) -> float:
 	# Mirror the positioning logic in _draw_waste so all helpers agree
-	var total_width = (card_count - 1) * 25.0
+	var total_width = (card_count - 1) * WASTE_SPREAD
 	var center_offset = total_width * 0.5
-	var card_offset = (card_count - 1 - i) * 25.0 - center_offset
+	var card_offset = (card_count - 1 - i) * WASTE_SPREAD - center_offset
 	return anchor_x - card_offset
 
 func _get_foundation_pos(foundation_index: int) -> Vector2:
@@ -160,9 +161,8 @@ func _render_after_animation() -> void:
 	await get_tree().create_timer(_animation_duration).timeout
 	render()
 
-func _on_game_card_moved() -> void:
-	"""Handle game card moved events"""
-	print("🎯 Game card moved event received")
+func _on_game_card_moved(_from_pile: String, _to_pile: String, _card_count: int) -> void:
+	pass
 
 func _on_game_completed() -> void:
 	if multiplayer_manager and multiplayer_manager.is_multiplayer:
@@ -258,6 +258,7 @@ func _on_stock_pressed() -> void:
 	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_CUBIC)
+	var tweener_count = 0
 
 	# Animate each previously-visible waste card to its new position (or off-screen)
 	for i in range(old_vis_start, old_waste.size()):
@@ -267,14 +268,14 @@ func _on_stock_pressed() -> void:
 		var view: CardView = old_views[card]
 		var new_idx = game.waste.find(card)
 		if new_idx == -1 or new_idx < new_vis_start:
-			# Pushed out of the visible window — slide left and fade out
 			tween.tween_property(view, "position:x", waste_anchor.x - 55.0, dur)
 			tween.tween_property(view, "modulate:a", 0.0, dur)
+			tweener_count += 1
 		else:
-			# Still visible — slide to its new x position
 			var vis_i = new_idx - new_vis_start
 			tween.tween_property(view, "position:x",
 				_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+			tweener_count += 1
 
 	# Slide newly drawn card(s) in from the stock position
 	var drawn_count = new_size - old_waste.size()
@@ -292,8 +293,12 @@ func _on_stock_pressed() -> void:
 		add_child(ghost)
 		tween.tween_property(ghost, "position:x",
 			_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+		tweener_count += 1
 
-	await tween.finished
+	if tweener_count > 0:
+		await tween.finished
+	else:
+		tween.kill()
 	_animating = false
 	render()
 
@@ -310,9 +315,11 @@ func render() -> void:
 
 	_stock_button = null  # Always recreate; don't preserve across renders
 
-	# Clear all children except the persistent label and the win overlay
+	# Clear all children except persistent nodes and in-flight undo ghost cards
 	for child in get_children():
 		if child == _stock_count_label or child == _win_overlay:
+			continue
+		if child.has_meta("_undo_ghost"):
 			continue
 		if is_instance_valid(child) and not child.is_queued_for_deletion():
 			child.queue_free()
@@ -348,8 +355,7 @@ func render() -> void:
 	for i in range(4):
 		var foundation_pos = Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y)
 		_draw_foundation_slot(foundation_pos, i)
-	# Draw waste and stock slots (right side)
-	_draw_slot(waste_pos)
+	# Draw stock slot only (waste has no outline by design)
 	_draw_slot(stock_pos)
 
 	# Draw foundations (left side)
@@ -391,30 +397,26 @@ func _draw_slot(pos: Vector2) -> void:
 		add_child(line)
 
 func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
-	# Dark fill
-	var foundation_indicator = ColorRect.new()
-	foundation_indicator.position = pos
-	foundation_indicator.size = CARD_SIZE
-	foundation_indicator.color = Color(0.06, 0.06, 0.06, 0.55)
-	foundation_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(foundation_indicator)
+	# Rounded dark panel with semi-transparent black border
+	var slot_panel = Panel.new()
+	slot_panel.position = pos
+	slot_panel.size = CARD_SIZE
+	slot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.42)
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.0, 0.0, 0.0, 0.6)
+	style.corner_radius_top_left     = 10
+	style.corner_radius_top_right    = 10
+	style.corner_radius_bottom_left  = 10
+	style.corner_radius_bottom_right = 10
+	slot_panel.add_theme_stylebox_override("panel", style)
+	add_child(slot_panel)
 
-	# Dark border (four thin rects)
-	var bw = 2.0
-	for border_rect in [
-		Rect2(pos,                                    Vector2(CARD_SIZE.x, bw)),
-		Rect2(pos + Vector2(0, CARD_SIZE.y - bw),     Vector2(CARD_SIZE.x, bw)),
-		Rect2(pos,                                    Vector2(bw, CARD_SIZE.y)),
-		Rect2(pos + Vector2(CARD_SIZE.x - bw, 0),     Vector2(bw, CARD_SIZE.y)),
-	]:
-		var line = ColorRect.new()
-		line.position = border_rect.position
-		line.size = border_rect.size
-		line.color = Color(0.55, 0.55, 0.55, 0.9)
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(line)
-
-	# Grayscale suit icon centered in the slot
+	# Suit icon: uniform white shape at ~40 % opacity so all four look identical
 	var icon_paths = [
 		"res://card_assets/cloves_icon.png",
 		"res://card_assets/diamonds_icon.png",
@@ -423,8 +425,8 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	]
 	var icon_path = icon_paths[suit_index]
 	if ResourceLoader.exists(icon_path):
-		var icon_w = 48.0
-		var icon_h = 48.0
+		var icon_w = 54.0
+		var icon_h = 54.0
 		var ix = pos.x + (CARD_SIZE.x - icon_w) * 0.5
 		var iy = pos.y + (CARD_SIZE.y - icon_h) * 0.5
 		var icon = TextureRect.new()
@@ -436,9 +438,9 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 		icon.offset_top    = iy
 		icon.offset_right  = ix + icon_w
 		icon.offset_bottom = iy + icon_h
-		# Grayscale via shader (handles any icon colour uniformly)
+		# Alpha-mask the PNG to a flat white — all suits render same tint
 		var shader = Shader.new()
-		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tfloat g = dot(c.rgb, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(vec3(g), c.a * 0.45);\n}"
+		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tCOLOR = vec4(1.0, 1.0, 1.0, c.a * 0.38);\n}"
 		var mat = ShaderMaterial.new()
 		mat.shader = shader
 		icon.material = mat
@@ -446,14 +448,32 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 
 func _draw_stock(pos: Vector2) -> void:
 	if game.stock.is_empty():
-		# Empty stock — show recycle symbol as a tap target
+		# Empty stock — circular redo button centred in the slot
 		var recycle_btn = Button.new()
-		recycle_btn.position = pos
-		recycle_btn.size = CARD_SIZE
-		recycle_btn.text = "♻"
-		recycle_btn.add_theme_font_size_override("font_size", 48)
-		recycle_btn.add_theme_color_override("font_color", Color.GRAY)
+		var btn_size = 72.0
+		recycle_btn.position = pos + (CARD_SIZE - Vector2(btn_size, btn_size)) * 0.5
+		recycle_btn.size = Vector2(btn_size, btn_size)
 		recycle_btn.pressed.connect(_on_stock_pressed)
+		var circle = StyleBoxFlat.new()
+		circle.bg_color = Color(0.0, 0.0, 0.0, 0.45)
+		var r = btn_size / 2.0
+		circle.corner_radius_top_left     = r
+		circle.corner_radius_top_right    = r
+		circle.corner_radius_bottom_left  = r
+		circle.corner_radius_bottom_right = r
+		recycle_btn.add_theme_stylebox_override("normal", circle)
+		var circle_pressed = circle.duplicate()
+		circle_pressed.bg_color = Color(0.0, 0.0, 0.0, 0.65)
+		recycle_btn.add_theme_stylebox_override("pressed", circle_pressed)
+		recycle_btn.add_theme_stylebox_override("hover",   circle)
+		# Redo icon via FontAwesome
+		var fa = FontAwesome.new()
+		fa.icon_name = "rotate-right"
+		fa.icon_type = "solid"
+		fa.icon_size = 36
+		fa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fa.set_anchors_preset(Control.PRESET_FULL_RECT)
+		recycle_btn.add_child(fa)
 		add_child(recycle_btn)
 		return
 
@@ -510,11 +530,10 @@ func _draw_waste(pos: Vector2) -> void:
 		var waste_card_view = preload("res://scenes/CardView.tscn").instantiate()
 		
 		# Center the 3-card group - calculate center offset
-		var total_width = (card_count - 1) * 25  # Total width of the group
-		var center_offset = total_width / 2  # Center the group
-		
-		# Position cards from right to left (newest on right), but centered
-		var card_offset = (card_count - 1 - i) * 25 - center_offset
+		var total_width = (card_count - 1) * WASTE_SPREAD
+		var center_offset = total_width / 2
+
+		var card_offset = (card_count - 1 - i) * WASTE_SPREAD - center_offset
 		waste_card_view.position = pos + Vector2(-card_offset, 0)
 		
 		waste_card_view.card = c
@@ -772,6 +791,116 @@ func _on_card_clicked(card_view: CardView) -> void:
 					return
 
 	_animating = false
+
+func animate_undo() -> void:
+	"""Animate the last move in reverse, then restore state via game.undo()."""
+	if _animating or game == null or not game.can_undo():
+		return
+	_animating = true
+	var hint = game.last_move_hint
+	if hint.is_empty():
+		game.undo()
+		_animating = false
+		render()
+		return
+	match hint.get("type", ""):
+		"to_foundation":
+			await _anim_undo_to_foundation(hint)
+		"tableau_to_tableau":
+			await _anim_undo_tableau_to_tableau(hint)
+		"waste_to_tableau":
+			await _anim_undo_waste_to_tableau(hint)
+		_:
+			game.undo()
+			render()
+	_animating = false
+
+func _anim_ghost(card: SolitaireCard, from_pos: Vector2, to_pos: Vector2) -> void:
+	"""Slide a ghost card from from_pos to to_pos, surviving render() in-flight."""
+	var ghost = preload("res://scenes/CardView.tscn").instantiate()
+	ghost.card = card
+	ghost._refresh()
+	ghost.position = from_pos
+	ghost.z_index = 1000
+	ghost.set_meta("_undo_ghost", true)
+	add_child(ghost)
+	# Re-render the board immediately so restored state is visible underneath
+	render()
+	var tween = ghost.create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(ghost, "position", to_pos, _animation_duration)
+	await tween.finished
+	if is_instance_valid(ghost):
+		ghost.queue_free()
+
+func _anim_undo_to_foundation(hint: Dictionary) -> void:
+	var foundation_col = hint.get("foundation_col", 0)
+	var from_pile      = hint.get("from_pile", "tableau")
+	var from_col       = hint.get("from_col", -1)
+	if game.foundations[foundation_col].is_empty():
+		game.undo(); render(); return
+	var card     = game.foundations[foundation_col][-1]
+	var from_pos = _get_foundation_pos(foundation_col)
+	game.undo()
+	var to_pos: Vector2
+	if from_pile == "tableau" and from_col >= 0:
+		to_pos = _get_tableau_card_pos(from_col, game.tableau[from_col].size() - 1)
+	else:
+		var cs = CARD_SIZE.x + _get_col_gap()
+		to_pos = Vector2(_get_left_x() + cs * 4.5, 16.0)
+	await _anim_ghost(card, from_pos, to_pos)
+
+func _anim_undo_tableau_to_tableau(hint: Dictionary) -> void:
+	var from_col  = hint.get("from_col", -1)
+	var to_col    = hint.get("to_col",   -1)
+	var count     = hint.get("card_count", 1)
+	if from_col == -1 or to_col == -1 or game.tableau[to_col].size() < count:
+		game.undo(); render(); return
+	# Capture current positions of the stack before undo
+	var pile       = game.tableau[to_col]
+	var start_idx  = pile.size() - count
+	var cards      = pile.slice(start_idx)
+	var cur_positions = []
+	for k in range(count):
+		cur_positions.append(_get_tableau_card_pos(to_col, start_idx + k))
+	game.undo()
+	var restored_start = game.tableau[from_col].size() - count
+	var target_positions = []
+	for k in range(count):
+		target_positions.append(_get_tableau_card_pos(from_col, restored_start + k))
+	# Spawn all ghosts, re-render beneath them, animate back
+	var ghosts = []
+	for k in range(count):
+		var ghost = preload("res://scenes/CardView.tscn").instantiate()
+		ghost.card = cards[k]
+		ghost._refresh()
+		ghost.position = cur_positions[k]
+		ghost.z_index  = 500 + k
+		ghost.set_meta("_undo_ghost", true)
+		add_child(ghost)
+		ghosts.append(ghost)
+	render()
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	for k in range(ghosts.size()):
+		tween.tween_property(ghosts[k], "position", target_positions[k], _animation_duration)
+	await tween.finished
+	for g in ghosts:
+		if is_instance_valid(g): g.queue_free()
+
+func _anim_undo_waste_to_tableau(hint: Dictionary) -> void:
+	var to_col = hint.get("to_col", -1)
+	if to_col == -1 or game.tableau[to_col].is_empty():
+		game.undo(); render(); return
+	var card     = game.tableau[to_col][-1]
+	var from_pos = _get_tableau_card_pos(to_col, game.tableau[to_col].size() - 1)
+	game.undo()
+	var cs     = CARD_SIZE.x + _get_col_gap()
+	var to_pos = Vector2(_get_left_x() + cs * 4.5, 16.0)
+	await _anim_ghost(card, from_pos, to_pos)
 
 func _animate_card_flip(card_view: CardView) -> void:
 	"""Flip a card from face-down to face-up with a scale-X animation."""

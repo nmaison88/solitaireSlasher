@@ -1223,6 +1223,16 @@ func _hide_menu_buttons():
 		elif child is Label and child.name == "PlayerStatusLabel":
 			child.visible = false
 
+func _circle_style(bg: Color, size: float) -> StyleBoxFlat:
+	var s = StyleBoxFlat.new()
+	s.bg_color = bg
+	var r = size / 2.0
+	s.corner_radius_top_left     = r
+	s.corner_radius_top_right    = r
+	s.corner_radius_bottom_left  = r
+	s.corner_radius_bottom_right = r
+	return s
+
 func _show_new_game_button():
 	# Remove existing game control buttons if any (immediate removal to prevent duplicates)
 	var buttons_to_remove = []
@@ -1255,17 +1265,12 @@ func _show_new_game_button():
 		var safe_area = DisplayServer.get_display_safe_area()
 		top_padding = max(10, safe_area.position.y)
 	
-	new_game_button.position = Vector2(900, top_padding)  # Moved left and down for safe area
-	new_game_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
-	
-	# Make button background transparent
-	var new_game_transparent_style = StyleBoxFlat.new()
-	new_game_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
-	new_game_transparent_style.draw_center = false  # Don't draw background
-	new_game_button.add_theme_stylebox_override("normal", new_game_transparent_style)
-	new_game_button.add_theme_stylebox_override("hover", new_game_transparent_style)
-	new_game_button.add_theme_stylebox_override("pressed", new_game_transparent_style)
-	new_game_button.add_theme_stylebox_override("disabled", new_game_transparent_style)
+	new_game_button.position = Vector2(900, top_padding)
+	new_game_button.size = Vector2(100, 100)
+	new_game_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
+	new_game_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
+	new_game_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
+	new_game_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
 	print("Creating game button - is_multiplayer: ", is_multiplayer_mode)
@@ -1299,45 +1304,46 @@ func _show_new_game_button():
 	
 	add_child(new_game_button)
 	
-	# Undo button (bottom center) - FontAwesome icon
-	# Only show for Solitaire, not Sudoku
+	# Undo button (bottom centre) — circle bg + icon + "Undo" label
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
-	
-	# Use anchors to position at bottom center, works on any screen size
-	undo_button.anchor_left = 0.5
-	undo_button.anchor_right = 0.5
-	undo_button.anchor_top = 1.0
+	undo_button.anchor_left   = 0.5
+	undo_button.anchor_right  = 0.5
+	undo_button.anchor_top    = 1.0
 	undo_button.anchor_bottom = 1.0
-	undo_button.offset_left = -50  # Half of button width (100/2)
-	undo_button.offset_right = 50   # Half of button width (100/2)
-	undo_button.offset_top = -120  # Button height + padding from bottom
-	undo_button.offset_bottom = -20  # Padding from bottom
-	undo_button.custom_minimum_size = Vector2(100, 100)  # 2x larger (was 50x50)
+	undo_button.offset_left   = -50
+	undo_button.offset_right  = 50
+	undo_button.offset_top    = -160  # 160px above bottom → 50px breathing room
+	undo_button.offset_bottom = -50
+	undo_button.custom_minimum_size = Vector2(100, 110)
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
-	undo_button.visible = (_current_game_type == "Solitaire")  # Hide for Sudoku
-	
-	print("Undo button positioned with anchors at bottom center")
-	
-	# Make button background transparent
-	var transparent_style = StyleBoxFlat.new()
-	transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
-	transparent_style.draw_center = false  # Don't draw background
-	undo_button.add_theme_stylebox_override("normal", transparent_style)
-	undo_button.add_theme_stylebox_override("hover", transparent_style)
-	undo_button.add_theme_stylebox_override("pressed", transparent_style)
-	undo_button.add_theme_stylebox_override("disabled", transparent_style)
-	
-	# Add FontAwesome icon as child
+	undo_button.visible = (_current_game_type == "Solitaire")
+	undo_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
+	undo_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
+	undo_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
+	undo_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
+
+	var undo_vbox = VBoxContainer.new()
+	undo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	undo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	undo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_button.add_child(undo_vbox)
+
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 64  # 2x larger (was 32)
+	undo_icon.icon_size = 84
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	undo_button.add_child(undo_icon)
-	
+	undo_vbox.add_child(undo_icon)
+
+	var undo_label = Label.new()
+	undo_label.text = "Undo"
+	undo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	undo_label.add_theme_font_size_override("font_size", 17)
+	undo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_vbox.add_child(undo_label)
+
 	add_child(undo_button)
 	
 	# Store reference to undo button for state updates
@@ -1361,20 +1367,15 @@ func _show_new_game_button():
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
 	
-	# Make button background transparent
-	var menu_transparent_style = StyleBoxFlat.new()
-	menu_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
-	menu_transparent_style.draw_center = false  # Don't draw background
-	menu_button.add_theme_stylebox_override("normal", menu_transparent_style)
-	menu_button.add_theme_stylebox_override("hover", menu_transparent_style)
-	menu_button.add_theme_stylebox_override("pressed", menu_transparent_style)
-	menu_button.add_theme_stylebox_override("disabled", menu_transparent_style)
-	
-	# Add FontAwesome icon as child
+	menu_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
+	menu_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
+	menu_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
+	menu_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
+
 	var menu_icon = FontAwesome.new()
-	menu_icon.icon_name = "bars"  # Hamburger menu icon
+	menu_icon.icon_name = "chevron-left"
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 64  # 2x larger (was 32)
+	menu_icon.icon_size = 52
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
@@ -1437,13 +1438,9 @@ func _new_game() -> void:
 			_setup_single_player_game()
 
 func _on_undo_pressed() -> void:
-	if _game and is_instance_valid(_game):
-		if _game.undo():
-			_board.render()
-			_update_undo_button_state()
-			print("Undo successful")
-		else:
-			print("Cannot undo - no moves to undo or already undone")
+	if _game and is_instance_valid(_game) and _game.can_undo():
+		await _board.animate_undo()
+		_update_undo_button_state()
 
 func _update_undo_button_state() -> void:
 	if _undo_button and is_instance_valid(_undo_button):
@@ -1647,6 +1644,9 @@ func _on_back_to_menu_pressed() -> void:
 	_board.render()
 
 func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
+	# Stop background music when entering multiplayer lobby
+	if SoundManager:
+		SoundManager.play_game_start()
 	# Hide main menu
 	if _menu_container:
 		_menu_container.visible = false

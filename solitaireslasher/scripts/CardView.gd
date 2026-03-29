@@ -9,6 +9,8 @@ signal card_drag_moved(card_view: CardView, new_position: Vector2)
 @onready var _texture_rect: TextureRect = $TextureRect
 @onready var _card_back: TextureRect = $CardBack
 
+static var _corner_shader: Shader = null
+
 var card: SolitaireCard
 var is_dragging: bool = false
 var original_position: Vector2
@@ -24,10 +26,39 @@ func set_card(value: SolitaireCard) -> void:
 	_refresh()
 
 func _ready() -> void:
+	_apply_rounded_corners()
 	_refresh()
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
+
+func _apply_rounded_corners() -> void:
+	if _corner_shader == null:
+		_corner_shader = Shader.new()
+		_corner_shader.code = """
+shader_type canvas_item;
+uniform vec2 card_size = vec2(120.0, 160.0);
+uniform float radius = 10.0;
+uniform float border_width = 3.5;
+void fragment() {
+	vec2 px = UV * card_size;
+	vec2 half = card_size * 0.5;
+	vec2 d = abs(px - half) - (half - vec2(radius));
+	float dist = length(max(d, vec2(0.0))) - radius;
+	float a = 1.0 - smoothstep(-1.0, 1.0, dist);
+	COLOR = texture(TEXTURE, UV);
+	// Dark border: ramps from 0 deep inside to 1 at the edge
+	float border = smoothstep(-(border_width + 1.5), 0.0, dist) * a;
+	COLOR.rgb = mix(COLOR.rgb, vec3(0.0), border * 0.75);
+	COLOR.a *= a;
+}
+"""
+	var mat = ShaderMaterial.new()
+	mat.shader = _corner_shader
+	_texture_rect.material = mat
+	var mat2 = ShaderMaterial.new()
+	mat2.shader = _corner_shader
+	_card_back.material = mat2
 
 func _refresh() -> void:
 	if not is_node_ready() or not card:
