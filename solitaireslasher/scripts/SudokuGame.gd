@@ -34,10 +34,17 @@ func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 	_fill_grid(solution_grid)
 	
 	# Check if mirror mode is enabled and we have mirror data
-	if not mirror_data.is_empty() and mirror_data.has("puzzle"):
-		# Load puzzle from mirror data
-		puzzle = mirror_data["puzzle"].duplicate(true)
-		print("Sudoku: Using mirror mode puzzle from host")
+	if not mirror_data.is_empty():
+		print("DEBUG: Sudoku new_game received mirror data with keys: ", mirror_data.keys())
+		if mirror_data.has("puzzle"):
+			# Load puzzle from mirror data
+			puzzle = mirror_data["puzzle"].duplicate(true)
+			print("Sudoku: Using mirror mode puzzle from host")
+		else:
+			print("DEBUG: Mirror data missing puzzle key, generating new puzzle")
+			# Normal puzzle generation
+			_create_puzzle(difficulty)
+			print("Sudoku: Generated new puzzle (fallback)")
 	else:
 		# Normal puzzle generation
 		_create_puzzle(difficulty)

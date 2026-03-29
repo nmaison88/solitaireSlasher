@@ -95,7 +95,7 @@ func new_game(difficulty_string: String = "Easy") -> void:
 		_game.game_won.connect(_on_game_won)
 
 	_game.new_game(difficulty_string)
-	render()
+	_play_deal_animation()
 
 func _on_game_won() -> void:
 	game_won.emit()
@@ -411,6 +411,8 @@ func _on_stock_pressed() -> void:
 
 	# --- Execute game state change ---
 	_game.deal_from_stock()
+	if SoundManager:
+		SoundManager.play_card_draw()
 
 	# --- Re-render board (cards at final positions, invisible until animation ends) ---
 	# We force a re-render with a fresh frame counter so it fires immediately
@@ -538,7 +540,14 @@ func _on_card_clicked(card_view: CardView) -> void:
 			stack_views.append(child)
 
 	var card_count = stack_cards.size()
+	var seq_before = _game.sequences_completed
 	_game.move_cards(src_col, card_idx, dest_col)
+	if SoundManager:
+		if _game.sequences_completed > seq_before:
+			SoundManager.play_card_place()
+			SoundManager.play_foundation()
+		else:
+			SoundManager.play_card_place()
 
 	var dest_start = _game.tableaus[dest_col].size() - card_count
 	for sv in stack_views:
@@ -631,7 +640,14 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 	if dest_col != -1 and src_col != -1 and dest_col != src_col:
 		if _game.can_place_on(top_drag_card, dest_col) and _game.can_move_from(src_col, card_idx):
 			var card_count = _dragged_cards.size()
+			var seq_before_drag = _game.sequences_completed
 			_game.move_cards(src_col, card_idx, dest_col)
+			if SoundManager:
+				if _game.sequences_completed > seq_before_drag:
+					SoundManager.play_card_place()
+					SoundManager.play_foundation()
+				else:
+					SoundManager.play_card_place()
 			moved = true
 
 			var dest_start = _game.tableaus[dest_col].size() - card_count
@@ -699,6 +715,75 @@ func _animate_card_flip(card_view: CardView) -> void:
 	await t2.finished
 	card_view.pivot_offset = Vector2.ZERO
 
+# ── Initial deal animation ─────────────────────────────────────────────────────
+
+func _play_deal_animation() -> void:
+	_animating = true
+
+	# Wait one frame so the Control has been laid out and size is valid
+	await get_tree().process_frame
+
+	# Collect the top (face-up) card of each column
+	var top_entries: Array = []
+	for col in range(SpiderGame.TABLEAU_COUNT):
+		var pile: Array = _game.tableaus[col]
+		if not pile.is_empty():
+			var top_card = pile[-1] as SolitaireCard
+			if top_card.face_up:
+				top_entries.append({"col": col, "card": top_card, "idx": pile.size() - 1})
+
+	# Temporarily flip top cards face-down so the initial render shows all face-down
+	for entry in top_entries:
+		(entry.card as SolitaireCard).face_up = false
+
+	_last_render_frame = -1
+	render()
+
+	# Restore face-up state (ghosts will show the correct card face)
+	for entry in top_entries:
+		(entry.card as SolitaireCard).face_up = true
+
+	var fly_origin = _stock_pos()
+	const STAGGER = 0.06
+	const FLY_DUR = 0.32
+
+	var ghosts: Array = []
+	var last_tween: Tween = null
+
+	for i in range(top_entries.size()):
+		var entry = top_entries[i]
+		var col: int = entry.col
+		var card = entry.card as SolitaireCard
+		var dest = _get_card_pos(col, entry.idx)
+
+		var ghost: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		ghost.card = card
+		ghost._refresh()
+		ghost.position = fly_origin
+		ghost.z_index = 2000 + i
+		ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(ghost)
+		ghosts.append(ghost)
+
+		var t = create_tween()
+		t.set_ease(Tween.EASE_OUT)
+		t.set_trans(Tween.TRANS_CUBIC)
+		if i > 0:
+			t.tween_interval(i * STAGGER)
+		t.tween_property(ghost, "position", dest, FLY_DUR)
+		last_tween = t
+
+	if last_tween != null:
+		await last_tween.finished
+
+	for ghost in ghosts:
+		if is_instance_valid(ghost):
+			ghost.queue_free()
+
+	_animating = false
+	_last_render_frame = -1
+	render()
+
 # ── Win screen ─────────────────────────────────────────────────────────────────
 
 func _show_win_screen() -> void:
@@ -755,4 +840,4 @@ func _restart_game() -> void:
 	_undo_btn = null
 	_redo_btn = null
 	_game.new_game(_game._difficulty)
-	render()
+	_play_deal_animation()

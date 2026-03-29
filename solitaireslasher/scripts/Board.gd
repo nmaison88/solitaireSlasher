@@ -11,7 +11,7 @@ const WASTE_SPREAD = 42.0  # Horizontal gap between fanned waste cards
 signal stock_clicked
 signal stock_count_changed(count: int)
 
-@onready var _stock_count_label: Label = $StockCountLabel
+@onready var _stock_count_label: Label = get_node_or_null("StockCountLabel")
 
 var game: Game
 var multiplayer_manager: MultiplayerGameManager
@@ -129,10 +129,9 @@ func _process(_delta: float) -> void:
 func set_game(value) -> void:
 	game = value
 	if game:
-		render()
 		game.card_moved.connect(_on_game_card_moved)
 		game.game_completed.connect(_on_game_completed)
-		render()
+		_play_deal_animation()
 
 func set_multiplayer_manager(value) -> void:
 	multiplayer_manager = value
@@ -224,6 +223,78 @@ func _restart_game() -> void:
 		_win_overlay = null
 	_animating = false
 	game.new_game()
+	_play_deal_animation()
+
+func _get_stock_pos() -> Vector2:
+	return Vector2(_get_left_x() + (CARD_SIZE.x + _get_col_gap()) * 6.0, 16.0)
+
+func _play_deal_animation() -> void:
+	_animating = true
+
+	# Wait one frame so the Control has been laid out and size is valid
+	await get_tree().process_frame
+
+	# Collect the top (face-up) card of each tableau column
+	var top_entries: Array = []
+	if game and game.tableau and game.tableau.size() >= 7:
+		for col in range(7):
+			var pile = game.tableau[col]
+			if pile and not pile.is_empty():
+				var top_card = pile[-1]
+				if top_card and top_card.face_up:
+					top_entries.append({"col": col, "card": top_card, "idx": pile.size() - 1})
+	else:
+		print("Board._play_deal_animation: Tableau not ready, skipping deal animation")
+
+	# Temporarily flip top cards face-down so the initial render shows all face-down
+	for entry in top_entries:
+		entry.card.face_up = false
+
+	_last_render_frame = -1
+	render()
+
+	# Restore face-up state (ghosts will show the correct card face)
+	for entry in top_entries:
+		entry.card.face_up = true
+
+	var fly_origin = _get_stock_pos()
+	const STAGGER = 0.06
+	const FLY_DUR = 0.32
+
+	var ghosts: Array = []
+	var last_tween: Tween = null
+
+	for i in range(top_entries.size()):
+		var entry = top_entries[i]
+		var col: int = entry.col
+		var card = entry.card
+		var dest = _get_tableau_card_pos(col, entry.idx)
+
+		var ghost: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		ghost.card = card
+		ghost._refresh()
+		ghost.position = fly_origin
+		ghost.z_index = 2000 + i
+		ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(ghost)
+		ghosts.append(ghost)
+
+		var t = create_tween()
+		t.set_ease(Tween.EASE_OUT)
+		t.set_trans(Tween.TRANS_CUBIC)
+		if i > 0:
+			t.tween_interval(i * STAGGER)
+		t.tween_property(ghost, "position", dest, FLY_DUR)
+		last_tween = t
+
+	if last_tween != null:
+		await last_tween.finished
+
+	for ghost in ghosts:
+		if is_instance_valid(ghost):
+			ghost.queue_free()
+
+	_animating = false
 	render()
 
 func _on_stock_pressed() -> void:
@@ -349,7 +420,8 @@ func render() -> void:
 	# Update stock count label position
 	if is_instance_valid(_stock_count_label):
 		_stock_count_label.position = stock_pos + Vector2(0, CARD_SIZE.y + 4.0)
-		_stock_count_label.text = str(game.stock.size())
+		if game and game.stock:
+			_stock_count_label.text = str(game.stock.size())
 
 	# Draw foundation slots first (left side) - darker for visibility
 	for i in range(4):
@@ -359,15 +431,21 @@ func render() -> void:
 	_draw_slot(stock_pos)
 
 	# Draw foundations (left side)
-	for i in range(4):
-		_draw_foundation(game.foundations[i], Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y), i)
+	if game and game.foundations and game.foundations.size() >= 4:
+		for i in range(4):
+			_draw_foundation(game.foundations[i], Vector2(foundation_start_x + i * (CARD_SIZE.x + col_gap), piles_row_y), i)
+	else:
+		print("Board.render: Foundations not ready, skipping foundation rendering")
 	# Draw waste and stock (right side) - waste first (left), then stock (right)
 	_draw_waste(waste_pos)
 	_draw_stock(stock_pos)
 
 	for col in range(7):
 		var x = left_x + col * (CARD_SIZE.x + col_gap)
-		_draw_tableau_column(game.tableau[col], Vector2(x, tableau_y), tableau_h, col)
+		if game and game.tableau and game.tableau.size() > col:
+			_draw_tableau_column(game.tableau[col], Vector2(x, tableau_y), tableau_h, col)
+		else:
+			print("Board.render: Tableau column ", col, " not ready, skipping")
 
 func _on_test_button_pressed():
 	print("TEST BUTTON PRESSED! Mouse input works!")
@@ -445,6 +523,10 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 		center.add_child(icon)
 
 func _draw_stock(pos: Vector2) -> void:
+	if not game or not game.stock:
+		print("Board.render: Stock not ready, skipping stock rendering")
+		return
+		
 	if game.stock.is_empty():
 		# Empty stock — circular redo button centred in the slot
 		var recycle_btn = Button.new()
@@ -513,6 +595,10 @@ func _on_stock_pile_input(event: InputEvent) -> void:
 		_on_stock_pressed()
 
 func _draw_waste(pos: Vector2) -> void:
+	if not game or not game.waste:
+		print("Board.render: Waste not ready, skipping waste rendering")
+		return
+		
 	if game.waste.is_empty():
 		return
 	

@@ -346,6 +346,8 @@ func _handle_race_ended(data: Dictionary) -> void:
 	"""Handle race ended notification from host"""
 	var winner_id = data.winner_id
 	print("Received race ended notification - winner: ", winner_id)
+	if MultiplayerGameManager:
+		MultiplayerGameManager.receive_race_ended(data)
 
 func _handle_mirror_data(data: Dictionary) -> void:
 	"""Handle mirror mode data from host"""

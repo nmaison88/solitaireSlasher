@@ -195,9 +195,21 @@ func play_background_music() -> void:
 func stop_background_music() -> void:
 	if music_player and music_player.playing:
 		music_player.stop()
+		music_player.volume_db = -6.0  # Reset volume for next play
+
+func fade_out_background_music(duration: float = 0.6) -> void:
+	if not music_player or not music_player.playing:
+		return
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(music_player, "volume_db", -80.0, duration)
+	await tween.finished
+	music_player.stop()
+	music_player.volume_db = -6.0  # Reset volume for next play
 
 func play_game_start() -> void:
-	stop_background_music()
+	fade_out_background_music()
 	play_restart_deck()
 
 func _on_music_finished() -> void:

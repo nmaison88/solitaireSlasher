@@ -18,6 +18,7 @@ var _last_standing_notification: Panel
 # Sudoku-specific variables
 var _sudoku_game: SudokuGame
 var _sudoku_board: SudokuBoard
+var _sudoku_mirror_mode_enabled: bool = false  # Track if Sudoku mirror mode is active
 var _waiting_for_ready: bool = false
 
 # Spider Solitaire
@@ -1184,6 +1185,7 @@ func _circle_style(bg: Color, size: float) -> StyleBoxFlat:
 
 func _show_new_game_button():
 	# Remove existing game control buttons if any (immediate removal to prevent duplicates)
+	print("DEBUG: _show_new_game_button() called")
 	var buttons_to_remove = []
 	var labels_to_remove = []
 	for child in get_children():
@@ -1364,32 +1366,46 @@ func _setup_multiplayer_game() -> void:
 	if _current_game_type == "Sudoku":
 		_setup_multiplayer_sudoku()
 	else:  # Solitaire
-		var local_game = MultiplayerGameManager.get_local_game()
-		if local_game and is_instance_valid(local_game):
-			_game = local_game
-			_board.set_game(_game)
-			_board.set_multiplayer_manager(MultiplayerGameManager)
-			_board.render()
-			
-			# IMPORTANT: Recreate buttons AFTER is_multiplayer is set to true
-			# This ensures forfeit button is created instead of retry button
-			_show_new_game_button()
-			
-			# Setup multiplayer-specific UI
-			_setup_multiplayer_ui()
-			# Connect to multiplayer signals
-			if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
-				MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
-			if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
-				MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
-			if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
-				MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
-			if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
-				MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
-			if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
-				_game.card_moved.connect(_on_multiplayer_card_moved)
-			
-			print("Multiplayer Solitaire setup complete - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
+		# Always set up buttons and signals — game may not be ready yet (mirror-mode client
+		# is waiting for mirror data), but the UI and signal wiring must happen now.
+		_show_new_game_button()
+		_setup_multiplayer_ui()
+		if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
+			MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
+		if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
+			MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
+		if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
+			MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
+		if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
+			MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
+		# race_started fires when the game is fully ready (both initial round and new rounds)
+		if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_race_board_ready):
+			MultiplayerGameManager.race_started.connect(_on_multiplayer_race_board_ready)
+
+		# Wire the board immediately if the game is already available
+		_on_multiplayer_race_board_ready()
+		print("Multiplayer Solitaire setup initiated - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
+
+func _on_multiplayer_race_board_ready() -> void:
+	"""Called each time a multiplayer Solitaire game is ready (initial round + every new round).
+	Wires the board to the current local_game and resets round UI."""
+	var local_game = MultiplayerGameManager.get_local_game()
+	if not (local_game and is_instance_valid(local_game)):
+		return
+	_game = local_game
+	_board.set_game(_game)
+	_board.set_multiplayer_manager(MultiplayerGameManager)
+	if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
+		_game.card_moved.connect(_on_multiplayer_card_moved)
+	_board.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Re-enable forfeit button and reset status label for the new round
+	for child in get_children():
+		if child is Button and child.name == "new_game":
+			child.disabled = false
+			child.tooltip_text = "Forfeit (Mark as Jammed)"
+	if _player_status_label:
+		_player_status_label.text = "Race in progress..."
+	print("Multiplayer Solitaire board wired - new round ready")
 
 func _on_new_game_pressed() -> void:
 	# Play retry sound
@@ -1711,12 +1727,37 @@ func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void
 	if game_type == "Sudoku":
 		_setup_multiplayer_sudoku()
 	else:  # Solitaire
-		MultiplayerGameManager.start_local_game(difficulty)
+		# Check if mirror mode is enabled before starting new game
+		var mirror_mode_enabled = false
+		
+		# For host, use the stored setting (host doesn't receive its own broadcast)
+		if MultiplayerGameManager.network_manager.is_host:
+			mirror_mode_enabled = MultiplayerGameManager.mirror_mode_enabled
+			print("Main: Host using stored mirror mode setting: ", mirror_mode_enabled)
+		# For client, check received settings
+		elif NetworkManager.game_settings.has("mirror_mode"):
+			mirror_mode_enabled = NetworkManager.game_settings["mirror_mode"]
+			print("Main: Client using received mirror mode setting: ", mirror_mode_enabled)
+		
+		if not mirror_mode_enabled:
+			MultiplayerGameManager.start_local_game(difficulty)
+			print("Main: No mirror mode, started new local game")
+		else:
+			print("Main: Mirror mode enabled, skipping start_local_game()")
+		
 		_setup_multiplayer_game()
+
+func set_sudoku_mirror_mode(enabled: bool) -> void:
+	"""Set the Sudoku mirror mode flag to prevent double game creation"""
+	_sudoku_mirror_mode_enabled = enabled
+	print("Main: Sudoku mirror mode flag set to: ", enabled)
 
 func _setup_multiplayer_sudoku() -> void:
 	"""Setup multiplayer Sudoku game"""
 	print("Setting up multiplayer Sudoku...")
+	print("DEBUG: _sudoku_mirror_mode_enabled: ", _sudoku_mirror_mode_enabled)
+	print("DEBUG: _pending_mirror_data empty: ", MultiplayerGameManager._pending_mirror_data.is_empty())
+	print("DEBUG: is_host: ", MultiplayerGameManager.network_manager.is_host)
 	
 	# Set game type in MultiplayerGameManager
 	MultiplayerGameManager.current_game_type = "Sudoku"
@@ -1735,6 +1776,38 @@ func _setup_multiplayer_sudoku() -> void:
 			difficulty_level = 5
 	
 	# Start new Sudoku game
+	# Check if mirror mode is enabled and we need to wait for data
+	var mirror_mode_enabled = false
+	if NetworkManager.game_settings.has("mirror_mode"):
+		mirror_mode_enabled = NetworkManager.game_settings["mirror_mode"]
+	
+	# If mirror mode is already enabled (from receive_mirror_data), use the pending data
+	if _sudoku_mirror_mode_enabled and not MultiplayerGameManager._pending_mirror_data.is_empty():
+		print("Client: Using pending mirror data for Sudoku (flag set)")
+		print("DEBUG: Pending mirror data keys: ", MultiplayerGameManager._pending_mirror_data.keys())
+		var mirror_data = MultiplayerGameManager._pending_mirror_data.duplicate(true)  # Duplicate to prevent clearing issues
+		if mirror_data.has("puzzle"):
+			print("DEBUG: Mirror data has puzzle, using it")
+		else:
+			print("DEBUG: Mirror data missing puzzle key!")
+		# Clear pending data after duplicating
+		MultiplayerGameManager._pending_mirror_data.clear()
+		_sudoku_mirror_mode_enabled = false  # Reset flag
+		# Create game with mirror data
+		print("DEBUG: About to call _sudoku_game.new_game with mirror_data keys: ", mirror_data.keys())
+		_sudoku_game.new_game(difficulty_level, true, mirror_data)
+		_sudoku_board.set_game(_sudoku_game)
+		print("Sudoku game created with mirror data (flag path)")
+		print("Multiplayer Sudoku game setup complete (flag path)")
+		print("DEBUG: About to continue to common UI setup from flag path")
+		# Continue to common UI setup (don't return)
+	
+	if mirror_mode_enabled and MultiplayerGameManager._pending_mirror_data.is_empty() and not MultiplayerGameManager.network_manager.is_host:
+		# Client with mirror mode enabled but no data yet - wait for it
+		print("Client: Mirror mode enabled for Sudoku but no data yet, waiting...")
+		# Don't create game yet, wait for mirror data
+		return
+	
 	# Check if we have pending mirror data (client) or need to generate (host)
 	var mirror_data = {}
 	if not MultiplayerGameManager._pending_mirror_data.is_empty():
@@ -1744,17 +1817,32 @@ func _setup_multiplayer_sudoku() -> void:
 		MultiplayerGameManager._pending_mirror_data.clear()  # Clear after use
 	elif MultiplayerGameManager.network_manager.is_host:
 		# Host: generate game and send mirror data to clients
-		_sudoku_game.new_game(difficulty_level, true)
-		var host_mirror_data = _sudoku_game.get_mirror_data()
-		MultiplayerGameManager.network_manager.send_mirror_data(host_mirror_data)
-		print("Host: Generated Sudoku game and sent mirror data")
+		# Check if we already generated a puzzle (prevent double generation)
+		print("DEBUG: Host check - _sudoku_game: ", _sudoku_game)
+		if _sudoku_game:
+			print("DEBUG: Host check - puzzle size: ", _sudoku_game.puzzle.size())
+		else:
+			print("DEBUG: Host check - _sudoku_game is null")
+			
+		if _sudoku_game and _sudoku_game.puzzle.size() > 0:
+			print("Host: Sudoku puzzle already generated, skipping duplicate generation")
+		else:
+			print("Host: Generating new Sudoku puzzle for mirror mode")
+			_sudoku_game.new_game(difficulty_level, true)
+			var host_mirror_data = _sudoku_game.get_mirror_data()
+			MultiplayerGameManager.network_manager.send_mirror_data(host_mirror_data)
+			print("Host: Generated Sudoku game and sent mirror data")
 	else:
 		# Fallback: generate normally
 		print("Fallback: Generating Sudoku game normally")
 	
 	if mirror_data.is_empty():
 		# Normal game creation (host or fallback)
-		_sudoku_game.new_game(difficulty_level, true)
+		# But check if host already generated a puzzle for mirror mode
+		if MultiplayerGameManager.network_manager.is_host and _sudoku_game and _sudoku_game.puzzle.size() > 0:
+			print("Host: Puzzle already generated for mirror mode, skipping duplicate creation")
+		else:
+			_sudoku_game.new_game(difficulty_level, true)
 	else:
 		# Mirror mode game creation (client)
 		_sudoku_game.new_game(difficulty_level, true, mirror_data)
@@ -1786,6 +1874,10 @@ func _setup_multiplayer_sudoku() -> void:
 	_setup_multiplayer_ui()
 	
 	print("Multiplayer Sudoku game setup complete")
+	_status_label.text = "Puzzle Completed!"
+	if SoundManager:
+		SoundManager.play_win()
+	# TODO: Send completion to server for race tracking
 
 func _on_multiplayer_sudoku_completed() -> void:
 	"""Handle Sudoku completion in multiplayer"""
@@ -1859,6 +1951,7 @@ func _setup_multiplayer_ui() -> void:
 
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
+	print("DEBUG: _on_multiplayer_race_ended called - winner_id: ", winner_id, ", winner_name: ", winner_name)
 	# Disable all game interactions for both Solitaire and Sudoku
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _sudoku_board:
@@ -1937,7 +2030,7 @@ func _show_ready_notification(winner_id: int) -> void:
 
 func _on_player_status_changed(player_id: int, status: String) -> void:
 	"""Handle player status changes"""
-	print("Player ", player_id, " status changed to: ", status)
+	print("DEBUG: _on_player_status_changed called - Player ", player_id, " status changed to: ", status)
 	# Update UI to show player statuses
 	_update_player_status_display()
 
@@ -2010,32 +2103,29 @@ func _on_all_players_ready() -> void:
 	if _current_game_type == "Sudoku":
 		if _sudoku_board:
 			_sudoku_board.mouse_filter = Control.MOUSE_FILTER_STOP
-		# Setup new Sudoku game
+		
+		# Check if mirror mode is enabled for restart
+		var mirror_mode_enabled = false
+		if MultiplayerGameManager.network_manager.is_host:
+			mirror_mode_enabled = MultiplayerGameManager.mirror_mode_enabled
+			print("Main: Host restart using stored mirror mode setting: ", mirror_mode_enabled)
+		elif NetworkManager.game_settings.has("mirror_mode"):
+			mirror_mode_enabled = NetworkManager.game_settings["mirror_mode"]
+			print("Main: Client restart using received mirror mode setting: ", mirror_mode_enabled)
+		
+		if mirror_mode_enabled and not MultiplayerGameManager.network_manager.is_host:
+			# Client: Reset mirror mode state and wait for new data
+			_sudoku_mirror_mode_enabled = true
+			MultiplayerGameManager._pending_mirror_data.clear()
+			print("Main: Client reset mirror mode state for restart")
+		
+		# Setup new Sudoku game (this will handle mirror mode properly)
 		_setup_multiplayer_sudoku()
 	else:  # Solitaire
-		_board.mouse_filter = Control.MOUSE_FILTER_STOP
-		
-		# Start new Solitaire game (like Sudoku does)
-		MultiplayerGameManager.start_local_game(_current_difficulty)
-		var local_game = MultiplayerGameManager.get_local_game()
-		if local_game and is_instance_valid(local_game):
-			_game = local_game
-			_board.set_game(_game)
-			_board.render()
-			
-			# Reconnect card moved signal
-			if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
-				_game.card_moved.connect(_on_multiplayer_card_moved)
-	
-	# Re-enable game buttons
-	for child in get_children():
-		if child is Button and child.name == "new_game":
-			child.disabled = false
-			child.tooltip_text = "Forfeit (Mark as Jammed)"
-	
-	# Reset status label
-	if _player_status_label:
-		_player_status_label.text = "Race in progress..."
+		# Board re-enable and button/label reset happens in _on_multiplayer_race_board_ready()
+		# which fires when MultiplayerGameManager.race_started is emitted after _start_new_round()
+		# sets up the new game.  Nothing to do here except hide the notification (done above).
+		pass
 
 func _on_forfeit_pressed() -> void:
 	"""Handle forfeit button press in multiplayer"""
