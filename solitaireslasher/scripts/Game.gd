@@ -49,6 +49,41 @@ func new_game(seed: int = -1) -> void:
 	var deck = Deck.new_standard_deck()
 	Deck.shuffle(deck, _rng)
 
+	_setup_game_from_deck(deck)
+
+func new_game_mirror(mirror_data: Dictionary) -> void:
+	"""Create a game with predefined shuffled deck for mirror mode"""
+	print("Game: Creating mirror mode game from original deck")
+	
+	# Use seed from mirror data
+	_rng.randomize()
+	if mirror_data.has("seed"):
+		_rng.seed = mirror_data["seed"]
+	
+	# Recreate the original shuffled deck from mirror data
+	var deck = []
+	if mirror_data.has("deck"):
+		# Recreate cards in the exact order they were shuffled
+		for card_data in mirror_data["deck"]:
+			var card = SolitaireCard.new()
+			card.suit = card_data.suit
+			card.rank = card_data.rank
+			card.face_up = false  # All cards start face down
+			card.pile_id = -1  # Will be assigned during dealing
+			card.stock = false  # Will be assigned during dealing
+			deck.append(card)
+		print("Recreated deck with ", deck.size(), " cards for mirror mode")
+	else:
+		# Fallback: create and shuffle standard deck
+		deck = Deck.new_standard_deck()
+		Deck.shuffle(deck, _rng)
+		print("Fallback: Created standard shuffled deck")
+	
+	# Use the same dealing logic as normal new_game
+	_setup_game_from_deck(deck)
+
+func _setup_game_from_deck(deck: Array) -> void:
+	"""Setup game state from a deck of cards"""
 	foundations = [[], [], [], []]
 	tableau = [[], [], [], [], [], [], []]
 	stock = []
@@ -76,6 +111,47 @@ func new_game(seed: int = -1) -> void:
 			c.stock = true
 			stock.append(c)
 			idx += 1
+
+func get_mirror_data() -> Dictionary:
+	"""Get complete game state for mirror mode synchronization"""
+	var deck_data = []
+	
+	# Collect all cards from tableau
+	for pile_i in range(tableau.size()):
+		for card in tableau[pile_i]:
+			deck_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": card.face_up,
+				"pile_id": card.pile_id,
+				"stock": false
+			})
+	
+	# Collect stock cards
+	for card in stock:
+		deck_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": false,  # Stock cards are always face down
+			"pile_id": -1,  # Stock pile
+			"stock": true
+		})
+	
+	# Collect waste cards
+	for card in waste:
+		deck_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": card.face_up,
+			"pile_id": -2,  # Waste pile
+			"stock": false
+		})
+	
+	return {
+		"deck": deck_data,
+		"seed": _rng.seed,
+		"difficulty": difficulty
+	}
 
 func draw_from_stock_3() -> void:
 	# Save state before drawing

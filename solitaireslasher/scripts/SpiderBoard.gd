@@ -1,0 +1,675 @@
+extends Control
+class_name SpiderBoard
+
+signal game_won
+
+const CARD_SIZE       = Vector2(120, 160)
+const PILE_GAP_X      = 20.0
+const FACE_DOWN_GAP_Y = 22.0
+const FACE_UP_GAP_Y   = 55.0
+const TABLEAU_TOP_Y   = 180.0   # Header gap for stock deck (CARD_SIZE.y * 0.75 + margins = ~130px card + 50px padding)
+const STOCK_CARD_SCALE = 0.72   # Scale factor for the header deck cards
+
+const WIN_MESSAGES = [
+	"YOU WIN!", "NICE JOB!", "MAN YOU'RE GOOD!",
+	"GENIUS ALERT!", "ABSOLUTELY NAILED IT!",
+	"FLAWLESS VICTORY!", "DEAL ME AGAIN!",
+	"SOLITAIRE LEGEND!", "CARD SHARK!",
+]
+
+var _game: SpiderGame = null
+var _animating: bool = false
+var _animation_duration: float = 0.28
+var _drop_zones: Dictionary = {}       # col_index(int) -> ColorRect
+var _dragged_card_view: CardView = null
+var _dragged_cards: Array = []         # Array[SolitaireCard]
+var _dragged_card_views: Array = []    # Array[CardView]
+var _dragged_card_offsets: Dictionary = {}
+var _win_overlay: Control = null
+var _last_render_frame: int = -1
+var _undo_btn: Button = null
+var _redo_btn: Button = null
+
+# ── Layout helpers ─────────────────────────────────────────────────────────────
+
+func _get_col_gap() -> float:
+	var margin_x = 12.0
+	var max_gap = (size.x - 2.0 * margin_x - 7.0 * CARD_SIZE.x) / 6.0
+	return clampf(max_gap, 6.0, PILE_GAP_X)
+
+func _get_left_x() -> float:
+	var margin_x = 12.0
+	var col_gap = _get_col_gap()
+	var total_w = 7.0 * CARD_SIZE.x + 6.0 * col_gap
+	var available_w = maxf(0.0, size.x - 2.0 * margin_x)
+	return margin_x + maxf(0.0, (available_w - total_w) * 0.5)
+
+func _get_col_x(col: int) -> float:
+	return _get_left_x() + col * (CARD_SIZE.x + _get_col_gap())
+
+func _get_card_y(col: int, card_idx: int) -> float:
+	var y = TABLEAU_TOP_Y
+	if _game == null:
+		return y
+	var pile: Array = _game.tableaus[col]
+	for i in range(card_idx):
+		if i < pile.size():
+			y += FACE_DOWN_GAP_Y if not (pile[i] as SolitaireCard).face_up else FACE_UP_GAP_Y
+	return y
+
+func _get_card_pos(col: int, card_idx: int) -> Vector2:
+	return Vector2(_get_col_x(col), _get_card_y(col, card_idx))
+
+func _stock_pos() -> Vector2:
+	# Top-right in the header gap. Card height at STOCK_CARD_SCALE ≈ 115px, fitting within 180px gap.
+	var scaled_w = CARD_SIZE.x * STOCK_CARD_SCALE
+	return Vector2(size.x - scaled_w - 12.0, 16.0)
+
+# ── Lifecycle ──────────────────────────────────────────────────────────────────
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_PASS
+	resized.connect(render)
+
+func _process(_delta: float) -> void:
+	if _dragged_card_view == null or _dragged_card_views.is_empty():
+		return
+	for cv in _dragged_card_views:
+		if cv == _dragged_card_view:
+			continue
+		if not is_instance_valid(cv):
+			continue
+		var offset: Vector2 = _dragged_card_offsets.get(cv, Vector2.ZERO)
+		cv.global_position = _dragged_card_view.global_position + offset
+
+# ── Public API ─────────────────────────────────────────────────────────────────
+
+func new_game(difficulty_string: String = "Easy") -> void:
+	if is_instance_valid(_win_overlay):
+		_win_overlay.queue_free()
+		_win_overlay = null
+	_animating = false
+	_undo_btn = null
+	_redo_btn = null
+
+	if _game == null:
+		_game = SpiderGame.new()
+		add_child(_game)
+		_game.game_won.connect(_on_game_won)
+
+	_game.new_game(difficulty_string)
+	render()
+
+func _on_game_won() -> void:
+	game_won.emit()
+	_show_win_screen()
+
+# ── Render ─────────────────────────────────────────────────────────────────────
+
+func render() -> void:
+	if _game == null:
+		return
+	var frame = Engine.get_frames_drawn()
+	if frame == _last_render_frame:
+		return
+	_last_render_frame = frame
+
+	# Clear children (keep win overlay, game node, undo/redo buttons)
+	for child in get_children():
+		if child == _win_overlay or child == _game:
+			continue
+		if child == _undo_btn or child == _redo_btn:
+			continue
+		if child.has_meta("_undo_ghost"):
+			continue
+		if is_instance_valid(child) and not child.is_queued_for_deletion():
+			child.queue_free()
+
+	_drop_zones.clear()
+
+	# Column slots and cards
+	for col in range(SpiderGame.TABLEAU_COUNT):
+		_draw_column_slot(Vector2(_get_col_x(col), TABLEAU_TOP_Y))
+		_draw_column(col)
+
+	# Stock deck (top-right)
+	_draw_stock_deck()
+
+	# Undo / Redo buttons (created once, kept across renders)
+	if _undo_btn == null:
+		_create_undo_redo_buttons()
+
+	_update_undo_redo_state()
+
+func _draw_column_slot(pos: Vector2) -> void:
+	var panel = Panel.new()
+	panel.position = pos
+	panel.size = CARD_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
+	style.border_width_left   = 2
+	style.border_width_right  = 2
+	style.border_width_top    = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(1.0, 1.0, 1.0, 0.22)
+	style.corner_radius_top_left     = 10
+	style.corner_radius_top_right    = 10
+	style.corner_radius_bottom_left  = 10
+	style.corner_radius_bottom_right = 10
+	panel.add_theme_stylebox_override("panel", style)
+	add_child(panel)
+
+func _draw_column(col: int) -> void:
+	# Drop zone covers the entire column height
+	var dz = ColorRect.new()
+	dz.color = Color(0.0, 1.0, 0.0, 0.0)
+	dz.position = Vector2(_get_col_x(col), TABLEAU_TOP_Y)
+	dz.size = Vector2(CARD_SIZE.x, 900.0)
+	dz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_drop_zones[col] = dz
+	add_child(dz)
+
+	var pile: Array = _game.tableaus[col]
+	for i in range(pile.size()):
+		var card = pile[i] as SolitaireCard
+		var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		cv.card = card
+		cv._refresh()
+		cv.position = _get_card_pos(col, i)
+		if card.face_up:
+			cv.card_clicked.connect(_on_card_clicked)
+			cv.card_drag_started.connect(_on_card_drag_started)
+			cv.card_drag_ended.connect(_on_card_drag_ended)
+			cv.card_drag_moved.connect(_on_card_drag_moved)
+			cv.move_to_front()
+		add_child(cv)
+
+func _draw_stock_deck() -> void:
+	var stock_count = _game.stock.size()
+	if stock_count == 0:
+		return
+
+	# Number of deals remaining (ceil, since a partial stock still = 1 deal)
+	var deals_remaining = int(ceil(stock_count / float(SpiderGame.TABLEAU_COUNT)))
+	var visible_cards = clampi(deals_remaining, 0, 5)  # Cap visual stack at 5
+
+	var base_pos = _stock_pos()
+	var scaled_size = CARD_SIZE * STOCK_CARD_SCALE
+	const STACK_OFFSET_Y = 5.0
+	const STACK_OFFSET_X = 1.5
+
+	for i in range(visible_cards):
+		var offset = Vector2(i * STACK_OFFSET_X, i * STACK_OFFSET_Y)
+		var is_top = (i == visible_cards - 1)
+
+		var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		var dummy = SolitaireCard.new()
+		dummy.face_up = false
+		dummy.stock = true
+		cv.card = dummy
+		cv._refresh()
+		cv.position = base_pos + offset
+		cv.scale = Vector2(STOCK_CARD_SCALE, STOCK_CARD_SCALE)
+		cv.z_index = i + 1
+
+		if is_top:
+			cv.mouse_filter = Control.MOUSE_FILTER_STOP
+			cv.gui_input.connect(func(event: InputEvent) -> void:
+				if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+					_on_stock_pressed()
+					get_viewport().set_input_as_handled()
+				elif event is InputEventScreenTouch and event.pressed:
+					_on_stock_pressed()
+					get_viewport().set_input_as_handled()
+			)
+		else:
+			cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		add_child(cv)
+
+	# Deal count label below the deck
+	var lbl = Label.new()
+	var draws_left = int(ceil(_game.stock.size() / float(SpiderGame.TABLEAU_COUNT)))
+	lbl.text = "%d deal%s left" % [draws_left, "s" if draws_left != 1 else ""]
+	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.modulate.a = 0.75
+	lbl.position = Vector2(_stock_pos().x, 16.0 + scaled_size.y + visible_cards * STACK_OFFSET_Y + 6.0)
+	add_child(lbl)
+
+# ── Undo / Redo buttons ────────────────────────────────────────────────────────
+
+func _circle_style(color: Color, radius: float) -> StyleBoxFlat:
+	var s = StyleBoxFlat.new()
+	s.bg_color = color
+	var r = radius / 2.0
+	s.corner_radius_top_left     = r
+	s.corner_radius_top_right    = r
+	s.corner_radius_bottom_left  = r
+	s.corner_radius_bottom_right = r
+	return s
+
+func _create_undo_redo_buttons() -> void:
+	var btn_size = 100.0
+	var bottom_offset = -160.0  # px up from bottom of SpiderBoard
+
+	# ── Undo ──
+	var undo_btn = Button.new()
+	undo_btn.name = "spider_undo"
+	undo_btn.anchor_left   = 0.0
+	undo_btn.anchor_right  = 0.0
+	undo_btn.anchor_top    = 1.0
+	undo_btn.anchor_bottom = 1.0
+	undo_btn.offset_left   = 12.0
+	undo_btn.offset_right  = 12.0 + btn_size
+	undo_btn.offset_top    = bottom_offset
+	undo_btn.offset_bottom = bottom_offset + btn_size
+	undo_btn.pivot_offset  = Vector2(btn_size * 0.5, btn_size * 0.5)
+	undo_btn.tooltip_text  = "Undo"
+	undo_btn.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), btn_size))
+	undo_btn.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.55), btn_size))
+	undo_btn.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), btn_size))
+	undo_btn.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), btn_size))
+
+	var undo_vbox = VBoxContainer.new()
+	undo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	undo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	undo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_btn.add_child(undo_vbox)
+
+	var undo_icon = FontAwesome.new()
+	undo_icon.icon_name = "rotate-left"
+	undo_icon.icon_type = "solid"
+	undo_icon.icon_size = 52
+	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_vbox.add_child(undo_icon)
+
+	var undo_lbl = Label.new()
+	undo_lbl.text = "Undo"
+	undo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	undo_lbl.add_theme_font_size_override("font_size", 17)
+	undo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	undo_vbox.add_child(undo_lbl)
+
+	var _undo_tween: Tween = null
+	undo_btn.button_down.connect(func() -> void:
+		if undo_btn.disabled: return
+		if _undo_tween and _undo_tween.is_valid(): _undo_tween.kill()
+		_undo_tween = undo_btn.create_tween()
+		_undo_tween.set_ease(Tween.EASE_OUT)
+		_undo_tween.set_trans(Tween.TRANS_CUBIC)
+		_undo_tween.tween_property(undo_btn, "scale", Vector2(0.88, 0.88), 0.08)
+	)
+	undo_btn.button_up.connect(func() -> void:
+		if _undo_tween and _undo_tween.is_valid(): _undo_tween.kill()
+		_undo_tween = undo_btn.create_tween()
+		_undo_tween.set_ease(Tween.EASE_OUT)
+		_undo_tween.set_trans(Tween.TRANS_BACK)
+		_undo_tween.tween_property(undo_btn, "scale", Vector2(1.0, 1.0), 0.22)
+	)
+	undo_btn.pressed.connect(_on_undo_pressed)
+	add_child(undo_btn)
+	_undo_btn = undo_btn
+
+	# ── Redo ──
+	var redo_btn = Button.new()
+	redo_btn.name = "spider_redo"
+	redo_btn.anchor_left   = 0.0
+	redo_btn.anchor_right  = 0.0
+	redo_btn.anchor_top    = 1.0
+	redo_btn.anchor_bottom = 1.0
+	redo_btn.offset_left   = 12.0 + btn_size + 16.0
+	redo_btn.offset_right  = 12.0 + btn_size + 16.0 + btn_size
+	redo_btn.offset_top    = bottom_offset
+	redo_btn.offset_bottom = bottom_offset + btn_size
+	redo_btn.pivot_offset  = Vector2(btn_size * 0.5, btn_size * 0.5)
+	redo_btn.tooltip_text  = "Redo"
+	redo_btn.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), btn_size))
+	redo_btn.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.55), btn_size))
+	redo_btn.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), btn_size))
+	redo_btn.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), btn_size))
+
+	var redo_vbox = VBoxContainer.new()
+	redo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	redo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	redo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	redo_btn.add_child(redo_vbox)
+
+	var redo_icon = FontAwesome.new()
+	redo_icon.icon_name = "rotate-right"
+	redo_icon.icon_type = "solid"
+	redo_icon.icon_size = 52
+	redo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	redo_vbox.add_child(redo_icon)
+
+	var redo_lbl = Label.new()
+	redo_lbl.text = "Redo"
+	redo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	redo_lbl.add_theme_font_size_override("font_size", 17)
+	redo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	redo_vbox.add_child(redo_lbl)
+
+	var _redo_tween: Tween = null
+	redo_btn.button_down.connect(func() -> void:
+		if redo_btn.disabled: return
+		if _redo_tween and _redo_tween.is_valid(): _redo_tween.kill()
+		_redo_tween = redo_btn.create_tween()
+		_redo_tween.set_ease(Tween.EASE_OUT)
+		_redo_tween.set_trans(Tween.TRANS_CUBIC)
+		_redo_tween.tween_property(redo_btn, "scale", Vector2(0.88, 0.88), 0.08)
+	)
+	redo_btn.button_up.connect(func() -> void:
+		if _redo_tween and _redo_tween.is_valid(): _redo_tween.kill()
+		_redo_tween = redo_btn.create_tween()
+		_redo_tween.set_ease(Tween.EASE_OUT)
+		_redo_tween.set_trans(Tween.TRANS_BACK)
+		_redo_tween.tween_property(redo_btn, "scale", Vector2(1.0, 1.0), 0.22)
+	)
+	redo_btn.pressed.connect(_on_redo_pressed)
+	add_child(redo_btn)
+	_redo_btn = redo_btn
+
+func _update_undo_redo_state() -> void:
+	if _game == null:
+		return
+	if is_instance_valid(_undo_btn):
+		var can = _game.can_undo()
+		_undo_btn.disabled = not can
+		_undo_btn.modulate.a = 1.0 if can else 0.38
+		if not can:
+			_undo_btn.scale = Vector2(1.0, 1.0)
+	if is_instance_valid(_redo_btn):
+		var can = _game.can_redo()
+		_redo_btn.disabled = not can
+		_redo_btn.modulate.a = 1.0 if can else 0.38
+		if not can:
+			_redo_btn.scale = Vector2(1.0, 1.0)
+
+# ── Stock dealing ──────────────────────────────────────────────────────────────
+
+func _on_stock_pressed() -> void:
+	if _animating:
+		return
+	_animating = true
+	var success = _game.deal_from_stock()
+	_animating = false
+	if success:
+		render()
+
+func _on_undo_pressed() -> void:
+	if _animating or not _game.can_undo():
+		return
+	_game.undo()
+	render()
+
+func _on_redo_pressed() -> void:
+	if _animating or not _game.can_redo():
+		return
+	_game.redo()
+	render()
+
+# ── Click to move ──────────────────────────────────────────────────────────────
+
+func _on_card_clicked(card_view: CardView) -> void:
+	if _animating:
+		return
+	var card = card_view.card
+	if card == null or not card.face_up:
+		return
+
+	var src_col = -1
+	var card_idx = -1
+	for c in range(SpiderGame.TABLEAU_COUNT):
+		var idx = _game.tableaus[c].find(card)
+		if idx != -1:
+			src_col = c
+			card_idx = idx
+			break
+
+	if src_col == -1:
+		return
+	if not _game.can_move_from(src_col, card_idx):
+		return
+
+	var dest_col = -1
+	for dc in range(SpiderGame.TABLEAU_COUNT):
+		if dc != src_col and _game.can_place_on(card, dc):
+			dest_col = dc
+			break
+
+	if dest_col == -1:
+		return
+
+	_animating = true
+
+	var card_to_flip: SolitaireCard = null
+	if card_idx > 0:
+		var below = _game.tableaus[src_col][card_idx - 1] as SolitaireCard
+		if not below.face_up:
+			card_to_flip = below
+
+	var stack_cards = _game.tableaus[src_col].slice(card_idx)
+	var stack_views: Array = []
+	for child in get_children():
+		if child is CardView and stack_cards.has(child.card):
+			stack_views.append(child)
+
+	var card_count = stack_cards.size()
+	_game.move_cards(src_col, card_idx, dest_col)
+
+	var dest_start = _game.tableaus[dest_col].size() - card_count
+	for sv in stack_views:
+		if is_instance_valid(sv):
+			sv.z_index = 500
+
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.set_parallel(true)
+	for k in range(stack_views.size()):
+		var sv = stack_views[k]
+		if is_instance_valid(sv):
+			tween.tween_property(sv, "position", _get_card_pos(dest_col, dest_start + k), _animation_duration)
+	await tween.finished
+
+	if card_to_flip != null:
+		for child in get_children():
+			if child is CardView and child.card == card_to_flip:
+				await _animate_card_flip(child)
+				break
+
+	_animating = false
+	render()
+
+# ── Drag to move ───────────────────────────────────────────────────────────────
+
+func _on_card_drag_started(card_view: CardView) -> void:
+	var card = card_view.card
+	if card == null or not card.face_up:
+		return
+
+	var src_col = -1
+	var card_idx = -1
+	for c in range(SpiderGame.TABLEAU_COUNT):
+		var idx = _game.tableaus[c].find(card)
+		if idx != -1:
+			src_col = c
+			card_idx = idx
+			break
+
+	if src_col == -1 or not _game.can_move_from(src_col, card_idx):
+		return
+
+	_dragged_card_view = card_view
+	_dragged_cards = _game.tableaus[src_col].slice(card_idx)
+
+	var all_views: Array = []
+	for child in get_children():
+		if child is CardView and _dragged_cards.has(child.card):
+			all_views.append(child)
+
+	_dragged_card_views = all_views
+	_dragged_card_offsets.clear()
+	var base_global = card_view.global_position
+	for cv in all_views:
+		if cv != card_view:
+			_dragged_card_offsets[cv] = cv.global_position - base_global
+
+	for cv in _dragged_card_views:
+		if is_instance_valid(cv):
+			cv.z_index = card_view.z_index_when_dragging
+
+func _on_card_drag_moved(_card_view: CardView, _pos: Vector2) -> void:
+	pass  # Multi-card stack handled in _process
+
+func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
+	if _dragged_card_view != card_view or _dragged_cards.is_empty():
+		return
+
+	var src_col = -1
+	var card_idx = -1
+	var top_drag_card = _dragged_cards[0] as SolitaireCard
+	for c in range(SpiderGame.TABLEAU_COUNT):
+		var idx = _game.tableaus[c].find(top_drag_card)
+		if idx != -1:
+			src_col = c
+			card_idx = idx
+			break
+
+	var card_to_flip: SolitaireCard = null
+	if src_col != -1 and card_idx > 0:
+		var below = _game.tableaus[src_col][card_idx - 1] as SolitaireCard
+		if not below.face_up:
+			card_to_flip = below
+
+	var dest_col = _get_drop_zone_at_position(target_position)
+	var moved = false
+
+	if dest_col != -1 and src_col != -1 and dest_col != src_col:
+		if _game.can_place_on(top_drag_card, dest_col) and _game.can_move_from(src_col, card_idx):
+			var card_count = _dragged_cards.size()
+			_game.move_cards(src_col, card_idx, dest_col)
+			moved = true
+
+			var dest_start = _game.tableaus[dest_col].size() - card_count
+			var tween = create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.set_trans(Tween.TRANS_CUBIC)
+			tween.set_parallel(true)
+			for k in range(_dragged_card_views.size()):
+				var sv = _dragged_card_views[k]
+				if is_instance_valid(sv):
+					tween.tween_property(sv, "position", _get_card_pos(dest_col, dest_start + k), _animation_duration)
+			await tween.finished
+
+			if card_to_flip != null:
+				for child in get_children():
+					if child is CardView and child.card == card_to_flip:
+						await _animate_card_flip(child)
+						break
+
+	if not moved:
+		var snap_tween = create_tween()
+		snap_tween.set_ease(Tween.EASE_OUT)
+		snap_tween.set_trans(Tween.TRANS_BACK)
+		snap_tween.set_parallel(true)
+		for cv in _dragged_card_views:
+			if is_instance_valid(cv):
+				var target_pos: Vector2
+				if cv == card_view:
+					target_pos = card_view.original_position
+				else:
+					target_pos = card_view.original_position + _dragged_card_offsets.get(cv, Vector2.ZERO)
+				snap_tween.tween_property(cv, "global_position", target_pos, 0.25)
+		await snap_tween.finished
+
+	for cv in _dragged_card_views:
+		if is_instance_valid(cv):
+			cv.z_index = 0
+	_dragged_card_view = null
+	_dragged_cards.clear()
+	_dragged_card_views.clear()
+	_dragged_card_offsets.clear()
+	render()
+
+func _get_drop_zone_at_position(pos: Vector2) -> int:
+	for col in _drop_zones.keys():
+		var zone: ColorRect = _drop_zones[col]
+		if Rect2(zone.global_position, zone.size).has_point(pos):
+			return col
+	return -1
+
+# ── Animations ─────────────────────────────────────────────────────────────────
+
+func _animate_card_flip(card_view: CardView) -> void:
+	card_view.pivot_offset = card_view.size * 0.5
+	var t1 = create_tween()
+	t1.set_ease(Tween.EASE_IN)
+	t1.set_trans(Tween.TRANS_QUAD)
+	t1.tween_property(card_view, "scale:x", 0.0, 0.1)
+	await t1.finished
+	card_view._refresh()
+	var t2 = create_tween()
+	t2.set_ease(Tween.EASE_OUT)
+	t2.set_trans(Tween.TRANS_QUAD)
+	t2.tween_property(card_view, "scale:x", 1.0, 0.1)
+	await t2.finished
+	card_view.pivot_offset = Vector2.ZERO
+
+# ── Win screen ─────────────────────────────────────────────────────────────────
+
+func _show_win_screen() -> void:
+	if is_instance_valid(_win_overlay):
+		return
+
+	var overlay = Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 10000
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_win_overlay = overlay
+	add_child(overlay)
+
+	var bg = ColorRect.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.0, 0.05, 0.15, 0.88)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(bg)
+
+	var msg_label = Label.new()
+	msg_label.text = WIN_MESSAGES[randi() % WIN_MESSAGES.size()]
+	msg_label.add_theme_font_size_override("font_size", 52)
+	msg_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+	msg_label.set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER)
+	overlay.add_child(msg_label)
+
+	var play_btn = Button.new()
+	play_btn.text = "Play Again"
+	play_btn.add_theme_font_size_override("font_size", 28)
+	play_btn.custom_minimum_size = Vector2(240, 70)
+	play_btn.pressed.connect(_restart_game)
+	overlay.add_child(play_btn)
+
+	await get_tree().process_frame
+	msg_label.position = Vector2((size.x - msg_label.size.x) * 0.5, size.y * 0.35)
+	msg_label.pivot_offset = msg_label.size * 0.5
+	play_btn.position = Vector2((size.x - 240.0) * 0.5, size.y * 0.55)
+
+	overlay.modulate.a = 0.0
+	var fade = create_tween()
+	fade.tween_property(overlay, "modulate:a", 1.0, 0.4)
+
+	msg_label.scale = Vector2(0.3, 0.3)
+	var bounce = msg_label.create_tween()
+	bounce.set_ease(Tween.EASE_OUT)
+	bounce.set_trans(Tween.TRANS_BACK)
+	bounce.tween_property(msg_label, "scale", Vector2(1.0, 1.0), 0.55)
+
+func _restart_game() -> void:
+	if is_instance_valid(_win_overlay):
+		_win_overlay.queue_free()
+		_win_overlay = null
+	_animating = false
+	_undo_btn = null
+	_redo_btn = null
+	_game.new_game(_game._difficulty)
+	render()

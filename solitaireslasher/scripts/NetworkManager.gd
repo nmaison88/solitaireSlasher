@@ -16,6 +16,7 @@ var is_host: bool = false
 var players: Dictionary = {}
 var local_player_id: int = 1
 var game_session_active: bool = false
+var game_settings: Dictionary = {}  # Store current game settings
 var broadcast_timer: Timer
 var discovery_server: UDPServer
 var custom_port: int = DEFAULT_PORT  # Can be overridden via command line (for hosting)
@@ -31,7 +32,8 @@ enum MessageType {
 	PLAYER_STATUS,
 	PLAYER_READY,
 	GAME_SETTINGS,
-	RACE_ENDED
+	RACE_ENDED,
+	MIRROR_DATA
 }
 
 func _ready() -> void:
@@ -225,6 +227,16 @@ func broadcast_race_ended(winner_id: int) -> void:
 		"winner_id": winner_id
 	})
 
+func send_mirror_data(mirror_data: Dictionary) -> void:
+	"""Send mirror mode data to clients"""
+	if not game_session_active:
+		print("NetworkManager: Cannot send mirror data - game session not active")
+		return
+	
+	print("NetworkManager: Sending mirror data: ", mirror_data.keys())
+	_broadcast_message(MessageType.MIRROR_DATA, mirror_data)
+	print("NetworkManager: Mirror data broadcast sent")
+
 func _broadcast_message(message_type: MessageType, data: Dictionary) -> void:
 	var message = {
 		"type": message_type,
@@ -236,16 +248,15 @@ func _broadcast_message(message_type: MessageType, data: Dictionary) -> void:
 @rpc("any_peer", "reliable")
 func receive_message(message: Dictionary) -> void:
 	var sender_id = multiplayer.get_remote_sender_id()
+	var message_type = message.get("type", -1)
+	var data = message.get("data", {})
 	
-	print("DEBUG: receive_message - sender_id: ", sender_id, ", is_host: ", is_host, ", message_type: ", message.type)
+	print("DEBUG: receive_message - sender_id: ", sender_id, ", is_host: ", is_host, ", message_type: ", message_type)
 	
 	# Host shouldn't process its own broadcast messages
 	if is_host and sender_id == 1:
 		print("DEBUG: Host ignoring own message")
 		return
-	
-	var message_type = message.type
-	var data = message.data
 	
 	match message_type:
 		MessageType.PLAYER_JOIN:
@@ -266,10 +277,14 @@ func receive_message(message: Dictionary) -> void:
 			_handle_player_ready(data)
 		MessageType.RACE_ENDED:
 			_handle_race_ended(data)
+		MessageType.MIRROR_DATA:
+			_handle_mirror_data(data)
+		_:
+			print("Unknown message type: ", message_type)
 
 func _handle_player_join(data: Dictionary) -> void:
-	var player_id = data.player_id
-	var player_name = data.player_name
+	var player_id = data.get("player_id", -1)
+	var player_name = data.get("player_name", "")
 	
 	players[player_id] = {
 		"name": player_name,
@@ -287,6 +302,7 @@ func _handle_player_leave(data: Dictionary) -> void:
 
 func _handle_game_settings(data: Dictionary) -> void:
 	print("Received game settings from host: ", data)
+	game_settings = data  # Store the game settings
 	game_settings_received.emit(data)
 
 func _handle_game_start(data: Dictionary) -> void:
@@ -330,10 +346,14 @@ func _handle_race_ended(data: Dictionary) -> void:
 	"""Handle race ended notification from host"""
 	var winner_id = data.winner_id
 	print("Received race ended notification - winner: ", winner_id)
-	
-	# Forward to MultiplayerGameManager to trigger ready screen
+
+func _handle_mirror_data(data: Dictionary) -> void:
+	"""Handle mirror mode data from host"""
+	print("NetworkManager: Received mirror data from host: ", data.keys())
 	if MultiplayerGameManager:
-		MultiplayerGameManager._end_multiplayer_race(winner_id)
+		MultiplayerGameManager.receive_mirror_data(data)
+	else:
+		print("NetworkManager: MultiplayerGameManager not available")
 
 func _on_peer_connected(id: int) -> void:
 	print("✓ Peer connected: ", id)

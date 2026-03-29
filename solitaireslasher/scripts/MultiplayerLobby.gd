@@ -20,6 +20,7 @@ var public_ip_label: Label
 var port_forward_label: Label
 var selected_game_type: String = "Solitaire"
 var selected_difficulty: String = "Medium"
+var mirror_mode_enabled: bool = false
 var qr_node: QR
 var qr_texture_rect: TextureRect
 var scan_button: Button
@@ -191,6 +192,7 @@ func _reset_lobby_state() -> void:
 	# Reset selected values to defaults
 	selected_game_type = "Solitaire"
 	selected_difficulty = "Medium"
+	mirror_mode_enabled = false
 	
 	# Clear any existing IP info containers
 	var existing_ip_info = get_node_or_null("IPInfoContainer")
@@ -270,6 +272,58 @@ func _create_game_settings_display() -> void:
 	hard_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	slider_row.add_child(hard_lbl)
 	settings_container.add_child(slider_row)
+
+	# Mirror Mode — radio button
+	var mirror_row = HBoxContainer.new()
+	mirror_row.add_theme_constant_override("separation", 16)
+	var mirror_checkbox = CheckBox.new()
+	mirror_checkbox.name = "MirrorModeCheckbox"
+	mirror_checkbox.text = "Mirror Mode"
+	mirror_checkbox.button_pressed = mirror_mode_enabled
+	# Make checkbox bigger
+	mirror_checkbox.add_theme_font_size_override("font_size", 32)
+	mirror_checkbox.custom_minimum_size = Vector2(300, 50)
+	# Make the checkmark bigger for iPhone
+	var checkbox_style = StyleBoxFlat.new()
+	checkbox_style.bg_color = Color(0.2, 0.2, 0.2, 0.8)
+	checkbox_style.border_width_left = 3
+	checkbox_style.border_width_right = 3
+	checkbox_style.border_width_top = 3
+	checkbox_style.border_width_bottom = 3
+	checkbox_style.border_color = Color(1.0, 1.0, 1.0, 0.8)
+	checkbox_style.corner_radius_top_left = 8
+	checkbox_style.corner_radius_top_right = 8
+	checkbox_style.corner_radius_bottom_left = 8
+	checkbox_style.corner_radius_bottom_right = 8
+	mirror_checkbox.add_theme_stylebox_override("normal", checkbox_style)
+	
+	# Add pressed state styling
+	var pressed_style = checkbox_style.duplicate()
+	pressed_style.bg_color = Color(0.3, 0.3, 0.3, 0.9)
+	mirror_checkbox.add_theme_stylebox_override("pressed", pressed_style)
+	
+	# Make the checkmark icon larger
+	mirror_checkbox.add_theme_constant_override("h_separation", 16)
+	mirror_checkbox.add_theme_constant_override("v_separation", 8)
+	mirror_checkbox.toggled.connect(func(toggled_on: bool) -> void:
+		mirror_mode_enabled = toggled_on
+		print("Mirror mode " + ("enabled" if toggled_on else "disabled"))
+		# Update the stored setting in MultiplayerGameManager
+		if MultiplayerGameManager:
+			MultiplayerGameManager.mirror_mode_enabled = toggled_on
+			print("Updated MultiplayerGameManager mirror mode: ", toggled_on)
+	)
+	mirror_row.add_child(mirror_checkbox)
+	settings_container.add_child(mirror_row)
+
+	# Add mirror mode explanation
+	var mirror_explanation = Label.new()
+	mirror_explanation.text = "Players compete with identical puzzles/card layouts"
+	mirror_explanation.add_theme_font_size_override("font_size", 20)
+	mirror_explanation.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.9))  # Light gray for subtle text
+	mirror_explanation.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mirror_explanation.modulate = Color(1.0, 1.0, 1.0, 0.8)  # Slightly transparent
+	settings_container.add_child(mirror_explanation)
 
 	diff_slider.value_changed.connect(func(val: float) -> void:
 		var idx = int(val)
@@ -367,6 +421,15 @@ func setup_as_host(player_name: String) -> void:
 	
 	print("Hosting multiplayer game for: ", selected_game_type)
 	
+	# Initialize MultiplayerGameManager for multiplayer
+	if MultiplayerGameManager.host_multiplayer_game(player_name):
+		print("MultiplayerGameManager initialized for hosting")
+		# Store mirror mode setting in MultiplayerGameManager
+		MultiplayerGameManager.mirror_mode_enabled = mirror_mode_enabled
+		print("Stored mirror mode setting in MultiplayerGameManager: ", mirror_mode_enabled)
+	else:
+		print("Failed to initialize MultiplayerGameManager for hosting")
+	
 	# Create professional game settings display
 	_create_game_settings_display()
 	
@@ -400,6 +463,11 @@ func setup_as_client(player_name: String) -> void:
 		selected_game_type = main_scene._current_game_type
 	
 	print("Joining multiplayer game for: ", selected_game_type)
+	
+	# Initialize MultiplayerGameManager for multiplayer (but don't connect yet)
+	# The connection happens when the client actually joins via IP or QR
+	MultiplayerGameManager.is_multiplayer = true
+	print("MultiplayerGameManager initialized for joining")
 	
 	selected_difficulty = "Medium"
 	
@@ -488,15 +556,26 @@ func _on_join_pressed() -> void:
 	else:
 		status_label.text = "Failed to connect to " + host_ip
 
+func get_mirror_mode() -> bool:
+	"""Get the current mirror mode setting"""
+	return mirror_mode_enabled
+
 func _on_start_pressed() -> void:
 	if is_host:
 		print("DEBUG: Host start button pressed")
-		# Pass game settings to start_race so they can be broadcast to clients
-		var game_settings = {
-			"game_type": selected_game_type,
-			"difficulty": selected_difficulty
-		}
-		NetworkManager.start_race(game_settings)
+		# Debug check
+		print("DEBUG: MultiplayerGameManager.is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
+		print("DEBUG: MultiplayerGameManager.network_manager.is_host: ", MultiplayerGameManager.network_manager.is_host)
+		print("DEBUG: selected_game_type: ", selected_game_type)
+		print("DEBUG: current_game_type in MultiplayerGameManager: ", MultiplayerGameManager.current_game_type)
+		
+		# Set game type in MultiplayerGameManager before starting
+		MultiplayerGameManager.current_game_type = selected_game_type
+		
+		# Call MultiplayerGameManager to start the race (this handles mirror data)
+		print("DEBUG: About to call MultiplayerGameManager.start_multiplayer_race()")
+		MultiplayerGameManager.start_multiplayer_race()
+		print("DEBUG: Called MultiplayerGameManager.start_multiplayer_race()")
 		# Don't emit game_started here - NetworkManager will broadcast it
 
 func _on_network_game_started() -> void:
@@ -507,12 +586,18 @@ func _on_network_game_started() -> void:
 
 func _on_game_settings_received(settings: Dictionary) -> void:
 	"""Called when client receives game settings from host"""
-	print("Received game settings from host: ", settings)
+	print("Client received game settings from host: ", settings)
 	if settings.has("game_type"):
 		selected_game_type = settings["game_type"]
 	if settings.has("difficulty"):
 		selected_difficulty = settings["difficulty"]
-	print("Updated lobby settings - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty)
+	if settings.has("mirror_mode"):
+		mirror_mode_enabled = settings["mirror_mode"]
+		# Update checkbox state
+		var checkbox = get_node_or_null("GameSettingsContainer/MirrorModeCheckbox")
+		if checkbox is CheckBox:
+			checkbox.button_pressed = mirror_mode_enabled
+	print("Updated lobby settings - Type: ", selected_game_type, ", Difficulty: ", selected_difficulty, ", Mirror Mode: ", mirror_mode_enabled)
 
 func _on_game_carousel_changed():
 	pass  # Legacy stub — game type is now inferred from main scene selection
@@ -658,8 +743,14 @@ func _close_camera() -> void:
 		camera_panel.visible = false
 
 	# Resume lobby music now that the camera is gone
+	# But only if not in multiplayer mode
 	if SoundManager:
-		SoundManager.play_background_music()
+		# Check if we're in multiplayer by checking if MultiplayerGameManager exists and is active
+		if not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer):
+			SoundManager.play_background_music()
+			print("Resumed background music (single player mode)")
+		else:
+			print("Keeping music stopped (multiplayer mode)")
 
 func _start_camera_feed() -> void:
 	"""Start the native camera feed"""

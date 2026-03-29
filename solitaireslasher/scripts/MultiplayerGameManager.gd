@@ -22,6 +22,8 @@ var player_statuses: Dictionary = {}  # player_id -> PlayerStatus
 var players_ready: Dictionary = {}  # player_id -> bool (for next round)
 var current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 var sudoku_puzzle_state: Dictionary = {}  # Shared Sudoku puzzle for all players
+var _pending_mirror_data: Dictionary = {}  # Mirror data waiting to be applied
+var mirror_mode_enabled: bool = false  # Store mirror mode setting from lobby
 
 func _ready() -> void:
 	# NetworkManager is an autoload singleton, don't create a new instance
@@ -58,16 +60,76 @@ func start_local_game(difficulty: String = "Medium") -> void:
 	print("Local game created and initialized (multiplayer: ", is_multiplayer, ")")
 
 func start_multiplayer_race() -> void:
+	print("DEBUG: start_multiplayer_race() called")
+	print("DEBUG: is_multiplayer: ", is_multiplayer)
+	print("DEBUG: network_manager.is_host: ", network_manager.is_host)
+	print("DEBUG: current_game_type: ", current_game_type)
+	
 	if not is_multiplayer or not network_manager.is_host:
+		print("DEBUG: Early return from start_multiplayer_race - is_multiplayer: ", is_multiplayer, ", is_host: ", network_manager.is_host)
 		return
+	
+	print("Host: Starting multiplayer race for ", current_game_type)
 	
 	local_game = Game.new()
 	add_child(local_game)
 	
+	# Create deck and shuffle it first
+	var deck = Deck.new_standard_deck()
+	var rng = RandomNumberGenerator.new()
+	rng.randomize()
 	var seed = randi()
+	rng.seed = seed
+	Deck.shuffle(deck, rng)
+	
+	# Prepare mirror data for later sending
+	# Use the stored mirror mode setting from MultiplayerGameManager
+	print("DEBUG: Using stored mirror mode setting: ", mirror_mode_enabled)
+	var lobby_mirror_mode = mirror_mode_enabled
+	
+	var prepared_mirror_data = null
+	if lobby_mirror_mode:
+		var deck_data = []
+		for card in deck:
+			deck_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": false,  # All cards start face down
+				"pile_id": -1,  # Not assigned yet
+				"stock": false
+			})
+		prepared_mirror_data = {
+			"deck": deck_data,
+			"seed": seed,
+			"difficulty": local_game.difficulty
+		}
+		print("Host: Prepared mirror data for Solitaire")
+	else:
+		print("Host: Mirror mode disabled - not preparing mirror data")
+	
+	# Now deal the game normally
 	local_game.new_game(seed)
 	
-	network_manager.start_race()
+	# Broadcast game settings and start race
+	var broadcast_settings = {
+		"game_type": current_game_type,
+		"difficulty": local_game.difficulty,
+		"mirror_mode": lobby_mirror_mode
+	}
+	print("DEBUG: Broadcasting settings with mirror_mode: ", lobby_mirror_mode)
+	network_manager.start_race(broadcast_settings)
+	
+	# Send mirror data after a short delay to ensure clients are ready
+	if prepared_mirror_data:
+		print("Host: Waiting 0.5s before sending mirror data...")
+		var timer = get_tree().create_timer(0.5)
+		timer.timeout.connect(func():
+			print("Host: Sending mirror data now")
+			network_manager.send_mirror_data({"game_type": "Solitaire", "mirror_data": prepared_mirror_data})
+			print("Host: Sent Solitaire mirror data after delay")
+		)
+	else:
+		print("Host: No mirror data to send (mirror mode disabled)")
 
 func _on_race_started() -> void:
 	print("DEBUG: MultiplayerGameManager._on_race_started() - game_type: ", current_game_type)
@@ -81,7 +143,21 @@ func _on_race_started() -> void:
 			local_game = Game.new()
 			add_child(local_game)
 		
-		local_game.new_game(randi())
+		# Check if we have pending mirror data
+		if not _pending_mirror_data.is_empty():
+			print("Client: Using mirror data for Solitaire game")
+			if _pending_mirror_data.has("mirror_data"):
+				local_game.new_game_mirror(_pending_mirror_data["mirror_data"])
+			else:
+				local_game.new_game(randi())
+				print("No mirror data found, using random seed")
+		else:
+			# No mirror data, create normal game
+			local_game.new_game(randi())
+			print("No pending mirror data, creating normal game")
+		
+		# Clear pending mirror data after use
+		_pending_mirror_data.clear()
 		
 		# Only connect if not already connected
 		if not local_game.game_completed.is_connected(_on_local_game_completed):
@@ -297,6 +373,29 @@ func receive_player_ready(player_id: int, ready: bool) -> void:
 	print("Player ", player_id, " ready status: ", ready)
 	players_ready[player_id] = ready
 	_check_all_players_ready()
+
+func receive_mirror_data(mirror_data: Dictionary) -> void:
+	"""Receive mirror mode data from host"""
+	print("MultiplayerGameManager received mirror data for game type: ", current_game_type)
+	if current_game_type == "Sudoku":
+		# Store mirror data for when Sudoku game is created
+		_pending_mirror_data = mirror_data
+		print("Stored mirror data for Sudoku game")
+	elif current_game_type == "Solitaire":
+		# Apply mirror data to Solitaire game
+		if local_game and mirror_data.has("mirror_data"):
+			print("Applying mirror data to existing Solitaire game")
+			local_game.new_game_mirror(mirror_data["mirror_data"])
+			# Need to re-render the board to show the new layout
+			if local_game.get_parent():
+				var board = local_game.get_parent().get_node_or_null("Board")
+				if board:
+					board.render()
+					print("Re-rendered board with mirror layout")
+		else:
+			# Game not created yet, store for later
+			_pending_mirror_data = mirror_data
+			print("Stored mirror data for future Solitaire game creation")
 
 func _check_all_players_ready() -> void:
 	"""Check if all players are ready for next round"""

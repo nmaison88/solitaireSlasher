@@ -25,14 +25,24 @@ signal game_over
 func _init():
 	pass
 
-func new_game(diff: int = 3, hints: bool = true):
+func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 	"""Start a new Sudoku game with given difficulty"""
 	difficulty = diff
 	show_hints = hints
 	lives = max_lives  # Reset lives to 3
 	_create_empty_grid()
 	_fill_grid(solution_grid)
-	_create_puzzle(difficulty)
+	
+	# Check if mirror mode is enabled and we have mirror data
+	if not mirror_data.is_empty() and mirror_data.has("puzzle"):
+		# Load puzzle from mirror data
+		puzzle = mirror_data["puzzle"].duplicate(true)
+		print("Sudoku: Using mirror mode puzzle from host")
+	else:
+		# Normal puzzle generation
+		_create_puzzle(difficulty)
+		print("Sudoku: Generated new puzzle")
+	
 	_init_player_grid()
 	print("Sudoku game created with difficulty: ", difficulty, " with ", lives, " lives")
 
@@ -179,6 +189,14 @@ func try_to_solve_grid(puzzle_grid):
 	solution_count += 1
 	if solution_count > 1:
 		return
+
+func get_mirror_data() -> Dictionary:
+	"""Get puzzle data for mirror mode synchronization"""
+	return {
+		"puzzle": puzzle.duplicate(true),
+		"solution": solution_grid.duplicate(true),
+		"difficulty": difficulty
+	}
 
 func get_game_state() -> Dictionary:
 	"""Get current game state for saving/multiplayer"""

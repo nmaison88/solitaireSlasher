@@ -20,6 +20,9 @@ var _sudoku_game: SudokuGame
 var _sudoku_board: SudokuBoard
 var _waiting_for_ready: bool = false
 
+# Spider Solitaire
+var _spider_board: SpiderBoard
+
 # Game type and difficulty selection
 var _player_name_input: LineEdit
 var _difficulty_option: OptionButton
@@ -91,9 +94,23 @@ func _ready() -> void:
 		var top_padding = safe_area.position.y
 		_sudoku_board.offset_top = top_padding + 120  # Extra 120px for larger buttons
 	
+	# Create Spider Solitaire board
+	_spider_board = SpiderBoard.new()
+	_spider_board.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_spider_board.offset_top = 120  # Match solitaire: clear menu + retry buttons (100px + padding)
+	_spider_board.visible = false
+	add_child(_spider_board)
+	_spider_board.game_won.connect(_on_spider_game_won)
+
+	# Apply mobile safe-area offset on top of the base 120px clearance
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		_spider_board.offset_top = safe_area.position.y + 120
+
 	# Hide game elements on startup
 	_board.visible = false
 	_sudoku_board.visible = false
+	_spider_board.visible = false
 	_status_label.visible = false
 	
 	_setup_main_menu()
@@ -236,7 +253,17 @@ func _setup_main_menu() -> void:
 	sudoku_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
 	sudoku_icon.gui_input.connect(_on_sudoku_icon_clicked)
 	game_carousel.add_child(sudoku_icon)
-	
+
+	var spider_icon_tex = TextureRect.new()
+	spider_icon_tex.texture = load("res://game icons/spider_icon.png")
+	spider_icon_tex.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)
+	spider_icon_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	spider_icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	spider_icon_tex.name = "Spider"
+	spider_icon_tex.mouse_filter = Control.MOUSE_FILTER_PASS
+	spider_icon_tex.gui_input.connect(_on_spider_icon_clicked)
+	game_carousel.add_child(spider_icon_tex)
+
 	# Connect to carousel change signals
 	game_carousel.manual_end.connect(_on_game_carousel_selection_changed)
 	game_carousel.snap_end.connect(_on_game_carousel_selection_changed)
@@ -274,6 +301,10 @@ func create_carousel_item(item_name: String) -> Control:
 		var sudoku_texture = load("res://game icons/sudoku_icon.png")
 		if sudoku_texture:
 			icon.texture = sudoku_texture
+	elif item_name == "Spider":
+		var spider_texture = load("res://game icons/spider_icon.png")
+		if spider_texture:
+			icon.texture = spider_texture
 	
 	vbox.add_child(icon)
 	
@@ -348,6 +379,29 @@ func _on_sudoku_icon_clicked(event: InputEvent) -> void:
 					_current_game_type = "Sudoku"
 					_on_game_selected()
 
+func _on_spider_icon_clicked(event: InputEvent) -> void:
+	var key = "Spider"
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Spider"
+					_on_game_selected()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_icon_press_pos[key] = event.position
+		else:
+			if key in _icon_press_pos:
+				var dist = event.position.distance_to(_icon_press_pos[key])
+				_icon_press_pos.erase(key)
+				if dist < _TAP_MAX_DISTANCE:
+					_current_game_type = "Spider"
+					_on_game_selected()
+
 func _on_game_carousel_selection_changed(index: int = -1) -> void:
 	"""Handle game carousel selection change"""
 	# If no index provided, get current index from carousel
@@ -358,7 +412,7 @@ func _on_game_carousel_selection_changed(index: int = -1) -> void:
 		else:
 			return
 	
-	var games = ["Solitaire", "Sudoku"]
+	var games = ["Solitaire", "Sudoku", "Spider"]
 	if index >= 0 and index < games.size():
 		_current_game_type = games[index]
 		print("Game selected: ", _current_game_type)
@@ -424,14 +478,15 @@ func _show_game_menu(game_type: String) -> void:
 	spacer3.custom_minimum_size = Vector2(0, 20)
 	game_menu.add_child(spacer3)
 	
-	# Multiplayer button
-	var multiplayer_button = Button.new()
-	multiplayer_button.text = "Multiplayer"
-	multiplayer_button.custom_minimum_size = Vector2(400, 80)
-	multiplayer_button.add_theme_font_size_override("font_size", 36)
-	multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
-	game_menu.add_child(multiplayer_button)
-	
+	# Multiplayer button (not available for Spider Solitaire)
+	if game_type != "Spider":
+		var multiplayer_button = Button.new()
+		multiplayer_button.text = "Multiplayer"
+		multiplayer_button.custom_minimum_size = Vector2(400, 80)
+		multiplayer_button.add_theme_font_size_override("font_size", 36)
+		multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
+		game_menu.add_child(multiplayer_button)
+
 	# Add spacing
 	var spacer4 = Control.new()
 	spacer4.custom_minimum_size = Vector2(0, 40)
@@ -529,6 +584,8 @@ func _update_game_background(game_type: String) -> void:
 			game_bg.color = Color(0.0, 0.5, 0.2)  # Traditional green
 		else:
 			game_bg.color = Color(0.05, 0.2, 0.1)  # Darker green for dark mode
+	elif game_type == "Spider":
+		game_bg.color = Color(0.0, 0.28, 0.12) if current_theme == "light" else Color(0.02, 0.12, 0.05)
 	else:  # Sudoku
 		# Sky blue for light mode, original dark for dark mode
 		if current_theme == "light":
@@ -564,6 +621,8 @@ func _on_single_player_start(game_type: String) -> void:
 	if game_type == "Solitaire":
 		MultiplayerGameManager.start_local_game(_current_difficulty)
 		_setup_single_player_game()
+	elif game_type == "Spider":
+		_setup_spider_game()
 	else:  # Sudoku
 		_setup_single_player_sudoku()
 
@@ -902,8 +961,13 @@ func _show_main_menu() -> void:
 			child.visible = false
 
 	# Start background music when on any menu
+	# But only if not in multiplayer mode
 	if SoundManager:
-		SoundManager.play_background_music()
+		if not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer):
+			SoundManager.play_background_music()
+			print("Started background music (single player mode)")
+		else:
+			print("Keeping music stopped (multiplayer mode)")
 
 func _hide_main_menu() -> void:
 	if _menu_container:
@@ -923,9 +987,18 @@ func _hide_main_menu() -> void:
 	if _current_game_type == "Solitaire":
 		_board.visible = true
 		_sudoku_board.visible = false
+		if _spider_board:
+			_spider_board.visible = false
+	elif _current_game_type == "Spider":
+		_board.visible = false
+		_sudoku_board.visible = false
+		if _spider_board:
+			_spider_board.visible = true
 	else:  # Sudoku
 		_board.visible = false
 		_sudoku_board.visible = true
+		if _spider_board:
+			_spider_board.visible = false
 	
 	_status_label.visible = true
 
@@ -952,12 +1025,14 @@ func _on_difficulty_changed(index: int) -> void:
 func _on_single_player() -> void:
 	# Clean up any existing game state
 	_cleanup_game_state()
-	
+
 	_hide_main_menu()
-	
+
 	if _current_game_type == "Solitaire":
 		MultiplayerGameManager.start_local_game(_current_difficulty)
 		_setup_single_player_game()
+	elif _current_game_type == "Spider":
+		_setup_spider_game()
 	else:  # Sudoku
 		_setup_single_player_sudoku()
 
@@ -1061,6 +1136,34 @@ func _on_sudoku_game_over() -> void:
 	_status_label.text = "Game Over - Out of Lives"
 	if SoundManager:
 		SoundManager.play_lose()
+
+func _setup_spider_game() -> void:
+	print("Setting up Spider Solitaire...")
+
+	if SoundManager:
+		SoundManager.play_game_start()
+
+	_hide_main_menu()
+
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+
+	_status_label.text = ""
+
+	_spider_board.new_game(_current_difficulty)
+
+	_hide_menu_buttons()
+	_show_new_game_button()
+
+	print("Spider Solitaire setup complete")
+
+func _on_spider_game_won() -> void:
+	print("Spider Solitaire won!")
+	_status_label.text = "You Win!"
+	_status_label.visible = true
+	if SoundManager:
+		SoundManager.play_win()
 
 func _hide_menu_buttons():
 	for child in get_children():
@@ -1298,6 +1401,8 @@ func _new_game() -> void:
 	if _current_game_type == "Sudoku":
 		# Restart Sudoku game
 		_setup_single_player_sudoku()
+	elif _current_game_type == "Spider":
+		_spider_board.new_game(_current_difficulty)
 	elif MultiplayerGameManager and is_instance_valid(MultiplayerGameManager):
 		if MultiplayerGameManager.is_multiplayer:
 			if MultiplayerGameManager.is_host_player():
@@ -1331,9 +1436,11 @@ func _cleanup_game_state() -> void:
 	_board.set_game(null)
 	_board.render()
 	
-	# Hide both boards
+	# Hide all boards
 	_board.visible = false
 	_sudoku_board.visible = false
+	if _spider_board:
+		_spider_board.visible = false
 	
 	# Hide and clear status label
 	_status_label.visible = false
@@ -1628,7 +1735,29 @@ func _setup_multiplayer_sudoku() -> void:
 			difficulty_level = 5
 	
 	# Start new Sudoku game
-	_sudoku_game.new_game(difficulty_level, true)
+	# Check if we have pending mirror data (client) or need to generate (host)
+	var mirror_data = {}
+	if not MultiplayerGameManager._pending_mirror_data.is_empty():
+		# Client: use mirror data from host
+		mirror_data = MultiplayerGameManager._pending_mirror_data
+		print("Client: Using mirror data for Sudoku game")
+		MultiplayerGameManager._pending_mirror_data.clear()  # Clear after use
+	elif MultiplayerGameManager.network_manager.is_host:
+		# Host: generate game and send mirror data to clients
+		_sudoku_game.new_game(difficulty_level, true)
+		var host_mirror_data = _sudoku_game.get_mirror_data()
+		MultiplayerGameManager.network_manager.send_mirror_data(host_mirror_data)
+		print("Host: Generated Sudoku game and sent mirror data")
+	else:
+		# Fallback: generate normally
+		print("Fallback: Generating Sudoku game normally")
+	
+	if mirror_data.is_empty():
+		# Normal game creation (host or fallback)
+		_sudoku_game.new_game(difficulty_level, true)
+	else:
+		# Mirror mode game creation (client)
+		_sudoku_game.new_game(difficulty_level, true, mirror_data)
 	_sudoku_board.set_game(_sudoku_game)
 	
 	# Connect signals
