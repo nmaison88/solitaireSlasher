@@ -465,7 +465,7 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 	# Large face icon (centered, under the text)
 	var face_icon = FontAwesome.new()
 	face_icon.name = "DifficultyFaceIcon"
-	face_icon.custom_minimum_size = Vector2(120, 120)
+	face_icon.icon_size = 70
 	face_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_set_difficulty_face(face_icon, current_index)
 	parent_vbox.add_child(face_icon)

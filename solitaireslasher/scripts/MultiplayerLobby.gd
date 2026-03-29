@@ -243,7 +243,7 @@ func _create_game_settings_display() -> void:
 
 	var face_icon = FontAwesome.new()
 	face_icon.name = "DifficultyFaceIcon"
-	face_icon.custom_minimum_size = Vector2(110, 110)
+	face_icon.icon_size = 70
 	face_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_set_difficulty_face_icon(face_icon, current_index)
 	settings_container.add_child(face_icon)
