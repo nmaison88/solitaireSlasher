@@ -7,8 +7,7 @@ const CARD_SIZE       = Vector2(120, 160)
 const PILE_GAP_X      = 20.0
 const FACE_DOWN_GAP_Y = 22.0
 const FACE_UP_GAP_Y   = 55.0
-const TABLEAU_TOP_Y   = 180.0   # Header gap for stock deck (CARD_SIZE.y * 0.75 + margins = ~130px card + 50px padding)
-const STOCK_CARD_SCALE = 0.72   # Scale factor for the header deck cards
+const TABLEAU_TOP_Y   = 205.0   # Header gap: full card (160) + 16px top margin + 5*5px stagger + buffer
 
 const WIN_MESSAGES = [
 	"YOU WIN!", "NICE JOB!", "MAN YOU'RE GOOD!",
@@ -61,9 +60,7 @@ func _get_card_pos(col: int, card_idx: int) -> Vector2:
 	return Vector2(_get_col_x(col), _get_card_y(col, card_idx))
 
 func _stock_pos() -> Vector2:
-	# Top-right in the header gap. Card height at STOCK_CARD_SCALE ≈ 115px, fitting within 180px gap.
-	var scaled_w = CARD_SIZE.x * STOCK_CARD_SCALE
-	return Vector2(size.x - scaled_w - 12.0, 16.0)
+	return Vector2(_get_col_x(6), 16.0)
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
 
@@ -195,7 +192,6 @@ func _draw_stock_deck() -> void:
 	var visible_cards = clampi(deals_remaining, 0, 5)  # Cap visual stack at 5
 
 	var base_pos = _stock_pos()
-	var scaled_size = CARD_SIZE * STOCK_CARD_SCALE
 	const STACK_OFFSET_Y = 5.0
 	const STACK_OFFSET_X = 1.5
 
@@ -210,7 +206,6 @@ func _draw_stock_deck() -> void:
 		cv.card = dummy
 		cv._refresh()
 		cv.position = base_pos + offset
-		cv.scale = Vector2(STOCK_CARD_SCALE, STOCK_CARD_SCALE)
 		cv.z_index = i + 1
 
 		if is_top:
@@ -234,7 +229,7 @@ func _draw_stock_deck() -> void:
 	lbl.text = "%d deal%s left" % [draws_left, "s" if draws_left != 1 else ""]
 	lbl.add_theme_font_size_override("font_size", 18)
 	lbl.modulate.a = 0.75
-	lbl.position = Vector2(_stock_pos().x, 16.0 + scaled_size.y + visible_cards * STACK_OFFSET_Y + 6.0)
+	lbl.position = Vector2(_stock_pos().x, 16.0 + CARD_SIZE.y + visible_cards * STACK_OFFSET_Y + 6.0)
 	add_child(lbl)
 
 # ── Undo / Redo buttons ────────────────────────────────────────────────────────
@@ -390,11 +385,99 @@ func _update_undo_redo_state() -> void:
 func _on_stock_pressed() -> void:
 	if _animating:
 		return
+
+	# Pre-flight checks (mirrors SpiderGame.deal_from_stock guards)
+	if _game.stock.is_empty():
+		return
+	for col in range(SpiderGame.TABLEAU_COUNT):
+		if _game.tableaus[col].is_empty():
+			return
+
 	_animating = true
-	var success = _game.deal_from_stock()
+
+	# --- Snapshot what will be dealt (top N cards, col 0 first) ---
+	var deal_count = mini(SpiderGame.TABLEAU_COUNT, _game.stock.size())
+	# stock is popped from the back, so the first card dealt is stock[-1]
+	var cards_to_deal: Array = []
+	for i in range(deal_count):
+		cards_to_deal.append(_game.stock[_game.stock.size() - 1 - i])
+
+	# --- Record destination Y for each column (current top + one FACE_UP gap) ---
+	var dest_positions: Array = []
+	for col in range(deal_count):
+		var pile: Array = _game.tableaus[col]
+		var y = _get_card_y(col, pile.size())  # position the new card will land at
+		dest_positions.append(Vector2(_get_col_x(col), y))
+
+	# --- Execute game state change ---
+	_game.deal_from_stock()
+
+	# --- Re-render board (cards at final positions, invisible until animation ends) ---
+	# We force a re-render with a fresh frame counter so it fires immediately
+	_last_render_frame = -1
+	render()
+
+	# --- Spawn ghost cards at stock origin and animate left→right with stagger ---
+	var fly_origin = _stock_pos()
+
+	var STAGGER   = 0.06   # seconds between each card launch
+	var FLY_DUR   = 0.32   # seconds for each card to reach its column
+
+	# Hide the real rendered cards so ghosts are the only visible ones during flight.
+	# Match by card object identity (cards_to_deal[i] is the SolitaireCard reference).
+	var landing_views: Array = []
+	var dealt_set: Array = cards_to_deal.duplicate()
+	for child in get_children():
+		if child is CardView and dealt_set.has(child.card):
+			child.visible = false
+			landing_views.append(child)
+
+	var ghosts: Array = []
+	for i in range(deal_count):
+		var ghost: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		var dummy = SolitaireCard.new()
+		# Show face-up dealt card texture
+		dummy.face_up = true
+		dummy.suit = cards_to_deal[i].suit
+		dummy.rank = cards_to_deal[i].rank
+		ghost.card = dummy
+		ghost._refresh()
+		ghost.position = fly_origin
+		ghost.z_index  = 2000 + i
+		ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ghost.set_meta("_undo_ghost", true)
+		add_child(ghost)
+		ghosts.append(ghost)
+
+	# Launch each ghost with a stagger
+	var last_tween: Tween = null
+	for i in range(deal_count):
+		var ghost: CardView = ghosts[i]
+		var dest: Vector2   = dest_positions[i]
+		var t = create_tween()
+		t.set_ease(Tween.EASE_OUT)
+		t.set_trans(Tween.TRANS_CUBIC)
+		# Delay start by i * STAGGER
+		if i > 0:
+			t.tween_interval(i * STAGGER)
+		t.tween_property(ghost, "position", dest, FLY_DUR)
+		last_tween = t
+
+	# Wait for the last card to land
+	if last_tween != null:
+		await last_tween.finished
+
+	# Clean up ghosts and reveal real cards
+	for ghost in ghosts:
+		if is_instance_valid(ghost):
+			ghost.queue_free()
+	for lv in landing_views:
+		if is_instance_valid(lv):
+			lv.visible = true
+
 	_animating = false
-	if success:
-		render()
+	_last_render_frame = -1
+	render()
 
 func _on_undo_pressed() -> void:
 	if _animating or not _game.can_undo():

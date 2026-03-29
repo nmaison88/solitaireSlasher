@@ -143,18 +143,29 @@ func _on_race_started() -> void:
 			local_game = Game.new()
 			add_child(local_game)
 		
+		# Check if mirror mode is enabled in the received settings
+		var mirror_mode_enabled = false
+		if network_manager.game_settings.has("mirror_mode"):
+			mirror_mode_enabled = network_manager.game_settings["mirror_mode"]
+		
+		print("Client: Mirror mode enabled in settings: ", mirror_mode_enabled)
+		
 		# Check if we have pending mirror data
-		if not _pending_mirror_data.is_empty():
+		if mirror_mode_enabled and not _pending_mirror_data.is_empty():
 			print("Client: Using mirror data for Solitaire game")
 			if _pending_mirror_data.has("mirror_data"):
 				local_game.new_game_mirror(_pending_mirror_data["mirror_data"])
 			else:
 				local_game.new_game(randi())
 				print("No mirror data found, using random seed")
+		elif mirror_mode_enabled and _pending_mirror_data.is_empty():
+			print("Client: Mirror mode enabled but no data yet, waiting...")
+			# Don't create game yet, wait for mirror data
+			return
 		else:
-			# No mirror data, create normal game
+			# No mirror mode, create normal game
 			local_game.new_game(randi())
-			print("No pending mirror data, creating normal game")
+			print("No mirror mode, creating normal game")
 		
 		# Clear pending mirror data after use
 		_pending_mirror_data.clear()
@@ -393,9 +404,29 @@ func receive_mirror_data(mirror_data: Dictionary) -> void:
 					board.render()
 					print("Re-rendered board with mirror layout")
 		else:
-			# Game not created yet, store for later
+			# Game not created yet, store for later and create it now
 			_pending_mirror_data = mirror_data
-			print("Stored mirror data for future Solitaire game creation")
+			print("Stored mirror data and creating Solitaire game now")
+			
+			# Create the game now that we have mirror data
+			if not local_game:
+				local_game = Game.new()
+				add_child(local_game)
+			
+			if _pending_mirror_data.has("mirror_data"):
+				local_game.new_game_mirror(_pending_mirror_data["mirror_data"])
+				print("Created Solitaire game with mirror data")
+			
+			# Clear pending mirror data after use
+			_pending_mirror_data.clear()
+			
+			# Only connect if not already connected
+			if not local_game.game_completed.is_connected(_on_local_game_completed):
+				local_game.game_completed.connect(_on_local_game_completed)
+			
+			# Emit race_started signal since we just created the game
+			print("DEBUG: Emitting race_started signal after mirror data received")
+			race_started.emit()
 
 func _check_all_players_ready() -> void:
 	"""Check if all players are ready for next round"""
