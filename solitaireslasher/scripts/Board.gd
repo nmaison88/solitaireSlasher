@@ -416,7 +416,7 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	slot_panel.add_theme_stylebox_override("panel", style)
 	add_child(slot_panel)
 
-	# Suit icon: uniform white shape at ~40 % opacity so all four look identical
+	# Suit icon: CenterContainer fills the panel and guarantees visual centering
 	var icon_paths = [
 		"res://card_assets/cloves_icon.png",
 		"res://card_assets/diamonds_icon.png",
@@ -425,26 +425,24 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 	]
 	var icon_path = icon_paths[suit_index]
 	if ResourceLoader.exists(icon_path):
-		var icon_w = 54.0
-		var icon_h = 54.0
-		var ix = pos.x + (CARD_SIZE.x - icon_w) * 0.5
-		var iy = pos.y + (CARD_SIZE.y - icon_h) * 0.5
+		var center = CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot_panel.add_child(center)
+
 		var icon = TextureRect.new()
 		icon.texture = load(icon_path)
+		icon.custom_minimum_size = Vector2(54, 54)
+		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		icon.offset_left   = ix
-		icon.offset_top    = iy
-		icon.offset_right  = ix + icon_w
-		icon.offset_bottom = iy + icon_h
 		# Alpha-mask the PNG to a flat white — all suits render same tint
 		var shader = Shader.new()
 		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tCOLOR = vec4(1.0, 1.0, 1.0, c.a * 0.38);\n}"
 		var mat = ShaderMaterial.new()
 		mat.shader = shader
 		icon.material = mat
-		add_child(icon)
+		center.add_child(icon)
 
 func _draw_stock(pos: Vector2) -> void:
 	if game.stock.is_empty():

@@ -404,69 +404,7 @@ func _show_game_menu(game_type: String) -> void:
 	spacer1.custom_minimum_size = Vector2(0, 40)
 	game_menu.add_child(spacer1)
 	
-	# Difficulty section with label aligned to selected item
-	var difficulty_section = Container.new()
-	difficulty_section.custom_minimum_size = Vector2(600, 250)
-	
-	# Difficulty label positioned to align with centered item
-	var difficulty_label = Label.new()
-	difficulty_label.text = "Difficulty:"
-	difficulty_label.add_theme_font_size_override("font_size", 36)
-	difficulty_label.position = Vector2(50, 95)  # Position to align with centered item
-	difficulty_section.add_child(difficulty_label)
-	
-	# Difficulty carousel using the correct Carousel class
-	var difficulty_carousel = Carousel.new()
-	difficulty_carousel.name = "DifficultyCarousel"
-	difficulty_carousel.custom_minimum_size = Vector2(400, 250)
-	difficulty_carousel.item_size = Vector2(300, 60)
-	difficulty_carousel.item_seperation = 20
-	
-	# Enable carousel movement and interaction (matching old configuration)
-	difficulty_carousel.carousel_angle = 90  # Vertical
-	difficulty_carousel.allow_loop = true
-	difficulty_carousel.display_loop = true
-	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
-	difficulty_carousel.can_drag = true
-	# Add difficulty labels as children (matching old way)
-	for i in range(3):
-		var diff = ["Easy", "Medium", "Hard"][i]
-		var diff_label = Label.new()
-		diff_label.text = diff
-		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		diff_label.custom_minimum_size = Vector2(300, 60)
-		# Set initial font sizes based on current difficulty
-		if diff == _current_difficulty:
-			diff_label.add_theme_font_size_override("font_size", 56)  # Selected
-			# Set starting index to match current difficulty
-			difficulty_carousel.starting_index = i
-		else:
-			diff_label.add_theme_font_size_override("font_size", 36)  # Not selected
-		diff_label.name = diff
-		difficulty_carousel.add_child(diff_label)
-	
-	# Connect to carousel change signals
-	print("DEBUG: Connecting difficulty carousel signals")
-	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_selection_changed)
-	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_selection_changed)
-	# Try to connect to any available real-time signals
-	if difficulty_carousel.has_signal("item_selected"):
-		difficulty_carousel.item_selected.connect(_on_difficulty_carousel_selection_changed)
-		print("DEBUG: Connected to item_selected signal")
-	elif difficulty_carousel.has_signal("selection_changed"):
-		difficulty_carousel.selection_changed.connect(_on_difficulty_carousel_selection_changed)
-		print("DEBUG: Connected to selection_changed signal")
-	else:
-		print("DEBUG: No real-time signal found, using manual_end and snap_end only")
-	print("DEBUG: Difficulty carousel signals connected")
-	# Position carousel to the right of the label
-	difficulty_carousel.position = Vector2(200, 0)
-	difficulty_section.add_child(difficulty_carousel)
-	game_menu.add_child(difficulty_section)
-	
-	# Force initial font size update
-	_on_difficulty_carousel_selection_changed()
+	_make_difficulty_slider(game_menu)
 	
 	# Add spacing
 	var spacer2 = Control.new()
@@ -508,73 +446,74 @@ func _show_game_menu(game_type: String) -> void:
 	game_menu.add_child(back_button)
 	
 	
-func _on_difficulty_carousel_selection_changed(index: int = -1) -> void:
-	"""Handle difficulty carousel selection change"""
-	print("DEBUG: _on_difficulty_carousel_selection_changed called with index: ", index)
-	# If no index provided, get current index from carousel
-	if index == -1:
-		var game_menu = get_node_or_null("GameMenu")
-		if game_menu:
-			# Look for the difficulty carousel in the difficulty section
-			var difficulty_carousel = null
-			for child in game_menu.get_children():
-				if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
-					for grandchild in child.get_children():
-						if grandchild is Carousel and grandchild.get_child_count() > 0:
-							var first_child = grandchild.get_child(0)
-							if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
-								difficulty_carousel = grandchild
-								break
-					break
-			
-			if difficulty_carousel and difficulty_carousel.get_child_count() > 0:
-				index = difficulty_carousel.get_current_carousel_index()
-				print("DEBUG: Got current index from carousel: ", index)
-			else:
-				print("DEBUG: No difficulty carousel found or empty")
-				return
-		else:
-			print("DEBUG: No game menu found")
-			return
-	
+func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
+	"""Build the difficulty HSlider with emoji face indicator and add it to parent_vbox"""
 	var difficulties = ["Easy", "Medium", "Hard"]
-	if index >= 0 and index < difficulties.size():
-		_current_difficulty = difficulties[index]
-		print("Difficulty selected: ", _current_difficulty)
-		
-		# Update font sizes - make selected item larger
-		var game_menu = get_node_or_null("GameMenu")
-		if game_menu:
-			# Look for the difficulty carousel in the difficulty section (same logic as above)
-			var difficulty_carousel = null
-			for child in game_menu.get_children():
-				if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
-					for grandchild in child.get_children():
-						if grandchild is Carousel and grandchild.get_child_count() > 0:
-							var first_child = grandchild.get_child(0)
-							if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
-								difficulty_carousel = grandchild
-								break
-					break
-			
-			if difficulty_carousel:
-				print("DEBUG: Updating font sizes for index ", index)
-				for i in range(difficulty_carousel.get_child_count()):
-					var label = difficulty_carousel.get_child(i)
-					if label is Label:
-						print("DEBUG: Updating font for item ", i, " (target index: ", index, ")")
-						if i == index:
-							label.add_theme_font_size_override("font_size", 56)  # Selected
-							print("DEBUG: Set font size 56 for item ", i)
-						else:
-							label.add_theme_font_size_override("font_size", 36)  # Not selected
-							print("DEBUG: Set font size 36 for item ", i)
-			else:
-				print("DEBUG: Could not find difficulty carousel")
-		else:
-			print("DEBUG: Could not find game menu for font update")
-	else:
-		print("DEBUG: Invalid index: ", index)
+	var current_index = difficulties.find(_current_difficulty)
+	if current_index == -1:
+		current_index = 1  # Default Medium
+
+	# Difficulty text label (centered, above face)
+	var face_label = Label.new()
+	face_label.name = "DifficultyFaceLabel"
+	face_label.text = difficulties[current_index]
+	face_label.add_theme_font_size_override("font_size", 40)
+	face_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	face_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent_vbox.add_child(face_label)
+
+	# Large face icon (centered, under the text)
+	var face_icon = FontAwesome.new()
+	face_icon.name = "DifficultyFaceIcon"
+	face_icon.custom_minimum_size = Vector2(120, 120)
+	face_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_set_difficulty_face(face_icon, current_index)
+	parent_vbox.add_child(face_icon)
+
+	# Slider row: "Easy" label | HSlider | "Hard" label
+	var slider_row = HBoxContainer.new()
+	slider_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider_row.add_theme_constant_override("separation", 16)
+
+	var easy_label = Label.new()
+	easy_label.text = "Easy"
+	easy_label.add_theme_font_size_override("font_size", 28)
+	easy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slider_row.add_child(easy_label)
+
+	var slider = HSlider.new()
+	slider.name = "DifficultySlider"
+	slider.min_value = 0
+	slider.max_value = 2
+	slider.step = 1
+	slider.value = current_index
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(300, 48)
+	slider_row.add_child(slider)
+
+	var hard_label = Label.new()
+	hard_label.text = "Hard"
+	hard_label.add_theme_font_size_override("font_size", 28)
+	hard_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slider_row.add_child(hard_label)
+
+	parent_vbox.add_child(slider_row)
+
+	# Wire up: update face icon + label + _current_difficulty on slide
+	slider.value_changed.connect(func(val: float) -> void:
+		var idx = int(val)
+		_current_difficulty = difficulties[idx]
+		face_label.text = difficulties[idx]
+		_set_difficulty_face(face_icon, idx)
+		print("Difficulty changed to: ", _current_difficulty)
+	)
+
+func _set_difficulty_face(icon: FontAwesome, index: int) -> void:
+	"""Update a FontAwesome node to show the face for the given difficulty index"""
+	match index:
+		0: icon.icon_name = "face-smile"   # Easy — happy
+		1: icon.icon_name = "face-meh"     # Medium — neutral
+		2: icon.icon_name = "face-angry"   # Hard — angry
 
 func _update_game_background(game_type: String) -> void:
 	"""Update background color based on game type and theme"""
@@ -721,66 +660,7 @@ func _on_show_single_player_menu() -> void:
 	spacer2.custom_minimum_size = Vector2(0, 40)
 	sp_menu.add_child(spacer2)
 	
-	# Difficulty section with label aligned to selected item
-	var difficulty_section = Container.new()
-	difficulty_section.custom_minimum_size = Vector2(600, 250)
-	
-	# Difficulty label positioned to align with centered item
-	var difficulty_label = Label.new()
-	difficulty_label.text = "Difficulty:"
-	difficulty_label.add_theme_font_size_override("font_size", 36)
-	difficulty_label.position = Vector2(50, 95)  # Position to align with centered item
-	difficulty_section.add_child(difficulty_label)
-	
-	# Create vertical carousel for difficulty
-	var difficulty_carousel = Carousel.new()
-	difficulty_carousel.custom_minimum_size = Vector2(400, 250)
-	difficulty_carousel.item_size = Vector2(300, 60)
-	difficulty_carousel.item_seperation = 20
-	difficulty_carousel.carousel_angle = 90  # Vertical
-	difficulty_carousel.allow_loop = true
-	difficulty_carousel.display_loop = true
-	difficulty_carousel.snap_behavior = Carousel.SNAP_BEHAVIOR.SNAP
-	difficulty_carousel.can_drag = true
-	print("DEBUG: Connecting single player difficulty carousel signals")
-	difficulty_carousel.manual_end.connect(_on_difficulty_carousel_changed)
-	difficulty_carousel.snap_end.connect(_on_difficulty_carousel_changed)
-	# Try to connect to any available real-time signals
-	if difficulty_carousel.has_signal("item_selected"):
-		difficulty_carousel.item_selected.connect(_on_difficulty_carousel_changed)
-		print("DEBUG: Connected to item_selected signal for single player")
-	elif difficulty_carousel.has_signal("selection_changed"):
-		difficulty_carousel.selection_changed.connect(_on_difficulty_carousel_changed)
-		print("DEBUG: Connected to selection_changed signal for single player")
-	else:
-		print("DEBUG: No real-time signal found for single player, using manual_end and snap_end only")
-	print("DEBUG: Single player difficulty carousel signals connected")
-	
-	# Add difficulty labels as children
-	for i in range(3):
-		var diff = ["Easy", "Medium", "Hard"][i]
-		var diff_label = Label.new()
-		diff_label.text = diff
-		diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		diff_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		diff_label.custom_minimum_size = Vector2(300, 60)
-		# Set initial font sizes based on current difficulty
-		if diff == _current_difficulty:
-			diff_label.add_theme_font_size_override("font_size", 56)  # Selected
-			# Set starting index to match current difficulty
-			difficulty_carousel.starting_index = i
-		else:
-			diff_label.add_theme_font_size_override("font_size", 36)  # Not selected
-		diff_label.name = diff
-		difficulty_carousel.add_child(diff_label)
-	
-	# Position carousel to the right of the label
-	difficulty_carousel.position = Vector2(200, 0)
-	difficulty_section.add_child(difficulty_carousel)
-	sp_menu.add_child(difficulty_section)
-	
-	# Force initial font size update
-	_on_difficulty_carousel_changed()
+	_make_difficulty_slider(sp_menu)
 	
 	var spacer3 = Control.new()
 	spacer3.custom_minimum_size = Vector2(0, 40)
@@ -906,41 +786,7 @@ func _on_game_carousel_changed():
 					break
 
 func _on_difficulty_carousel_changed():
-	print("DEBUG: _on_difficulty_carousel_changed called")
-	# Get the current index from the difficulty carousel
-	var sp_menu = get_node_or_null("SinglePlayerMenu")
-	if sp_menu:
-		# Look for the difficulty carousel in the difficulty section
-		var difficulty_carousel = null
-		for child in sp_menu.get_children():
-			if child is Container and child.custom_minimum_size.x == 600:  # This is the difficulty_section
-				for grandchild in child.get_children():
-					if grandchild is Carousel and grandchild.get_child_count() > 0:
-						var first_child = grandchild.get_child(0)
-						if first_child.name == "Easy" or first_child.name == "Medium" or first_child.name == "Hard":
-							difficulty_carousel = grandchild
-							break
-				break
-		
-		if difficulty_carousel:
-			var current_index = difficulty_carousel.get_current_carousel_index()
-			print("DEBUG: Current carousel index: ", current_index)
-			var difficulties = ["Easy", "Medium", "Hard"]
-			if current_index >= 0 and current_index < difficulties.size():
-				_current_difficulty = difficulties[current_index]
-				print("Difficulty changed to: ", _current_difficulty)
-				
-				# Update font sizes - make selected item larger
-				for i in range(difficulty_carousel.get_child_count()):
-					var label = difficulty_carousel.get_child(i)
-					if label is Label:
-						print("DEBUG: Updating font for item ", i, " (current_index: ", current_index, ")")
-						if i == current_index:
-							label.add_theme_font_size_override("font_size", 56)  # Selected
-							print("DEBUG: Set font size 56 for item ", i)
-						else:
-							label.add_theme_font_size_override("font_size", 36)  # Not selected
-							print("DEBUG: Set font size 36 for item ", i)
+	pass  # Legacy stub — difficulty now controlled by HSlider via _make_difficulty_slider
 
 func _on_single_player_start_legacy():
 	"""Handle single player start button (legacy function)"""
@@ -1344,8 +1190,32 @@ func _show_new_game_button():
 	undo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_label)
 
+	# Pivot at center for scale animation
+	undo_button.pivot_offset = Vector2(50, 55)
+
+	# Click animation: squish on press, spring back on release
+	var _undo_tween: Tween = null
+	undo_button.button_down.connect(func() -> void:
+		if undo_button.disabled:
+			return
+		if _undo_tween and _undo_tween.is_valid():
+			_undo_tween.kill()
+		_undo_tween = undo_button.create_tween()
+		_undo_tween.set_ease(Tween.EASE_OUT)
+		_undo_tween.set_trans(Tween.TRANS_CUBIC)
+		_undo_tween.tween_property(undo_button, "scale", Vector2(0.88, 0.88), 0.08)
+	)
+	undo_button.button_up.connect(func() -> void:
+		if _undo_tween and _undo_tween.is_valid():
+			_undo_tween.kill()
+		_undo_tween = undo_button.create_tween()
+		_undo_tween.set_ease(Tween.EASE_OUT)
+		_undo_tween.set_trans(Tween.TRANS_BACK)
+		_undo_tween.tween_property(undo_button, "scale", Vector2(1.0, 1.0), 0.22)
+	)
+
 	add_child(undo_button)
-	
+
 	# Store reference to undo button for state updates
 	_undo_button = undo_button
 	if _current_game_type == "Solitaire":
@@ -1444,10 +1314,12 @@ func _on_undo_pressed() -> void:
 
 func _update_undo_button_state() -> void:
 	if _undo_button and is_instance_valid(_undo_button):
-		if _game and is_instance_valid(_game):
-			_undo_button.disabled = not _game.can_undo()
-		else:
-			_undo_button.disabled = true
+		var can = _game and is_instance_valid(_game) and _game.can_undo()
+		_undo_button.disabled = not can
+		_undo_button.modulate.a = 1.0 if can else 0.38
+		# Reset scale in case it was mid-animation when disabled
+		if not can:
+			_undo_button.scale = Vector2(1.0, 1.0)
 
 func _on_card_moved(_from_pile: String, _to_pile: String, _card_count: int) -> void:
 	# Update undo button state after any card move
