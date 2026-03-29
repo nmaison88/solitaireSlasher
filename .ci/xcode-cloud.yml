@@ -1,0 +1,36 @@
+name: Build iOS App
+
+triggers:
+  - push
+    branches:
+      - main
+
+environment:
+  xcode: 15.4
+  platform: iOS
+
+steps:
+  - name: Build and Archive
+    script: |
+      xcodebuild archive \
+        -project /Volumes/workspace/repository/solitaireslasher/export/solitaireslasher.xcodeproj \
+        -scheme solitaireslasher \
+        -destination generic/platform=iOS \
+        -archivePath /Volumes/workspace/build.xcarchive \
+        -derivedDataPath /Volumes/workspace/DerivedData \
+        -resultBundleVersion 3 \
+        -resultBundlePath /Volumes/workspace/resultbundle.xcresult \
+        -resultStreamPath /Volumes/workspace/tmp/resultBundleStream.json \
+        -IDEPostProgressNotifications=YES \
+        CODE_SIGN_IDENTITY="Apple Development" \
+        CODE_SIGN_STYLE=Automatic \
+        DEVELOPMENT_TEAM=A799KC8Q79 \
+        COMPILER_INDEX_STORE_ENABLE=NO \
+        -hideShellScriptEnvironment
+
+  - name: Export IPA
+    script: |
+      xcodebuild -exportArchive \
+        -archivePath /Volumes/workspace/build.xcarchive \
+        -exportPath /Volumes/workspace/export \
+        -exportOptionsPlist /Volumes/workspace/repository/solitaireslasher/export/ExportOptions.plist
