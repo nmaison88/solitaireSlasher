@@ -10,7 +10,7 @@
 !/export/DistributionSummary.plist
 
 # Exclude large libraries and build artifacts
-/export/*.xcframework/
+# /export/*.xcframework/
 /export/*.xcarchive/
 /export/*.ipa
 /export/*.pck
