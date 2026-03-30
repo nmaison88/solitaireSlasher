@@ -2063,6 +2063,7 @@ func _show_ready_notification(winner_id: int) -> void:
 	_last_standing_notification.offset_top = -200
 	_last_standing_notification.offset_right = 300
 	_last_standing_notification.offset_bottom = 200
+	_last_standing_notification.z_index = 1000  # Ensure it appears above board/cards
 	add_child(_last_standing_notification)
 	
 	var vbox = VBoxContainer.new()
@@ -2128,6 +2129,7 @@ func _on_last_player_standing(player_id: int) -> void:
 	_last_standing_notification.offset_top = -200
 	_last_standing_notification.offset_right = 300
 	_last_standing_notification.offset_bottom = 200
+	_last_standing_notification.z_index = 1000  # Ensure it appears above board/cards
 	add_child(_last_standing_notification)
 	
 	var vbox = VBoxContainer.new()
