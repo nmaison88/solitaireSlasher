@@ -11,6 +11,7 @@ var tableaus: Array = []       # Array[Array[SolitaireCard]], index 0=bottom, -1
 var stock: Array = []          # Array[SolitaireCard]
 var sequences_completed: int = 0
 var _difficulty: String = "Easy"
+var _start_time: float = 0.0  # Time when game started (in seconds)
 
 var _history: Array = []    # stack of state snapshots for undo
 var _redo_stack: Array = [] # stack of state snapshots for redo
@@ -69,6 +70,7 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	sequences_completed = 0
 	_history.clear()
 	_redo_stack.clear()
+	_start_time = Time.get_ticks_msec() / 1000.0  # Start timer
 
 	# Reset tableaus and stock
 	tableaus.clear()
@@ -290,6 +292,12 @@ func _check_sequences() -> void:
 			if sequences_completed >= SEQUENCES_TO_WIN:
 				game_won.emit()
 				return
+
+func get_game_time() -> float:
+	"""Get elapsed time in seconds since game start"""
+	if _start_time == 0.0:
+		return 0.0
+	return Time.get_ticks_msec() / 1000.0 - _start_time
 
 func get_save_data() -> Dictionary:
 	"""Serialize game state for saving"""

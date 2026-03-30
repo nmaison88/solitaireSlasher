@@ -1232,6 +1232,7 @@ func _on_sudoku_completed() -> void:
 func _on_sudoku_game_over() -> void:
 	print("Sudoku game over - out of lives")
 	_status_label.text = "Game Over - Out of Lives"
+	PlayerData.clear_saved_game("Sudoku")  # Clear save on game over/loss
 	if SoundManager:
 		SoundManager.play_lose()
 
@@ -2775,23 +2776,51 @@ func _on_settings_back() -> void:
 	print("DEBUG: Settings back function completed")
 
 func _save_current_game_if_in_progress() -> void:
-	"""Save the current game state if a game is in progress"""
+	"""Save the current game state if a game is in progress and has been played meaningfully (1+ min)"""
 	if _current_game_type.is_empty():
 		return  # No game in progress
+
+	# Only save if game has been played for at least 1 minute (meaningful progress)
+	if not _has_game_been_played_meaningfully():
+		print("Game not played long enough, not saving")
+		return
 
 	match _current_game_type:
 		"Solitaire":
 			if _game:
 				var save_data = _game.get_save_data()
 				PlayerData.save_game("Solitaire", save_data)
+				print("Saved Solitaire game")
 		"Spider":
 			if _spider_board and _spider_board._game:
 				var save_data = _spider_board._game.get_save_data()
 				PlayerData.save_game("Spider", save_data)
+				print("Saved Spider game")
 		"Sudoku":
 			if _sudoku_game:
 				var save_data = _sudoku_game.get_save_data()
 				PlayerData.save_game("Sudoku", save_data)
+				print("Saved Sudoku game")
+
+func _has_game_been_played_meaningfully() -> bool:
+	"""Check if the current game has been played meaningfully (1+ min for all games)"""
+	var min_play_time = 60.0  # 1 minute in seconds
+
+	match _current_game_type:
+		"Solitaire":
+			if _game:
+				var play_time = _game.get_game_time()
+				return play_time >= min_play_time
+		"Spider":
+			if _spider_board and _spider_board._game:
+				var play_time = _spider_board._game.get_game_time()
+				return play_time >= min_play_time
+		"Sudoku":
+			if _sudoku_game:
+				var play_time = _sudoku_game.get_game_time()
+				return play_time >= min_play_time
+
+	return false
 
 func _check_and_show_saved_games() -> void:
 	"""Check for saved games and show continue/new game prompt"""

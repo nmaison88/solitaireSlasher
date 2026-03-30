@@ -17,6 +17,9 @@ var show_hints: bool = true
 var lives: int = 3
 var max_lives: int = 3
 
+# Game time tracking
+var _start_time: float = 0.0  # Time when game started (in seconds)
+
 signal puzzle_completed
 signal cell_filled(row: int, col: int, value: int, is_correct: bool)
 signal life_lost(remaining_lives: int)
@@ -30,6 +33,7 @@ func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 	difficulty = diff
 	show_hints = hints
 	lives = max_lives  # Reset lives to 3
+	_start_time = Time.get_ticks_msec() / 1000.0  # Start timer
 	_create_empty_grid()
 	_fill_grid(solution_grid)
 
@@ -117,6 +121,12 @@ func get_cell_value(row: int, col: int) -> int:
 func get_solution_value(row: int, col: int) -> int:
 	"""Get the correct solution for a cell"""
 	return solution_grid[row][col]
+
+func get_game_time() -> float:
+	"""Get elapsed time in seconds since game start"""
+	if _start_time == 0.0:
+		return 0.0
+	return Time.get_ticks_msec() / 1000.0 - _start_time
 
 # Generating Valid Sudoku grid
 func _fill_grid(grid_obj):

@@ -500,10 +500,10 @@ func _on_number_selected(number: int):
 func _on_erase_pressed():
 	if selected_cell == Vector2i(-1, -1):
 		return
-	
+
 	var row = selected_cell.x
 	var col = selected_cell.y
-	
+
 	# Only erase if cell is editable and has incorrect value
 	if game.is_cell_editable(row, col):
 		var btn = grid_buttons[row][col]
@@ -511,6 +511,23 @@ func _on_erase_pressed():
 		if btn.text != "" and btn.get_theme_color("font_color") == Color(1.0, 0.0, 0.0):
 			# Set the cell to 0 (which will trigger _on_cell_filled)
 			game.set_cell(row, col, 0)
+
+func reset_board() -> void:
+	"""Reset all user entries and clear the saved game"""
+	print("Resetting Sudoku board - clearing all user entries and save")
+
+	# Clear all user-filled cells
+	for row in range(GRID_SIZE):
+		for col in range(GRID_SIZE):
+			if game.is_cell_editable(row, col) and game.get_cell_value(row, col) != 0:
+				game.set_cell(row, col, 0)
+
+	# Clear the saved game when board is reset
+	PlayerData.clear_saved_game("Sudoku")
+
+	# Deselect any selected cell
+	selected_cell = Vector2i(-1, -1)
+	_highlight_selected_cell()
 
 func _update_erase_button_state():
 	if not erase_button:

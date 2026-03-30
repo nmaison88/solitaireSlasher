@@ -429,33 +429,54 @@ func _check_completion() -> void:
 func _check_auto_win() -> void:
 	"""Auto-win when stock is empty and every tableau card is face-up.
 	At that point the player can always complete the game, so we do it for them."""
+	print("DEBUG: _check_auto_win called - _is_completed: ", _is_completed, ", _auto_winning: ", _auto_winning)
+
 	if _is_completed or _auto_winning:
+		print("DEBUG: Early return - already completed or auto-winning")
 		return
 
 	# Condition 1: stock must be empty
+	print("DEBUG: Stock size: ", stock.size())
 	if not stock.is_empty():
+		print("DEBUG: Stock not empty, returning")
 		return
 
 	# Condition 2: all tableau cards must be face-up (no hidden cards remain)
-	for pile in tableau:
-		for card in pile:
+	var face_down_count = 0
+	for pile_idx in range(tableau.size()):
+		for card_idx in range(tableau[pile_idx].size()):
+			var card = tableau[pile_idx][card_idx]
 			if not card.face_up:
-				return
+				print("DEBUG: Found face-down card at tableau[", pile_idx, "][", card_idx, "]")
+				face_down_count += 1
+
+	print("DEBUG: Face-down cards in tableau: ", face_down_count)
+	if face_down_count > 0:
+		print("DEBUG: Face-down cards exist, returning")
+		return
 
 	# All cards are visible — auto-complete to foundation
 	var total_cards = 0
+	var tableau_cards = 0
+	var waste_cards = waste.size() if waste else 0
+
 	for pile in tableau:
+		tableau_cards += pile.size()
 		total_cards += pile.size()
-	total_cards += waste.size()
+	total_cards += waste_cards
+
+	print("DEBUG: Auto-win conditions met! Tableau cards: ", tableau_cards, ", Waste cards: ", waste_cards, ", Total: ", total_cards)
 
 	if total_cards > 0:
 		print("Auto-win detected! Moving all ", total_cards, " cards to foundation")
 		_auto_winning = true
 		_auto_move_all_to_foundation()
 		_auto_winning = false
+	else:
+		print("DEBUG: No cards to move, already complete?")
 
 func _auto_move_all_to_foundation() -> void:
-	"""Automatically move all remaining cards to foundation"""
+	"""Automatically move all remaining cards to foundation with quick animation"""
 	var moved = true
 	var moves_made = 0
 
@@ -470,6 +491,8 @@ func _auto_move_all_to_foundation() -> void:
 				move_to_foundation("waste", -1, card.suit)
 				moved = true
 				moves_made += 1
+				# Small delay for quick animation effect (much faster than normal)
+				await get_tree().create_timer(0.05).timeout
 
 		# Try moving tableau cards to foundation
 		for i in range(tableau.size()):
@@ -479,8 +502,12 @@ func _auto_move_all_to_foundation() -> void:
 					move_to_foundation("tableau", i, card.suit)
 					moved = true
 					moves_made += 1
+					# Small delay for quick animation effect (much faster than normal)
+					await get_tree().create_timer(0.05).timeout
 
 	print("Auto-win completed! Moved ", moves_made, " cards automatically")
+	# Trigger win after all cards are moved
+	_check_completion()
 
 func get_game_time() -> float:
 	if _start_time == 0.0:
