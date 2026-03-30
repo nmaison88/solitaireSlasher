@@ -156,25 +156,30 @@ func get_mirror_data() -> Dictionary:
 func draw_from_stock_3() -> void:
 	# Save state before drawing
 	_save_state()
-	
+
 	# If stock is empty, recycle waste pile back to stock
 	if stock.is_empty():
+		print("DEBUG: Game.draw_from_stock_3 - stock is empty, attempting to recycle waste (waste size: ", waste.size(), ")")
 		_recycle_waste_to_stock()
 		# If still empty after recycling, nothing to draw
 		if stock.is_empty():
+			print("DEBUG: Game.draw_from_stock_3 - stock still empty after recycle, nothing to draw")
 			return
 
 	# Draw cards from stock to waste (respects difficulty setting)
 	var cards_to_draw: int = min(draw_count, stock.size())
+	print("DEBUG: Game.draw_from_stock_3 - drawing ", cards_to_draw, " cards (draw_count: ", draw_count, ", stock size: ", stock.size(), ")")
 	for _i in range(cards_to_draw):
 		var c = stock.pop_back()
 		c.face_up = true
 		c.stock = false  # Important: card is no longer in stock pile
 		waste.append(c)
-	
+
+	print("DEBUG: Game.draw_from_stock_3 - after draw: stock size: ", stock.size(), ", waste size: ", waste.size())
+
 	# Check for auto-win after drawing from stock
 	_check_auto_win()
-	
+
 	# Play card draw sound
 	if SoundManager:
 		SoundManager.play_card_draw()

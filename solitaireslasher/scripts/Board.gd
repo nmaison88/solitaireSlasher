@@ -524,23 +524,27 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 
 func _draw_stock(pos: Vector2) -> void:
 	if not game:
-		print("Board.render: Stock not ready - game is null")
+		print("DEBUG: Board._draw_stock - game is null")
 		return
 
 	if game.stock == null:
-		print("Board.render: Stock not ready - game.stock is null")
+		print("DEBUG: Board._draw_stock - game.stock is null")
 		return
 
+	var stock_size = game.stock.size()
+	var waste_size = game.waste.size() if game.waste else 0
+	print("DEBUG: Board._draw_stock - stock size: ", stock_size, ", waste size: ", waste_size)
+
 	if game.stock.is_empty():
-		print("Board.render: Stock is empty (size: ", game.stock.size(), "), creating recycle button")
-		
-	if game.stock.is_empty():
+		print("DEBUG: Board._draw_stock - Stock is empty, creating recycle button at position: ", pos)
+
 		# Empty stock — circular redo button centred in the slot
 		var recycle_btn = Button.new()
 		var btn_size = 72.0
 		recycle_btn.position = pos + (CARD_SIZE - Vector2(btn_size, btn_size)) * 0.5
 		recycle_btn.size = Vector2(btn_size, btn_size)
 		recycle_btn.pressed.connect(_on_stock_pressed)
+		recycle_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		var circle = StyleBoxFlat.new()
 		circle.bg_color = Color(0.0, 0.0, 0.0, 0.45)
 		var r = btn_size / 2.0
@@ -562,7 +566,10 @@ func _draw_stock(pos: Vector2) -> void:
 		fa.set_anchors_preset(Control.PRESET_FULL_RECT)
 		recycle_btn.add_child(fa)
 		add_child(recycle_btn)
+		print("DEBUG: Board._draw_stock - Recycle button created and added to scene")
 		return
+
+	print("DEBUG: Board._draw_stock - Stock has cards, showing card view")
 
 	# Stock has cards — use a CardView (same renderer as waste) so Y aligns perfectly
 	var stock_card = SolitaireCard.new()
