@@ -7,7 +7,7 @@ const CARD_SIZE       = Vector2(120, 160)
 const PILE_GAP_X      = 20.0
 const FACE_DOWN_GAP_Y = 22.0
 const FACE_UP_GAP_Y   = 55.0
-const TABLEAU_TOP_Y   = 205.0   # Header gap: full card (160) + 16px top margin + 5*5px stagger + buffer
+const TABLEAU_TOP_Y   = 250.0   # Header gap: increased to give more space between stock and tableau
 
 const WIN_MESSAGES = [
 	"YOU WIN!", "NICE JOB!", "MAN YOU'RE GOOD!",
@@ -193,7 +193,7 @@ func _draw_stock_deck() -> void:
 
 	var base_pos = _stock_pos()
 	const STACK_OFFSET_Y = 5.0
-	const STACK_OFFSET_X = 1.5
+	const STACK_OFFSET_X = 18.0  # Spread out 3 visible stock cards horizontally
 
 	for i in range(visible_cards):
 		var offset = Vector2(i * STACK_OFFSET_X, i * STACK_OFFSET_Y)
@@ -692,10 +692,27 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 	render()
 
 func _get_drop_zone_at_position(pos: Vector2) -> int:
+	# Check which zone contains the position
 	for col in _drop_zones.keys():
 		var zone: ColorRect = _drop_zones[col]
 		if Rect2(zone.global_position, zone.size).has_point(pos):
 			return col
+
+	# If no exact hit, find the closest column (handles edge cases)
+	var closest_col = -1
+	var closest_dist = 9999.0
+	for col in _drop_zones.keys():
+		var zone: ColorRect = _drop_zones[col]
+		var zone_center = zone.global_position.x + zone.size.x * 0.5
+		var dist = abs(pos.x - zone_center)
+		if dist < closest_dist:
+			closest_dist = dist
+			closest_col = col
+
+	# Only use closest if it's within reasonable range (0.75x card width)
+	if closest_dist <= CARD_SIZE.x * 0.75:
+		return closest_col
+
 	return -1
 
 # ── Animations ─────────────────────────────────────────────────────────────────
