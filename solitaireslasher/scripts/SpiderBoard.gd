@@ -125,6 +125,10 @@ func _on_sequence_completed(col: int, suit: int) -> void:
 	if cards_to_animate.size() > 13:
 		cards_to_animate = cards_to_animate.slice(0, 13)
 
+	# Mark these CardViews so render() won't free them during animation
+	for cv in cards_to_animate:
+		cv.set_meta("_foundation_animating", true)
+
 	# Calculate foundation position (above left 4 columns, stacked)
 	var col_gap = _get_col_gap()
 	var left_x = _get_left_x()
@@ -150,9 +154,11 @@ func _on_sequence_completed(col: int, suit: int) -> void:
 	if SoundManager:
 		SoundManager.play_foundation()
 
-	# Hide the animated cards and track the foundation
+	# Hide the animated cards and track the foundation (check if still valid)
 	for cv in cards_to_animate:
-		cv.visible = false
+		if is_instance_valid(cv):
+			cv.visible = false
+			cv.remove_meta("_foundation_animating")  # Allow cleanup in next render
 	_foundation_stacks.append(cards_to_animate.map(func(cv): return cv.card))
 
 	# Re-render to show new foundation position
@@ -317,13 +323,15 @@ func render() -> void:
 		return
 	_last_render_frame = frame
 
-	# Clear children (keep win overlay, game node, undo/redo buttons)
+	# Clear children (keep win overlay, game node, undo/redo buttons, and animating foundation cards)
 	for child in get_children():
 		if child == _win_overlay or child == _game:
 			continue
 		if child == _undo_btn or child == _redo_btn:
 			continue
 		if child.has_meta("_undo_ghost"):
+			continue
+		if child.has_meta("_foundation_animating"):
 			continue
 		if is_instance_valid(child) and not child.is_queued_for_deletion():
 			child.queue_free()
