@@ -2,6 +2,7 @@ extends Node
 class_name SpiderGame
 
 signal game_won
+signal sequence_completed(col: int, suit: int)  # Emitted when a sequence (K-A) is completed
 
 const TABLEAU_COUNT = 7
 const SEQUENCES_TO_WIN = 4
@@ -272,6 +273,9 @@ func _check_sequences() -> void:
 					break
 
 		if is_complete:
+			# Emit signal before removing cards (so board can animate them)
+			sequence_completed.emit(col, base_suit)
+
 			# Remove those 13 cards
 			tableaus[col] = col_arr.slice(0, col_arr.size() - 13)
 			sequences_completed += 1

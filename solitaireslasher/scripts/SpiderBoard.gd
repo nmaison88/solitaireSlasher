@@ -28,6 +28,7 @@ var _win_overlay: Control = null
 var _last_render_frame: int = -1
 var _undo_btn: Button = null
 var _redo_btn: Button = null
+var _foundation_stacks: Array = []     # Array[Array[SolitaireCard]] - tracks completed sequences (max 4)
 
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 
@@ -88,11 +89,13 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	_animating = false
 	_undo_btn = null
 	_redo_btn = null
+	_foundation_stacks.clear()
 
 	if _game == null:
 		_game = SpiderGame.new()
 		add_child(_game)
 		_game.game_won.connect(_on_game_won)
+		_game.sequence_completed.connect(_on_sequence_completed)
 
 	_game.new_game(difficulty_string)
 	_play_deal_animation()
@@ -100,6 +103,60 @@ func new_game(difficulty_string: String = "Easy") -> void:
 func _on_game_won() -> void:
 	game_won.emit()
 	_show_win_screen()
+
+func _on_sequence_completed(col: int, suit: int) -> void:
+	"""Handle completed sequence - animate to foundation"""
+	if _foundation_stacks.size() >= 4:
+		return  # Already have 4 foundations
+
+	# Get the 13 cards that were just removed (they're still in view)
+	var cards_to_animate: Array = []
+	for child in get_children():
+		if child is CardView and child.card and child.card.suit == suit and child.card.face_up:
+			cards_to_animate.append(child)
+
+	if cards_to_animate.is_empty():
+		return
+
+	# Sort by position (bottom to top)
+	cards_to_animate.sort_custom(func(a, b): return a.global_position.y > b.global_position.y)
+
+	# Keep only the top 13 cards from this column
+	if cards_to_animate.size() > 13:
+		cards_to_animate = cards_to_animate.slice(0, 13)
+
+	# Calculate foundation position (above left 4 columns, stacked)
+	var col_gap = _get_col_gap()
+	var left_x = _get_left_x()
+	var foundation_col = _foundation_stacks.size()
+	var foundation_x = left_x + foundation_col * (CARD_SIZE.x + col_gap)
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0  # Above tableau with gap
+
+	# Animate each card to foundation position with stagger
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_parallel(true)
+
+	for i in range(cards_to_animate.size()):
+		var cv = cards_to_animate[i]
+		var stagger_delay = i * 0.03
+		tween.tween_callback(func(): pass).set_delay(stagger_delay)
+		tween.tween_property(cv, "global_position", Vector2(foundation_x, foundation_y), 0.5)
+
+	await tween.finished
+
+	# Play foundation sound
+	if SoundManager:
+		SoundManager.play_foundation()
+
+	# Hide the animated cards and track the foundation
+	for cv in cards_to_animate:
+		cv.visible = false
+	_foundation_stacks.append(cards_to_animate.map(func(cv): return cv.card))
+
+	# Re-render to show new foundation position
+	render()
 
 # ── Render ─────────────────────────────────────────────────────────────────────
 
@@ -128,6 +185,9 @@ func render() -> void:
 	for col in range(SpiderGame.TABLEAU_COUNT):
 		_draw_column_slot(Vector2(_get_col_x(col), TABLEAU_TOP_Y))
 		_draw_column(col)
+
+	# Foundation stacks (completed sequences - top left area)
+	_draw_foundations()
 
 	# Stock deck (top-right)
 	_draw_stock_deck()
@@ -181,6 +241,32 @@ func _draw_column(col: int) -> void:
 			cv.card_drag_moved.connect(_on_card_drag_moved)
 			cv.move_to_front()
 		add_child(cv)
+
+func _draw_foundations() -> void:
+	"""Draw foundation slots for completed sequences (top left area)"""
+	if _foundation_stacks.is_empty():
+		return
+
+	var col_gap = _get_col_gap()
+	var left_x = _get_left_x()
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+
+	for i in range(_foundation_stacks.size()):
+		var foundation_x = left_x + i * (CARD_SIZE.x + col_gap)
+		var pos = Vector2(foundation_x, foundation_y)
+
+		# Draw slot background
+		_draw_column_slot(pos)
+
+		# Draw the completed sequence (show top card - Ace face up)
+		if not _foundation_stacks[i].is_empty():
+			var top_card = _foundation_stacks[i][-1]  # Ace (last card in sequence)
+			var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
+			cv.card = top_card
+			cv._refresh()
+			cv.position = pos
+			cv.z_index = 100
+			add_child(cv)
 
 func _draw_stock_deck() -> void:
 	var stock_count = _game.stock.size()
