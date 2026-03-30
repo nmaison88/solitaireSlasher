@@ -688,7 +688,8 @@ func _get_drop_zone_at_position(pos: Vector2) -> int:
 		if Rect2(zone.global_position, zone.size).has_point(pos):
 			return col
 
-	# If no exact hit, find the closest column (handles edge cases)
+	# If no exact hit, find the closest column by X position (handles off-screen drags)
+	# This is especially important when dragging from right edge - finger may go off-screen
 	var closest_col = -1
 	var closest_dist = 9999.0
 	for col in _drop_zones.keys():
@@ -699,8 +700,8 @@ func _get_drop_zone_at_position(pos: Vector2) -> int:
 			closest_dist = dist
 			closest_col = col
 
-	# Only use closest if it's within reasonable range (0.75x card width)
-	if closest_dist <= CARD_SIZE.x * 0.75:
+	# Allow larger radius for edge cases (off-screen drags) - use full card width
+	if closest_dist <= CARD_SIZE.x * 1.5:
 		return closest_col
 
 	return -1
