@@ -185,11 +185,12 @@ func _on_race_started() -> void:
 			return
 		else:
 			# No mirror mode or host creating game normally
-			if network_manager.is_host and mirror_mode_enabled:
-				# Host should create game with the same seed used for mirror data
-				# But the host already created the game in start_multiplayer_race()!
+			if network_manager.is_host:
+				# Host already created the game in start_multiplayer_race() with proper initialization
+				# Skip duplicate creation regardless of mirror mode setting
 				print("Host: Game already created in start_multiplayer_race(), skipping duplicate creation")
 			else:
+				# Client without mirror data - create a random game
 				local_game.new_game(randi())
 				print("Creating normal game (mirror mode: ", mirror_mode_enabled, ", is_host: ", network_manager.is_host, ")")
 		
