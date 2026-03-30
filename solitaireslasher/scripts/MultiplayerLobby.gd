@@ -265,7 +265,7 @@ func _create_game_settings_display() -> void:
 	diff_slider.step = 1
 	diff_slider.value = current_index
 	diff_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	diff_slider.custom_minimum_size = Vector2(260, 80)  # Thicker slider for easier thumb interaction
+	diff_slider.custom_minimum_size = Vector2(260, 120)  # Extra thick slider for easier thumb interaction
 
 	# Make slider grab area bigger for large thumbs
 	var slider_grab_style = StyleBoxFlat.new()
