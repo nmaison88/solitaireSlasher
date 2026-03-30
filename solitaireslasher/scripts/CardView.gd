@@ -164,9 +164,10 @@ func _on_motion(global_pos: Vector2) -> void:
 			card_drag_started.emit(self)
 			print("DEBUG: CardView drag_started at ", global_pos, " original_position: ", original_position)
 	if is_dragging:
+		# Allow card to move off-screen to follow finger during edge drags
+		# This ensures 1-to-1 finger tracking even at screen boundaries
 		global_position = global_pos + drag_offset
 		card_drag_moved.emit(self, global_position)  # Emit global_position not local position
-		#print("DEBUG: CardView dragging - finger: ", global_pos, " drag_offset: ", drag_offset, " card_pos: ", global_position)
 
 func _card_clicked() -> void:
 	card_clicked.emit(self)
