@@ -625,6 +625,8 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 	var dest_col = _get_drop_zone_at_position(target_position)
 	var moved = false
 
+	print("DEBUG: drag_ended - src: ", src_col, ", target_pos: ", target_position, ", dest: ", dest_col, ", can_place: ", (dest_col != -1 and _game.can_place_on(top_drag_card, dest_col)))
+
 	if dest_col != -1 and src_col != -1 and dest_col != src_col:
 		if _game.can_place_on(top_drag_card, dest_col) and _game.can_move_from(src_col, card_idx):
 			var card_count = _dragged_cards.size()

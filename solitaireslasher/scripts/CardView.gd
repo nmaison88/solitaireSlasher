@@ -162,9 +162,11 @@ func _on_motion(global_pos: Vector2) -> void:
 		if mouse_press_position.distance_to(global_pos) > drag_threshold:
 			is_dragging = true
 			card_drag_started.emit(self)
+			print("DEBUG: CardView drag_started at ", global_pos, " original_position: ", original_position)
 	if is_dragging:
 		global_position = global_pos + drag_offset
-		card_drag_moved.emit(self, position)
+		card_drag_moved.emit(self, global_position)  # Emit global_position not local position
+		#print("DEBUG: CardView dragging - finger: ", global_pos, " drag_offset: ", drag_offset, " card_pos: ", global_position)
 
 func _card_clicked() -> void:
 	card_clicked.emit(self)
