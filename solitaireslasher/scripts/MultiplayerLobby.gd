@@ -257,6 +257,7 @@ func _create_game_settings_display() -> void:
 	easy_lbl.add_theme_font_size_override("font_size", 26)
 	easy_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	slider_row.add_child(easy_lbl)
+
 	var diff_slider = HSlider.new()
 	diff_slider.name = "DifficultySlider"
 	diff_slider.min_value = 0
@@ -264,7 +265,54 @@ func _create_game_settings_display() -> void:
 	diff_slider.step = 1
 	diff_slider.value = current_index
 	diff_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	diff_slider.custom_minimum_size = Vector2(260, 44)
+	diff_slider.custom_minimum_size = Vector2(260, 80)  # Thicker slider for easier thumb interaction
+
+	# Make slider grab area bigger for large thumbs
+	var slider_grab_style = StyleBoxFlat.new()
+	slider_grab_style.bg_color = Color(0.3, 0.8, 0.3, 1.0)
+	slider_grab_style.corner_radius_top_left = 16
+	slider_grab_style.corner_radius_top_right = 16
+	slider_grab_style.corner_radius_bottom_left = 16
+	slider_grab_style.corner_radius_bottom_right = 16
+	diff_slider.add_theme_stylebox_override("grabber", slider_grab_style)
+
+	# Make slider track thicker
+	var slider_track_style = StyleBoxFlat.new()
+	slider_track_style.bg_color = Color(0.2, 0.2, 0.2, 0.8)
+	slider_track_style.corner_radius_top_left = 8
+	slider_track_style.corner_radius_top_right = 8
+	slider_track_style.corner_radius_bottom_left = 8
+	slider_track_style.corner_radius_bottom_right = 8
+	diff_slider.add_theme_stylebox_override("slider", slider_track_style)
+
+	# Add click-to-position behavior: left=Easy, middle=Medium, right=Hard
+	diff_slider.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed:
+			# Get the click position relative to the slider
+			var click_pos = event.position.x - diff_slider.global_position.x
+			var slider_width = diff_slider.size.x
+			var relative_pos = click_pos / slider_width  # 0.0 to 1.0
+
+			if relative_pos < 0.33:
+				diff_slider.value = 0  # Easy
+			elif relative_pos < 0.67:
+				diff_slider.value = 1  # Medium
+			else:
+				diff_slider.value = 2  # Hard
+		elif event is InputEventScreenTouch and event.pressed:
+			# Handle touch input
+			var click_pos = event.position.x - diff_slider.global_position.x
+			var slider_width = diff_slider.size.x
+			var relative_pos = click_pos / slider_width
+
+			if relative_pos < 0.33:
+				diff_slider.value = 0  # Easy
+			elif relative_pos < 0.67:
+				diff_slider.value = 1  # Medium
+			else:
+				diff_slider.value = 2  # Hard
+	)
+
 	slider_row.add_child(diff_slider)
 	var hard_lbl = Label.new()
 	hard_lbl.text = "Hard"
