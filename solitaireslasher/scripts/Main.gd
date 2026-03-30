@@ -1446,6 +1446,8 @@ func _setup_multiplayer_game() -> void:
 	if _current_game_type == "Sudoku":
 		_setup_multiplayer_sudoku()
 	else:  # Solitaire
+		# Ensure MultiplayerGameManager has the correct game type for synchronization
+		MultiplayerGameManager.current_game_type = "Solitaire"
 		# Always set up buttons and signals — game may not be ready yet (mirror-mode client
 		# is waiting for mirror data), but the UI and signal wiring must happen now.
 		_show_new_game_button()
@@ -2172,14 +2174,21 @@ func _on_ready_pressed() -> void:
 func _on_all_players_ready() -> void:
 	"""Called when all players are ready to start new round"""
 	print("All players ready - starting new round")
-	
+
 	# Hide ready notification
 	if _last_standing_notification:
 		_last_standing_notification.queue_free()
 		_last_standing_notification = null
-	
+
+	# Use the game type from MultiplayerGameManager, which is synced across all players
+	var current_game_type = MultiplayerGameManager.current_game_type
+	if current_game_type.is_empty():
+		# Fallback to local game type if not set
+		current_game_type = _current_game_type
+	print("DEBUG: _on_all_players_ready - current_game_type from MGM: ", MultiplayerGameManager.current_game_type, ", fallback: ", _current_game_type)
+
 	# Re-enable board interactions for current game type
-	if _current_game_type == "Sudoku":
+	if current_game_type == "Sudoku":
 		if _sudoku_board:
 			_sudoku_board.mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -2204,10 +2213,20 @@ func _on_all_players_ready() -> void:
 		if _player_status_label:
 			_player_status_label.text = "Race in progress..."
 	else:  # Solitaire
-		# Board re-enable and button/label reset happens in _on_multiplayer_race_board_ready()
+		# Re-enable board interactions after forfeit
+		if _board:
+			_board.mouse_filter = Control.MOUSE_FILTER_STOP
+
+		# Re-enable forfeit button
+		for child in get_children():
+			if child is Button and child.name == "new_game":
+				child.disabled = false
+				child.tooltip_text = "Forfeit (Mark as Jammed)"
+
+		# Board re-setup happens in _on_multiplayer_race_board_ready()
 		# which fires when MultiplayerGameManager.race_started is emitted after _start_new_round()
-		# sets up the new game.  Nothing to do here except hide the notification (done above).
-		pass
+		if _player_status_label:
+			_player_status_label.text = "Race in progress..."
 
 func _on_forfeit_pressed() -> void:
 	"""Handle forfeit button press in multiplayer"""
