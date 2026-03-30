@@ -223,15 +223,6 @@ func _draw_stock_deck() -> void:
 
 		add_child(cv)
 
-	# Deal count label below the deck
-	var lbl = Label.new()
-	var draws_left = int(ceil(_game.stock.size() / float(SpiderGame.TABLEAU_COUNT)))
-	lbl.text = "%d deal%s left" % [draws_left, "s" if draws_left != 1 else ""]
-	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.modulate.a = 0.75
-	lbl.position = Vector2(_stock_pos().x, 16.0 + CARD_SIZE.y + visible_cards * STACK_OFFSET_Y + 6.0)
-	add_child(lbl)
-
 # ── Undo / Redo buttons ────────────────────────────────────────────────────────
 
 func _circle_style(color: Color, radius: float) -> StyleBoxFlat:
