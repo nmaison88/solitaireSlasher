@@ -532,8 +532,8 @@ func _draw_stock(pos: Vector2) -> void:
 		return
 
 	var stock_size = game.stock.size()
-	var waste_size = game.waste.size() if game.waste else 0
-	print("DEBUG: Board._draw_stock - stock size: ", stock_size, ", waste size: ", waste_size)
+	var waste_size = game.waste.size() if (game.waste and game.waste is Array) else -1
+	print("DEBUG: Board._draw_stock - stock size: ", stock_size, ", waste: ", ("null" if not game.waste else "array"), ", waste size: ", waste_size)
 
 	if game.stock.is_empty():
 		print("DEBUG: Board._draw_stock - Stock is empty, creating recycle button at position: ", pos)
