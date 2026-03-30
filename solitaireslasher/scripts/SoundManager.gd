@@ -190,7 +190,8 @@ func play_restart_deck() -> void:
 
 func play_background_music() -> void:
 	if music_player and music_player.stream and not music_player.playing:
-		music_player.play()
+		if PlayerData.is_background_music_enabled():
+			music_player.play()
 
 func stop_background_music() -> void:
 	if music_player and music_player.playing:
@@ -215,7 +216,8 @@ func play_game_start() -> void:
 func _on_music_finished() -> void:
 	# Loop the music when it finishes
 	if music_player and music_player.stream:
-		music_player.play()
+		if PlayerData.is_background_music_enabled():
+			music_player.play()
 
 # Helper function to load sounds from files
 func load_sounds(card_place_path: String, card_draw_path: String, win_path: String) -> void:

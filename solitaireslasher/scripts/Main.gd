@@ -1042,11 +1042,14 @@ func _show_main_menu() -> void:
 			child.visible = false
 
 	# Start background music when on any menu
-	# But only if not in multiplayer mode
+	# But only if not in multiplayer mode and if setting is enabled
 	if SoundManager:
 		if not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer):
-			SoundManager.play_background_music()
-			print("Started background music (single player mode)")
+			if PlayerData.is_background_music_enabled():
+				SoundManager.play_background_music()
+				print("Started background music (single player mode)")
+			else:
+				print("Background music disabled in settings")
 		else:
 			print("Keeping music stopped (multiplayer mode)")
 
@@ -2497,11 +2500,72 @@ func _on_settings_button_pressed() -> void:
 	theme_container.add_child(dark_mode_toggle)
 	theme_section.add_child(theme_container)
 	settings_menu.add_child(theme_section)
-	
+
 	var spacer5 = Control.new()
-	spacer5.custom_minimum_size = Vector2(0, 50)
+	spacer5.custom_minimum_size = Vector2(0, 40)
 	settings_menu.add_child(spacer5)
-	
+
+	# Add separator line
+	var separator3 = HSeparator.new()
+	separator3.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
+	settings_menu.add_child(separator3)
+
+	var spacer6 = Control.new()
+	spacer6.custom_minimum_size = Vector2(0, 30)
+	settings_menu.add_child(spacer6)
+
+	# Sound section with background music toggle
+	var sound_section = VBoxContainer.new()
+	sound_section.add_theme_constant_override("separation", 15)
+
+	var sound_label = Label.new()
+	sound_label.text = "Sound"
+	sound_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sound_label.add_theme_font_size_override("font_size", 28)
+	sound_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	sound_section.add_child(sound_label)
+
+	# Background music toggle container
+	var music_container = HBoxContainer.new()
+	music_container.add_theme_constant_override("separation", 25)
+	music_container.alignment = HBoxContainer.ALIGNMENT_CENTER
+
+	var music_label = Label.new()
+	music_label.text = "Background Music"
+	music_label.custom_minimum_size = Vector2(200, 60)
+	music_label.add_theme_font_size_override("font_size", 24)
+	music_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
+	music_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	music_container.add_child(music_label)
+
+	var music_toggle = CheckBox.new()
+	music_toggle.button_pressed = PlayerData.is_background_music_enabled()
+	music_toggle.custom_minimum_size = Vector2(80, 80)
+	music_toggle.add_theme_font_size_override("font_size", 48)
+	music_toggle.toggled.connect(_on_background_music_toggled)
+
+	# Style the toggle for better visibility
+	var music_toggle_style = StyleBoxFlat.new()
+	music_toggle_style.bg_color = Color(0.7, 0.7, 0.7) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
+	music_toggle_style.corner_radius_top_left = 12
+	music_toggle_style.corner_radius_top_right = 12
+	music_toggle_style.corner_radius_bottom_left = 12
+	music_toggle_style.corner_radius_bottom_right = 12
+	music_toggle_style.border_width_left = 3
+	music_toggle_style.border_width_right = 3
+	music_toggle_style.border_width_top = 3
+	music_toggle_style.border_width_bottom = 3
+	music_toggle_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
+	music_toggle.add_theme_stylebox_override("normal", music_toggle_style)
+
+	music_container.add_child(music_toggle)
+	sound_section.add_child(music_container)
+	settings_menu.add_child(sound_section)
+
+	var spacer7 = Control.new()
+	spacer7.custom_minimum_size = Vector2(0, 50)
+	settings_menu.add_child(spacer7)
+
 	# Back button with professional styling
 	var back_button = Button.new()
 	back_button.text = "Back"
@@ -2611,6 +2675,20 @@ func _on_dark_mode_toggled(toggled_on: bool) -> void:
 		print("Sudoku board theme updated")
 	
 	print("Theme changed to: ", new_theme)
+
+func _on_background_music_toggled(toggled_on: bool) -> void:
+	"""Handle background music toggle"""
+	PlayerData.set_background_music_enabled(toggled_on)
+	print("Background music toggled: ", toggled_on)
+
+	if toggled_on:
+		# Start playing background music
+		if SoundManager:
+			SoundManager.play_background_music()
+	else:
+		# Stop background music
+		if SoundManager:
+			SoundManager.stop_background_music()
 
 func _on_settings_back() -> void:
 	"""Handle settings back button"""

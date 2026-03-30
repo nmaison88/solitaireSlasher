@@ -159,7 +159,8 @@ func draw_from_stock_3() -> void:
 
 	# If stock is empty, recycle waste pile back to stock
 	if stock.is_empty():
-		print("DEBUG: Game.draw_from_stock_3 - stock is empty, attempting to recycle waste (waste size: ", waste.size(), ")")
+		var waste_size = waste.size() if waste else -1
+		print("DEBUG: Game.draw_from_stock_3 - stock is empty, attempting to recycle waste (waste: ", ("null" if not waste else "array"), ", size: ", waste_size, ")")
 		_recycle_waste_to_stock()
 		# If still empty after recycling, nothing to draw
 		if stock.is_empty():

@@ -96,6 +96,7 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	# Clear any remaining foundation CardViews from previous game
 	for child in get_children():
 		if child is CardView and child.has_meta("_foundation_card"):
+			remove_child(child)
 			child.queue_free()
 
 	if _game == null:
@@ -111,65 +112,52 @@ func _on_game_won() -> void:
 	game_won.emit()
 	_show_win_screen()
 
-func _on_sequence_completed(col: int, suit: int) -> void:
-	"""Handle completed sequence - animate to foundation"""
+func _animate_completed_sequence_to_foundation(stack_views: Array, src_col: int, cards: Array) -> void:
+	"""Animate completed sequence from tableau to foundation"""
 	if _foundation_stacks.size() >= 4:
-		return  # Already have 4 foundations
-
-	# Get the 13 cards that were just removed (they're still in view)
-	var cards_to_animate: Array = []
-	for child in get_children():
-		if child is CardView and child.card and child.card.suit == suit and child.card.face_up:
-			cards_to_animate.append(child)
-
-	if cards_to_animate.is_empty():
 		return
 
-	# Sort by position (bottom to top)
-	cards_to_animate.sort_custom(func(a, b): return a.global_position.y > b.global_position.y)
-
-	# Keep only the top 13 cards from this column
-	if cards_to_animate.size() > 13:
-		cards_to_animate = cards_to_animate.slice(0, 13)
-
-	# Mark these CardViews so render() won't free them during animation
-	for cv in cards_to_animate:
-		cv.set_meta("_foundation_animating", true)
-
-	# Calculate foundation position (above left 4 columns, stacked)
+	var foundation_col = _foundation_stacks.size()
 	var col_gap = _get_col_gap()
 	var left_x = _get_left_x()
-	var foundation_col = _foundation_stacks.size()
 	var foundation_x = left_x + foundation_col * (CARD_SIZE.x + col_gap)
-	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0  # Above tableau with gap
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 50.0
+	var foundation_pos = Vector2(foundation_x, foundation_y)
 
-	# Animate each card to foundation position with stagger
+	# Mark CardViews so render() won't free them
+	for cv in stack_views:
+		cv.set_meta("_foundation_animating", true)
+
+	# Animate all cards in the sequence to foundation as a group
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN_OUT)
 	tween.set_trans(Tween.TRANS_QUAD)
 	tween.set_parallel(true)
 
-	for i in range(cards_to_animate.size()):
-		var cv = cards_to_animate[i]
-		var stagger_delay = i * 0.03
-		tween.tween_callback(func(): pass).set_delay(stagger_delay)
-		tween.tween_property(cv, "global_position", Vector2(foundation_x, foundation_y), 0.5)
+	for cv in stack_views:
+		if is_instance_valid(cv):
+			tween.tween_property(cv, "global_position", foundation_pos, 0.5)
 
 	await tween.finished
+
+	# Hide and track the foundation
+	for cv in stack_views:
+		if is_instance_valid(cv):
+			cv.visible = false
+			cv.remove_meta("_foundation_animating")
+
+	_foundation_stacks.append(cards.map(func(card): return card))
 
 	# Play foundation sound
 	if SoundManager:
 		SoundManager.play_foundation()
 
-	# Hide the animated cards and track the foundation (check if still valid)
-	for cv in cards_to_animate:
-		if is_instance_valid(cv):
-			cv.visible = false
-			cv.remove_meta("_foundation_animating")  # Allow cleanup in next render
-	_foundation_stacks.append(cards_to_animate.map(func(cv): return cv.card))
-
-	# Re-render to show new foundation position
+	# Re-render to show new foundation
 	render()
+
+func _on_sequence_completed(col: int, suit: int) -> void:
+	"""Signal handler for sequence completion - sequence animation is now handled in click/drag handlers"""
+	pass  # Sequence animation is handled after move animations in _on_card_clicked and _on_card_drag_ended
 
 func _animate_foundation_removal(foundation_index: int) -> void:
 	"""Animate removed foundation back to tableau during undo"""
@@ -183,7 +171,7 @@ func _animate_foundation_removal(foundation_index: int) -> void:
 	# Calculate foundation position
 	var col_gap = _get_col_gap()
 	var left_x = _get_left_x()
-	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 50.0
 	var foundation_x = left_x + foundation_index * (CARD_SIZE.x + col_gap)
 	var foundation_pos = Vector2(foundation_x, foundation_y)
 
@@ -297,7 +285,7 @@ func _animate_foundation_addition(foundation_index: int) -> void:
 	# Calculate foundation position
 	var col_gap = _get_col_gap()
 	var left_x = _get_left_x()
-	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 50.0
 	var foundation_x = left_x + foundation_index * (CARD_SIZE.x + col_gap)
 	var foundation_pos = Vector2(foundation_x, foundation_y)
 
@@ -341,6 +329,7 @@ func render() -> void:
 		if child.has_meta("_foundation_animating"):
 			continue
 		if is_instance_valid(child) and not child.is_queued_for_deletion():
+			remove_child(child)
 			child.queue_free()
 
 	_drop_zones.clear()
@@ -413,7 +402,7 @@ func _draw_foundations() -> void:
 
 	var col_gap = _get_col_gap()
 	var left_x = _get_left_x()
-	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 50.0
 
 	for i in range(_foundation_stacks.size()):
 		var foundation_x = left_x + i * (CARD_SIZE.x + col_gap)
@@ -835,15 +824,19 @@ func _on_card_clicked(card_view: CardView) -> void:
 
 	var card_count = stack_cards.size()
 	var seq_before = _game.sequences_completed
+	# Save destination size BEFORE move (move_cards calls _check_sequences which removes cards)
+	var dest_size_before = _game.tableaus[dest_col].size()
 	_game.move_cards(src_col, card_idx, dest_col)
+	var sequence_completed = _game.sequences_completed > seq_before
+
 	if SoundManager:
-		if _game.sequences_completed > seq_before:
+		if sequence_completed:
 			SoundManager.play_card_place()
 			SoundManager.play_foundation()
 		else:
 			SoundManager.play_card_place()
 
-	var dest_start = _game.tableaus[dest_col].size() - card_count
+	var dest_start = dest_size_before
 	for sv in stack_views:
 		if is_instance_valid(sv):
 			sv.z_index = 500
@@ -863,6 +856,10 @@ func _on_card_clicked(card_view: CardView) -> void:
 			if child is CardView and child.card == card_to_flip:
 				await _animate_card_flip(child)
 				break
+
+	# If a sequence was completed, animate it to the foundation
+	if sequence_completed:
+		await _animate_completed_sequence_to_foundation(stack_views, dest_col, stack_cards)
 
 	_animating = false
 	render()
@@ -937,16 +934,19 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 		if _game.can_place_on(top_drag_card, dest_col) and _game.can_move_from(src_col, card_idx):
 			var card_count = _dragged_cards.size()
 			var seq_before_drag = _game.sequences_completed
+			# Save destination size BEFORE move (move_cards calls _check_sequences which removes cards)
+			var dest_size_before = _game.tableaus[dest_col].size()
 			_game.move_cards(src_col, card_idx, dest_col)
+			var sequence_completed = _game.sequences_completed > seq_before_drag
 			if SoundManager:
-				if _game.sequences_completed > seq_before_drag:
+				if sequence_completed:
 					SoundManager.play_card_place()
 					SoundManager.play_foundation()
 				else:
 					SoundManager.play_card_place()
 			moved = true
 
-			var dest_start = _game.tableaus[dest_col].size() - card_count
+			var dest_start = dest_size_before
 			var tween = create_tween()
 			tween.set_ease(Tween.EASE_OUT)
 			tween.set_trans(Tween.TRANS_CUBIC)
@@ -962,6 +962,10 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 					if child is CardView and child.card == card_to_flip:
 						await _animate_card_flip(child)
 						break
+
+			# If a sequence was completed, animate it to the foundation
+			if sequence_completed:
+				await _animate_completed_sequence_to_foundation(_dragged_card_views, dest_col, _dragged_cards)
 
 	if not moved:
 		var snap_tween = create_tween()

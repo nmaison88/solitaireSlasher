@@ -4,6 +4,7 @@ const SAVE_FILE_PATH = "user://player_data.json"
 
 var player_name: String = "Player"
 var theme: String = "dark"
+var background_music_enabled: bool = true
 var stats: Dictionary = {
 	"games_played": 0,
 	"games_won": 0,
@@ -21,9 +22,10 @@ func save_data() -> void:
 	var data = {
 		"player_name": player_name,
 		"theme": theme,
+		"background_music_enabled": background_music_enabled,
 		"stats": stats
 	}
-	
+
 	var file = FileAccess.open(SAVE_FILE_PATH, FileAccess.WRITE)
 	if file:
 		var json_string = JSON.stringify(data, "\t")
@@ -38,23 +40,26 @@ func load_data() -> void:
 	if not FileAccess.file_exists(SAVE_FILE_PATH):
 		print("No save file found, using defaults")
 		return
-	
+
 	var file = FileAccess.open(SAVE_FILE_PATH, FileAccess.READ)
 	if file:
 		var json_string = file.get_as_text()
 		file.close()
-		
+
 		var json = JSON.new()
 		var parse_result = json.parse(json_string)
-		
+
 		if parse_result == OK:
 			var data = json.data
 			if data.has("player_name"):
 				player_name = data.player_name
-				
+
 			if data.has("theme"):
 				theme = data.theme
-				
+
+			if data.has("background_music_enabled"):
+				background_music_enabled = data.background_music_enabled
+
 			if data.has("stats"):
 				stats = data.stats
 			print("Player data loaded: ", player_name)
@@ -97,3 +102,11 @@ func set_theme(new_theme: String) -> void:
 	theme = new_theme
 	save_data()
 
+func is_background_music_enabled() -> bool:
+	"""Get background music setting"""
+	return background_music_enabled
+
+func set_background_music_enabled(enabled: bool) -> void:
+	"""Set background music and save"""
+	background_music_enabled = enabled
+	save_data()
