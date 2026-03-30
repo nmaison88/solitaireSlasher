@@ -306,7 +306,11 @@ func render():
 	# Hide game over overlay if visible
 	if game_over_overlay:
 		game_over_overlay.visible = false
-	
+
+	# Hide win overlay if visible
+	if win_overlay:
+		win_overlay.visible = false
+
 	# Reset hearts to full
 	_update_hearts(3)
 	

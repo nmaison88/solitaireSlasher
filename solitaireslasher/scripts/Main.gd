@@ -1261,6 +1261,7 @@ func _on_spider_game_won() -> void:
 	print("Spider Solitaire won!")
 	_status_label.text = "You Win!"
 	_status_label.visible = true
+	PlayerData.clear_saved_game("Spider")
 	if SoundManager:
 		SoundManager.play_win()
 
