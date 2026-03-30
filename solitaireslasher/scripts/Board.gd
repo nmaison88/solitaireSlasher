@@ -523,9 +523,16 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 		center.add_child(icon)
 
 func _draw_stock(pos: Vector2) -> void:
-	if not game or not game.stock:
-		print("Board.render: Stock not ready, skipping stock rendering")
+	if not game:
+		print("Board.render: Stock not ready - game is null")
 		return
+
+	if game.stock == null:
+		print("Board.render: Stock not ready - game.stock is null")
+		return
+
+	if game.stock.is_empty():
+		print("Board.render: Stock is empty (size: ", game.stock.size(), "), creating recycle button")
 		
 	if game.stock.is_empty():
 		# Empty stock — circular redo button centred in the slot
