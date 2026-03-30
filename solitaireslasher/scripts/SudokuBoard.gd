@@ -43,7 +43,7 @@ func _init_theme_colors() -> void:
 		theme_colors = {
 			"cell": Color(0.2, 0.2, 0.2),  # Dark gray cells
 			"text": Color(1.0, 1.0, 1.0),  # White text
-			"user_text": Color(0.0, 0.0, 1.0),  # Blue text for user input
+			"user_text": Color(1.0, 1.0, 1.0),  # White text for user input (matching seeded text)
 			"highlight_row": Color(0, 0.1, 0.2, 0.5),  # Dark blue highlight
 			"highlight_match": Color(0.1, 0.2, 0.4),  # Darker blue
 			"selected": Color(0.3, 0.4, 0.6),  # Medium blue
@@ -560,7 +560,12 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	
 	# Update erase button state after filling a cell
 	_update_erase_button_state()
-	
+
+	# Check for line, column, and section completions when correct entry is made
+	if is_correct and value != 0:
+		print("Checking for completions at (", row, ",", col, ")")
+		_check_for_completions(row, col)
+
 	# Keep gray background consistent with other cells
 	var stylebox = StyleBoxFlat.new()
 	stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Gray background (same as all cells)
@@ -666,3 +671,94 @@ func _on_puzzle_completed():
 				btn.disabled = true
 	
 	game_completed.emit()
+
+func _check_for_completions(row: int, col: int) -> void:
+	"""Check if the cell at (row, col) completes a line, column, or 3x3 section"""
+	var completed_cells: Array[Vector2i] = []
+
+	# Check row completion
+	if _is_row_complete(row):
+		print("Row ", row, " completed!")
+		for c in range(GRID_SIZE):
+			completed_cells.append(Vector2i(row, c))
+		_animate_completion(completed_cells)
+		return
+
+	# Check column completion
+	if _is_column_complete(col):
+		print("Column ", col, " completed!")
+		for r in range(GRID_SIZE):
+			completed_cells.append(Vector2i(r, col))
+		_animate_completion(completed_cells)
+		return
+
+	# Check 3x3 section completion
+	var section_row = (row / 3) * 3
+	var section_col = (col / 3) * 3
+	if _is_section_complete(section_row, section_col):
+		print("Section (", section_row, ",", section_col, ") completed!")
+		for r in range(section_row, section_row + 3):
+			for c in range(section_col, section_col + 3):
+				completed_cells.append(Vector2i(r, c))
+		_animate_completion(completed_cells)
+
+func _is_row_complete(row: int) -> bool:
+	"""Check if a row has all cells filled with correct values"""
+	for col in range(GRID_SIZE):
+		if game.get_cell_value(row, col) != game.get_solution_value(row, col):
+			return false
+	return true
+
+func _is_column_complete(col: int) -> bool:
+	"""Check if a column has all cells filled with correct values"""
+	for row in range(GRID_SIZE):
+		if game.get_cell_value(row, col) != game.get_solution_value(row, col):
+			return false
+	return true
+
+func _is_section_complete(start_row: int, start_col: int) -> bool:
+	"""Check if a 3x3 section has all cells filled with correct values"""
+	for r in range(start_row, start_row + 3):
+		for c in range(start_col, start_col + 3):
+			if game.get_cell_value(r, c) != game.get_solution_value(r, c):
+				return false
+	return true
+
+func _animate_completion(cells: Array[Vector2i]) -> void:
+	"""Animate stars appearing and fading for completed cells"""
+	print("Animating completion for ", cells.size(), " cells")
+	# Play foundation sound for completion
+	if SoundManager:
+		SoundManager.play_foundation()
+
+	# First, create all stars and store them with their tweens
+	var stars_and_tweens: Array = []
+
+	for cell_pos in cells:
+		var row = cell_pos.x
+		var col = cell_pos.y
+		var btn = grid_buttons[row][col]
+		if not btn:
+			continue
+
+		# Create star label
+		var star = Label.new()
+		star.text = "★"
+		star.add_theme_font_size_override("font_size", int(cell_size * 0.8))
+		star.add_theme_color_override("font_color", Color(1.0, 0.84, 0.0))  # Gold color
+		star.set_anchors_preset(Control.PRESET_CENTER)
+		btn.add_child(star)
+		print("Star created and added to button at (", row, ",", col, ")")
+
+		# Create tween for star
+		var tween = star.create_tween()
+		tween.set_parallel(true)  # Run animations in parallel
+		tween.tween_property(star, "position:y", -cell_size * 0.5, 0.3)  # Move up quickly
+		tween.tween_property(star, "modulate:a", 0.0, 0.3)  # Fade out quickly
+
+		stars_and_tweens.append({"star": star, "tween": tween})
+
+	# Now wait for all tweens to finish and clean up
+	for item in stars_and_tweens:
+		await item.tween.finished
+		item.star.queue_free()

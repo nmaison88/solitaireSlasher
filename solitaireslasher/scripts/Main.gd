@@ -2859,26 +2859,29 @@ func _show_continue_game_dialog(saved_games: Array) -> void:
 	spacer.custom_minimum_size = Vector2(0, 15)
 	vbox.add_child(spacer)
 
-	# Button container for horizontal layout
-	var button_container = HBoxContainer.new()
-	button_container.add_theme_constant_override("separation", 20)
-	vbox.add_child(button_container)
-
-	# Continue button
+	# Continue button - positioned on left side
 	var continue_btn = Button.new()
 	continue_btn.text = "Continue"
-	continue_btn.custom_minimum_size = Vector2(180, 70)
+	continue_btn.custom_minimum_size = Vector2(160, 70)
 	continue_btn.add_theme_font_size_override("font_size", 28)
 	continue_btn.pressed.connect(func():
 		_handle_continue_game(saved_games[0])  # Continue the first saved game
 		dialog.queue_free()
 	)
-	button_container.add_child(continue_btn)
+	continue_btn.anchor_left = 0.25
+	continue_btn.anchor_right = 0.25
+	continue_btn.anchor_top = 0.75
+	continue_btn.anchor_bottom = 0.75
+	continue_btn.offset_left = -80
+	continue_btn.offset_right = 80
+	continue_btn.offset_top = -35
+	continue_btn.offset_bottom = 35
+	dialog.add_child(continue_btn)
 
-	# New Game button
+	# New Game button - positioned on right side
 	var new_game_btn = Button.new()
 	new_game_btn.text = "New Game"
-	new_game_btn.custom_minimum_size = Vector2(180, 70)
+	new_game_btn.custom_minimum_size = Vector2(160, 70)
 	new_game_btn.add_theme_font_size_override("font_size", 28)
 	new_game_btn.pressed.connect(func():
 		# Clear all saves and proceed with new game
@@ -2886,7 +2889,15 @@ func _show_continue_game_dialog(saved_games: Array) -> void:
 			PlayerData.clear_saved_game(game_type)
 		dialog.queue_free()
 	)
-	button_container.add_child(new_game_btn)
+	new_game_btn.anchor_left = 0.75
+	new_game_btn.anchor_right = 0.75
+	new_game_btn.anchor_top = 0.75
+	new_game_btn.anchor_bottom = 0.75
+	new_game_btn.offset_left = -80
+	new_game_btn.offset_right = 80
+	new_game_btn.offset_top = -35
+	new_game_btn.offset_bottom = 35
+	dialog.add_child(new_game_btn)
 
 func _show_continue_game_dialog_for_type(game_type: String) -> void:
 	"""Show dialog offering to continue or start new game for a specific type"""
@@ -2929,33 +2940,44 @@ func _show_continue_game_dialog_for_type(game_type: String) -> void:
 	spacer.custom_minimum_size = Vector2(0, 15)
 	vbox.add_child(spacer)
 
-	# Button container for horizontal layout
-	var button_container = HBoxContainer.new()
-	button_container.add_theme_constant_override("separation", 20)
-	vbox.add_child(button_container)
-
-	# Continue button
+	# Continue button - positioned on left side
 	var continue_btn = Button.new()
 	continue_btn.text = "Continue"
-	continue_btn.custom_minimum_size = Vector2(180, 70)
+	continue_btn.custom_minimum_size = Vector2(160, 70)
 	continue_btn.add_theme_font_size_override("font_size", 28)
 	continue_btn.pressed.connect(func():
 		_handle_continue_game(game_type)
 		dialog.queue_free()
 	)
-	button_container.add_child(continue_btn)
+	continue_btn.anchor_left = 0.25
+	continue_btn.anchor_right = 0.25
+	continue_btn.anchor_top = 0.75
+	continue_btn.anchor_bottom = 0.75
+	continue_btn.offset_left = -80
+	continue_btn.offset_right = 80
+	continue_btn.offset_top = -35
+	continue_btn.offset_bottom = 35
+	dialog.add_child(continue_btn)
 
-	# New Game button
+	# New Game button - positioned on right side
 	var new_game_btn = Button.new()
 	new_game_btn.text = "New Game"
-	new_game_btn.custom_minimum_size = Vector2(180, 70)
+	new_game_btn.custom_minimum_size = Vector2(160, 70)
 	new_game_btn.add_theme_font_size_override("font_size", 28)
 	new_game_btn.pressed.connect(func():
 		PlayerData.clear_saved_game(game_type)
 		_start_new_game_after_dialog(game_type)
 		dialog.queue_free()
 	)
-	button_container.add_child(new_game_btn)
+	new_game_btn.anchor_left = 0.75
+	new_game_btn.anchor_right = 0.75
+	new_game_btn.anchor_top = 0.75
+	new_game_btn.anchor_bottom = 0.75
+	new_game_btn.offset_left = -80
+	new_game_btn.offset_right = 80
+	new_game_btn.offset_top = -35
+	new_game_btn.offset_bottom = 35
+	dialog.add_child(new_game_btn)
 
 func _start_new_game_after_dialog(game_type: String) -> void:
 	"""Start a new game after the continue/new game dialog is handled"""
@@ -2999,9 +3021,12 @@ func _handle_continue_game(game_type: String) -> void:
 
 	print("Continuing saved game: ", game_type)
 	_hide_main_menu()
+	_update_game_background(game_type)
 
 	match game_type:
 		"Solitaire":
+			# Create the game first (normally done by start_local_game)
+			MultiplayerGameManager.start_local_game(_current_difficulty)
 			_setup_single_player_game()
 			# Load saved state into the game
 			if _game and not save_data.is_empty():
