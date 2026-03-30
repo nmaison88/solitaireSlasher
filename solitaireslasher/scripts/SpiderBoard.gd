@@ -29,6 +29,7 @@ var _last_render_frame: int = -1
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _foundation_stacks: Array = []     # Array[Array[SolitaireCard]] - tracks completed sequences (max 4)
+var _last_click_destination: Dictionary = {}  # Tracks last destination for each card (card_id -> col_index)
 
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 
@@ -90,6 +91,12 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	_undo_btn = null
 	_redo_btn = null
 	_foundation_stacks.clear()
+	_last_click_destination.clear()  # Reset click cycling for new game
+
+	# Clear any remaining foundation CardViews from previous game
+	for child in get_children():
+		if child is CardView and child.has_meta("_foundation_card"):
+			child.queue_free()
 
 	if _game == null:
 		_game = SpiderGame.new()
@@ -415,11 +422,15 @@ func _draw_foundations() -> void:
 		# Draw slot background
 		_draw_column_slot(pos)
 
-		# Draw the completed sequence (show top card - Ace face up)
+		# Draw the completed sequence as a closed back-faced stack (King face-down)
 		if not _foundation_stacks[i].is_empty():
-			var top_card = _foundation_stacks[i][-1]  # Ace (last card in sequence)
+			var dummy_card = SolitaireCard.new()
+			dummy_card.face_up = false  # Show back of card (closed stack)
+			dummy_card.suit = _foundation_stacks[i][0].suit
+			dummy_card.rank = _foundation_stacks[i][0].rank
 			var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
-			cv.card = top_card
+			cv.card = dummy_card
+			cv.set_meta("_foundation_card", true)  # Mark so it can be cleared on new game
 			cv._refresh()
 			cv.position = pos
 			cv.z_index = 100
@@ -767,14 +778,46 @@ func _on_card_clicked(card_view: CardView) -> void:
 	if not _game.can_move_from(src_col, card_idx):
 		return
 
-	var dest_col = -1
+	# Find all valid destination columns, prioritizing non-empty ones first
+	var valid_destinations: Array = []
+	var non_empty_destinations: Array = []
+	var empty_destinations: Array = []
+
 	for dc in range(SpiderGame.TABLEAU_COUNT):
 		if dc != src_col and _game.can_place_on(card, dc):
-			dest_col = dc
-			break
+			valid_destinations.append(dc)
+			if _game.tableaus[dc].is_empty():
+				empty_destinations.append(dc)
+			else:
+				non_empty_destinations.append(dc)
 
-	if dest_col == -1:
+	if valid_destinations.is_empty():
 		return
+
+	# Prioritize non-empty columns, then empty ones
+	var ordered_destinations = non_empty_destinations + empty_destinations
+
+	# Check if we've moved this card before
+	var card_id = card.get_instance_id()
+	var last_dest = _last_click_destination.get(card_id, -1)
+
+	# Find the next destination after the last one
+	var dest_col = -1
+	if last_dest != -1:
+		# Find where last_dest is in the ordered list
+		var last_index = ordered_destinations.find(last_dest)
+		if last_index != -1 and last_index < ordered_destinations.size() - 1:
+			# Move to next position
+			dest_col = ordered_destinations[last_index + 1]
+		else:
+			# Wrap around to first position
+			dest_col = ordered_destinations[0]
+	else:
+		# First time clicking - use first valid (non-empty preferenced)
+		dest_col = ordered_destinations[0]
+
+	# Track this destination for next click
+	_last_click_destination[card_id] = dest_col
 
 	_animating = true
 
