@@ -1124,9 +1124,9 @@ func _start_multiplayer_game() -> void:
 	var settings_button = get_node_or_null("settings_button")
 	if settings_button:
 		settings_button.visible = false
-	
-	if MultiplayerGameManager.is_host_player():
-		MultiplayerGameManager.start_multiplayer_race()
+
+	# Note: start_multiplayer_race() is already called by the lobby before this signal is emitted.
+	# Just set up the game UI here.
 	_setup_multiplayer_game()
 
 func _setup_single_player_game() -> void:
@@ -1838,13 +1838,34 @@ func _setup_multiplayer_sudoku() -> void:
 	print("DEBUG: _sudoku_mirror_mode_enabled: ", _sudoku_mirror_mode_enabled)
 	print("DEBUG: _pending_mirror_data empty: ", MultiplayerGameManager._pending_mirror_data.is_empty())
 	print("DEBUG: is_host: ", MultiplayerGameManager.network_manager.is_host)
-	
+
 	# Set game type in MultiplayerGameManager
 	MultiplayerGameManager.current_game_type = "Sudoku"
-	
+
 	# Clear status label
 	_status_label.text = ""
-	
+
+	# Always set up buttons and signals first — game may not be ready yet (mirror-mode client
+	# waiting for mirror data), but the UI and signal wiring must happen now.
+	# Connect multiplayer signals
+	if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
+		MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
+	if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
+		MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
+	if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
+		MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
+	if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
+		MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
+
+	# Hide menu buttons
+	_hide_menu_buttons()
+
+	# Show game buttons (menu button only, no undo for Sudoku)
+	_show_new_game_button()
+
+	# Setup multiplayer UI
+	_setup_multiplayer_ui()
+
 	# Get difficulty level (1=Easy, 3=Medium, 5=Hard)
 	var difficulty_level = 3  # Default to Medium
 	match _current_difficulty:
@@ -1854,13 +1875,13 @@ func _setup_multiplayer_sudoku() -> void:
 			difficulty_level = 3
 		"Hard":
 			difficulty_level = 5
-	
+
 	# Start new Sudoku game
 	# Check if mirror mode is enabled and we need to wait for data
 	var mirror_mode_enabled = false
 	if NetworkManager.game_settings.has("mirror_mode"):
 		mirror_mode_enabled = NetworkManager.game_settings["mirror_mode"]
-	
+
 	# If mirror mode is already enabled (from receive_mirror_data), use the pending data
 	if _sudoku_mirror_mode_enabled and not MultiplayerGameManager._pending_mirror_data.is_empty():
 		print("Client: Using pending mirror data for Sudoku (flag set)")
@@ -1881,11 +1902,11 @@ func _setup_multiplayer_sudoku() -> void:
 		print("Multiplayer Sudoku game setup complete (flag path)")
 		print("DEBUG: About to continue to common UI setup from flag path")
 		# Continue to common UI setup (don't return)
-	
+
 	if mirror_mode_enabled and MultiplayerGameManager._pending_mirror_data.is_empty() and not MultiplayerGameManager.network_manager.is_host:
 		# Client with mirror mode enabled but no data yet - wait for it
 		print("Client: Mirror mode enabled for Sudoku but no data yet, waiting...")
-		# Don't create game yet, wait for mirror data
+		# Buttons and signals are already set up above, so just return here
 		return
 	
 	# Check if we have pending mirror data (client) or need to generate (host)
@@ -1927,36 +1948,14 @@ func _setup_multiplayer_sudoku() -> void:
 		# Mirror mode game creation (client)
 		_sudoku_game.new_game(difficulty_level, true, mirror_data)
 	_sudoku_board.set_game(_sudoku_game)
-	
-	# Connect signals
+
+	# Connect Sudoku game signals
 	if not _sudoku_game.puzzle_completed.is_connected(_on_multiplayer_sudoku_completed):
 		_sudoku_game.puzzle_completed.connect(_on_multiplayer_sudoku_completed)
 	if not _sudoku_game.game_over.is_connected(_on_multiplayer_sudoku_game_over):
 		_sudoku_game.game_over.connect(_on_multiplayer_sudoku_game_over)
-	
-	# Connect multiplayer signals
-	if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
-		MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
-	if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
-		MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
-	if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
-		MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
-	if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
-		MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
-	
-	# Hide menu buttons
-	_hide_menu_buttons()
-	
-	# Show game buttons (menu button only, no undo for Sudoku)
-	_show_new_game_button()
-	
-	# Setup multiplayer UI
-	_setup_multiplayer_ui()
-	
+
 	print("Multiplayer Sudoku game setup complete")
-	_status_label.text = "Puzzle Completed!"
-	if SoundManager:
-		SoundManager.play_win()
 	# TODO: Send completion to server for race tracking
 
 func _on_multiplayer_sudoku_completed() -> void:
