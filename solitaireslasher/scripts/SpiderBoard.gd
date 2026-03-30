@@ -158,6 +158,155 @@ func _on_sequence_completed(col: int, suit: int) -> void:
 	# Re-render to show new foundation position
 	render()
 
+func _animate_foundation_removal(foundation_index: int) -> void:
+	"""Animate removed foundation back to tableau during undo"""
+	if foundation_index < 0 or foundation_index >= _foundation_stacks.size():
+		return
+
+	var removed_foundation = _foundation_stacks[foundation_index]
+	if removed_foundation.is_empty():
+		return
+
+	# Calculate foundation position
+	var col_gap = _get_col_gap()
+	var left_x = _get_left_x()
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+	var foundation_x = left_x + foundation_index * (CARD_SIZE.x + col_gap)
+	var foundation_pos = Vector2(foundation_x, foundation_y)
+
+	# Create temporary CardViews for animation
+	var ghost_views: Array = []
+	for card in removed_foundation:
+		var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		cv.card = card
+		cv._refresh()
+		cv.position = foundation_pos
+		cv.z_index = 100
+		add_child(cv)
+		ghost_views.append(cv)
+
+	# Find which tableau column these cards belong to (they should be on top of a column now)
+	# The sequence was removed from a specific column, so they go back to that column
+	var target_col = -1
+	var target_y = TABLEAU_TOP_Y
+	for col in range(SpiderGame.TABLEAU_COUNT):
+		# Find which column has the King (bottom card of the sequence)
+		if not _game.tableaus[col].is_empty():
+			var col_size = _game.tableaus[col].size()
+			# The King should be the last card we added back
+			if col_size >= 13:
+				# Check if the top 13 cards match our removed sequence
+				var found = true
+				for i in range(13):
+					if _game.tableaus[col][col_size - 13 + i] != removed_foundation[i]:
+						found = false
+						break
+				if found:
+					target_col = col
+					target_y = _get_card_y(col, col_size - 13)
+					break
+
+	if target_col == -1:
+		# Fallback: just animate down
+		target_col = 0
+		target_y = TABLEAU_TOP_Y + 200.0
+
+	# Animate ghosts back to tableau
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_parallel(true)
+
+	for i in range(ghost_views.size()):
+		var cv = ghost_views[i]
+		var target_pos = Vector2(_get_col_x(target_col), target_y + i * FACE_UP_GAP_Y)
+		tween.tween_property(cv, "global_position", target_pos, 0.5)
+
+	await tween.finished
+
+	# Remove ghost views
+	for cv in ghost_views:
+		cv.queue_free()
+
+	# Play undo-like sound (reverse of foundation sound)
+	if SoundManager:
+		SoundManager.play_card_draw()  # Use card draw as undo indicator
+
+	# Remove from foundation stacks
+	_foundation_stacks.remove_at(foundation_index)
+
+func _animate_foundation_addition(foundation_index: int) -> void:
+	"""Animate restored foundation from tableau back to foundation during redo"""
+	if foundation_index >= _foundation_stacks.size():
+		return
+
+	var restored_foundation = _foundation_stacks[foundation_index]
+	if restored_foundation.is_empty():
+		return
+
+	# Create temporary CardViews starting from tableau position
+	var ghost_views: Array = []
+	var start_col = -1
+
+	# Find where these cards are in the tableau (should be stacked together)
+	for col in range(SpiderGame.TABLEAU_COUNT):
+		if not _game.tableaus[col].is_empty():
+			var col_arr = _game.tableaus[col]
+			var col_size = col_arr.size()
+			# Check if the last 13 cards match our restored sequence
+			if col_size >= 13:
+				var found = true
+				for i in range(13):
+					if col_arr[col_size - 13 + i] != restored_foundation[i]:
+						found = false
+						break
+				if found:
+					start_col = col
+					break
+
+	if start_col == -1:
+		return  # Couldn't find the cards
+
+	# Create ghost views for animation
+	var col_size = _game.tableaus[start_col].size()
+	var start_y = _get_card_y(start_col, col_size - 13)
+
+	for i in range(restored_foundation.size()):
+		var card = restored_foundation[i]
+		var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		cv.card = card
+		cv._refresh()
+		cv.position = Vector2(_get_col_x(start_col), start_y + i * FACE_UP_GAP_Y)
+		cv.z_index = 100
+		add_child(cv)
+		ghost_views.append(cv)
+
+	# Calculate foundation position
+	var col_gap = _get_col_gap()
+	var left_x = _get_left_x()
+	var foundation_y = TABLEAU_TOP_Y - CARD_SIZE.y - 20.0
+	var foundation_x = left_x + foundation_index * (CARD_SIZE.x + col_gap)
+	var foundation_pos = Vector2(foundation_x, foundation_y)
+
+	# Animate ghosts up to foundation
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_parallel(true)
+
+	for cv in ghost_views:
+		tween.tween_property(cv, "global_position", foundation_pos, 0.5)
+
+	await tween.finished
+
+	# Remove ghost views
+	for cv in ghost_views:
+		cv.queue_free()
+
+	# Play foundation sound
+	if SoundManager:
+		SoundManager.play_foundation()
+
 # ── Render ─────────────────────────────────────────────────────────────────────
 
 func render() -> void:
@@ -558,13 +707,33 @@ func _on_stock_pressed() -> void:
 func _on_undo_pressed() -> void:
 	if _animating or not _game.can_undo():
 		return
+
+	# Store foundation state before undo
+	var foundations_before = _foundation_stacks.size()
+
 	_game.undo()
+
+	# Check if a foundation was removed by undo
+	if foundations_before > _foundation_stacks.size():
+		# Animate the removed foundation back down
+		await _animate_foundation_removal(foundations_before - 1)
+
 	render()
 
 func _on_redo_pressed() -> void:
 	if _animating or not _game.can_redo():
 		return
+
+	# Store foundation state before redo
+	var foundations_before = _foundation_stacks.size()
+
 	_game.redo()
+
+	# Check if a foundation was added back by redo
+	if _foundation_stacks.size() > foundations_before:
+		# Animate the newly restored foundation from tableau back to foundation
+		await _animate_foundation_addition(foundations_before)
+
 	render()
 
 # ── Click to move ──────────────────────────────────────────────────────────────
