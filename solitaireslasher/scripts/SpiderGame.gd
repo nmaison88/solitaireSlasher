@@ -211,25 +211,35 @@ func deal_from_stock() -> bool:
 	if stock.is_empty():
 		return false
 
-	# Cannot deal if any tableau column is empty
-	for col in range(TABLEAU_COUNT):
-		if tableaus[col].is_empty():
-			return false
-
 	_history.append(_save_state())
 	_redo_stack.clear()
 
-	# Deal one card to each column (from end of stock), col 0 first
+	# Deal one card to each column that has cards, filling empty columns left-to-right
+	var dealt = false
+
+	# First pass: deal to non-empty columns (left to right)
 	for col in range(TABLEAU_COUNT):
 		if stock.is_empty():
 			break
-		var card: SolitaireCard = stock.pop_back()
-		card.face_up = true
-		tableaus[col].append(card)
+		if not tableaus[col].is_empty():
+			var card: SolitaireCard = stock.pop_back()
+			card.face_up = true
+			tableaus[col].append(card)
+			dealt = true
+
+	# Second pass: if stock still has cards and there are empty columns, fill them left-to-right
+	for col in range(TABLEAU_COUNT):
+		if stock.is_empty():
+			break
+		if tableaus[col].is_empty():
+			var card: SolitaireCard = stock.pop_back()
+			card.face_up = true
+			tableaus[col].append(card)
+			dealt = true
 
 	# Check for completed sequences after dealing
 	_check_sequences()
-	return true
+	return dealt
 
 
 func _check_sequences() -> void:

@@ -377,12 +377,9 @@ func _on_stock_pressed() -> void:
 	if _animating:
 		return
 
-	# Pre-flight checks (mirrors SpiderGame.deal_from_stock guards)
+	# Pre-flight check: only blocked if stock is empty
 	if _game.stock.is_empty():
 		return
-	for col in range(SpiderGame.TABLEAU_COUNT):
-		if _game.tableaus[col].is_empty():
-			return
 
 	_animating = true
 
