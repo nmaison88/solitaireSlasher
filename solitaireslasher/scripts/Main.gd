@@ -1836,11 +1836,15 @@ func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void
 			print("Main: Client using received mirror mode setting: ", mirror_mode_enabled)
 		
 		if not mirror_mode_enabled:
-			MultiplayerGameManager.start_local_game(difficulty)
-			print("Main: No mirror mode, started new local game")
+			# Host already created the game in start_multiplayer_race(), only client needs to create
+			if not MultiplayerGameManager.network_manager.is_host:
+				MultiplayerGameManager.start_local_game(difficulty)
+				print("Main: Client creating game in non-mirror mode")
+			else:
+				print("Main: Host skipping start_local_game() - game already created in start_multiplayer_race()")
 		else:
 			print("Main: Mirror mode enabled, skipping start_local_game()")
-		
+
 		_setup_multiplayer_game()
 
 func set_sudoku_mirror_mode(enabled: bool) -> void:
