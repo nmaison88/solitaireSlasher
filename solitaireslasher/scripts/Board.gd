@@ -528,7 +528,8 @@ func _draw_stock(pos: Vector2) -> void:
 		return
 
 	if game.stock == null:
-		print("DEBUG: Board._draw_stock - game.stock is null")
+		print("DEBUG: Board._draw_stock - game.stock is null! Initializing empty array")
+		game.stock = []  # Initialize if somehow null
 		return
 
 	var stock_size = game.stock.size()
@@ -609,8 +610,16 @@ func _on_stock_pile_input(event: InputEvent) -> void:
 		_on_stock_pressed()
 
 func _draw_waste(pos: Vector2) -> void:
-	if not game or not game.waste:
-		print("Board.render: Waste not ready, skipping waste rendering")
+	if not game:
+		print("DEBUG: Board._draw_waste - game is null")
+		return
+
+	if game.waste == null:
+		print("DEBUG: Board._draw_waste - game.waste is null! Initializing empty array")
+		game.waste = []  # Initialize if somehow null
+		return
+
+	if game.waste.is_empty():
 		return
 		
 	if game.waste.is_empty():
