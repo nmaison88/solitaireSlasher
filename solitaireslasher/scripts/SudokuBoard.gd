@@ -745,7 +745,7 @@ func _animate_completion(cells: Array[Vector2i]) -> void:
 		var star = Label.new()
 		star.text = "★"
 		star.add_theme_font_size_override("font_size", int(cell_size * 0.8))
-		star.add_theme_color_override("font_color", Color(1.0, 0.84, 0.0))  # Gold color
+		star.add_theme_color_override("font_color", Color(1.0, 0.95, 0.5))  # Yellow/white color
 		star.set_anchors_preset(Control.PRESET_CENTER)
 		btn.add_child(star)
 		print("Star created and added to button at (", row, ",", col, ")")
