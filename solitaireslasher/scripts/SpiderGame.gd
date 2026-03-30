@@ -290,3 +290,62 @@ func _check_sequences() -> void:
 			if sequences_completed >= SEQUENCES_TO_WIN:
 				game_won.emit()
 				return
+
+func get_save_data() -> Dictionary:
+	"""Serialize game state for saving"""
+	var tableaus_data: Array = []
+	for col in tableaus:
+		var col_data: Array = []
+		for card in col:
+			col_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": card.face_up
+			})
+		tableaus_data.append(col_data)
+
+	var stock_data: Array = []
+	for card in stock:
+		stock_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": card.face_up
+		})
+
+	return {
+		"tableaus": tableaus_data,
+		"stock": stock_data,
+		"sequences_completed": sequences_completed,
+		"difficulty": _difficulty
+	}
+
+func restore_from_save(save_data: Dictionary) -> void:
+	"""Restore game state from saved data"""
+	if save_data.is_empty():
+		return
+
+	# Reconstruct tableaus
+	tableaus.clear()
+	for col_data in save_data.get("tableaus", []):
+		var col: Array = []
+		for card_data in col_data:
+			var card = SolitaireCard.new()
+			card.suit = card_data.get("suit", 0)
+			card.rank = card_data.get("rank", 0)
+			card.face_up = card_data.get("face_up", false)
+			col.append(card)
+		tableaus.append(col)
+
+	# Reconstruct stock
+	stock.clear()
+	for card_data in save_data.get("stock", []):
+		var card = SolitaireCard.new()
+		card.suit = card_data.get("suit", 0)
+		card.rank = card_data.get("rank", 0)
+		card.face_up = card_data.get("face_up", false)
+		stock.append(card)
+
+	sequences_completed = save_data.get("sequences_completed", 0)
+	_difficulty = save_data.get("difficulty", "Easy")
+	_history.clear()
+	_redo_stack.clear()

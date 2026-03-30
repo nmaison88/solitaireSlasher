@@ -167,6 +167,7 @@ func _on_game_completed() -> void:
 	if multiplayer_manager and multiplayer_manager.is_multiplayer:
 		var _completion_time = game.get_game_time()
 		multiplayer_manager.send_local_progress()
+	PlayerData.clear_saved_game("Solitaire")
 	_show_win_screen()
 
 func _show_win_screen() -> void:
@@ -222,6 +223,7 @@ func _restart_game() -> void:
 		_win_overlay.queue_free()
 		_win_overlay = null
 	_animating = false
+	PlayerData.clear_saved_game("Solitaire")
 	game.new_game()
 	_play_deal_animation()
 

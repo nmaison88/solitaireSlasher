@@ -645,29 +645,36 @@ func _on_single_player_start(game_type: String) -> void:
 	var game_menu = get_node_or_null("GameMenu")
 	if game_menu:
 		game_menu.queue_free()
-	
+
 	# Set the game type
 	_current_game_type = game_type
-	
+
+	# Check for saved games and show prompt if any exist
+	if PlayerData.has_saved_game(game_type):
+		_show_continue_game_dialog_for_type(game_type)
+		return  # Return early - setup will be called after user makes a choice
+
 	# Update background based on game type
 	_update_game_background(game_type)
-	
+
 	# Hide settings button when game starts
 	var settings_button = get_node_or_null("settings_button")
 	if settings_button:
 		settings_button.visible = false
-	
+
 	# Hide menu button when game starts
 	if _menu_button:
 		_menu_button.visible = false
-	
+
 	# Start game based on selection
 	if game_type == "Solitaire":
+		PlayerData.clear_saved_game("Solitaire")
 		MultiplayerGameManager.start_local_game(_current_difficulty)
 		_setup_single_player_game()
 	elif game_type == "Spider":
 		_setup_spider_game()
 	else:  # Sudoku
+		PlayerData.clear_saved_game("Sudoku")
 		_setup_single_player_sudoku()
 
 func _on_game_menu_back() -> void:
@@ -687,14 +694,17 @@ func _on_game_menu_back() -> void:
 
 func _on_show_single_player_menu() -> void:
 	"""Show single player submenu with carousels for game type and difficulty"""
+	# Check for saved games and show continue prompt if any exist
+	_check_and_show_saved_games()
+
 	# Hide main menu
 	_menu_container.visible = false
-	
+
 	# Hide settings button when in single player menu
 	var settings_button = get_node_or_null("settings_button")
 	if settings_button:
 		settings_button.visible = false
-	
+
 	# Create single player menu container - wider to accommodate larger carousel
 	var sp_menu = VBoxContainer.new()
 	sp_menu.name = "SinglePlayerMenu"
@@ -1011,6 +1021,9 @@ func _on_join_game(game_type: String) -> void:
 	_show_multiplayer_lobby(false, player_name)
 
 func _show_main_menu() -> void:
+	# Save current game state before resetting (if game is in progress)
+	_save_current_game_if_in_progress()
+
 	# Reset game state when returning to main menu
 	_current_game_type = ""
 	_current_difficulty = "Medium"
@@ -1180,7 +1193,7 @@ func _setup_single_player_sudoku() -> void:
 	
 	# Clear status label
 	_status_label.text = ""
-	
+
 	# Get difficulty level (1=Easy, 3=Medium, 5=Hard)
 	var difficulty_level = 3  # Default to Medium
 	match _current_difficulty:
@@ -1190,7 +1203,7 @@ func _setup_single_player_sudoku() -> void:
 			difficulty_level = 3
 		"Hard":
 			difficulty_level = 5
-	
+
 	# Start new Sudoku game
 	_sudoku_game.new_game(difficulty_level, true)
 	_sudoku_board.set_game(_sudoku_game)
@@ -1212,6 +1225,7 @@ func _setup_single_player_sudoku() -> void:
 func _on_sudoku_completed() -> void:
 	print("Sudoku puzzle completed!")
 	_status_label.text = "Puzzle Completed!"
+	PlayerData.clear_saved_game("Sudoku")
 	if SoundManager:
 		SoundManager.play_win()
 
@@ -2759,3 +2773,249 @@ func _on_settings_back() -> void:
 		print("DEBUG: Menu background updated to: ", menu_bg.color, " visible: ", menu_bg.visible)
 	
 	print("DEBUG: Settings back function completed")
+
+func _save_current_game_if_in_progress() -> void:
+	"""Save the current game state if a game is in progress"""
+	if _current_game_type.is_empty():
+		return  # No game in progress
+
+	match _current_game_type:
+		"Solitaire":
+			if _game:
+				var save_data = _game.get_save_data()
+				PlayerData.save_game("Solitaire", save_data)
+		"Spider":
+			if _spider_board and _spider_board._game:
+				var save_data = _spider_board._game.get_save_data()
+				PlayerData.save_game("Spider", save_data)
+		"Sudoku":
+			if _sudoku_game:
+				var save_data = _sudoku_game.get_save_data()
+				PlayerData.save_game("Sudoku", save_data)
+
+func _check_and_show_saved_games() -> void:
+	"""Check for saved games and show continue/new game prompt"""
+	# Check each game type for saved games
+	var saved_games: Array = []
+	if PlayerData.has_saved_game("Solitaire"):
+		saved_games.append("Solitaire")
+	if PlayerData.has_saved_game("Spider"):
+		saved_games.append("Spider")
+	if PlayerData.has_saved_game("Sudoku"):
+		saved_games.append("Sudoku")
+
+	if saved_games.is_empty():
+		return  # No saved games, proceed normally
+
+	# Show dialog asking to continue or start new
+	_show_continue_game_dialog(saved_games)
+
+func _check_and_show_saved_games_for_type(game_type: String) -> void:
+	"""Check for saved game of a specific type and show continue/new game prompt"""
+	if not PlayerData.has_saved_game(game_type):
+		return  # No saved game for this type, proceed normally
+
+	# Show dialog asking to continue or start new
+	_show_continue_game_dialog_for_type(game_type)
+
+func _show_continue_game_dialog(saved_games: Array) -> void:
+	"""Show dialog offering to continue or start new game"""
+	# Create notification panel matching ready notification style
+	var dialog = Panel.new()
+	dialog.name = "ContinueGameDialog"
+	dialog.set_anchors_preset(Control.PRESET_CENTER)
+	dialog.anchor_left = 0.5
+	dialog.anchor_top = 0.5
+	dialog.anchor_right = 0.5
+	dialog.anchor_bottom = 0.5
+	dialog.offset_left = -350
+	dialog.offset_top = -220
+	dialog.offset_right = 350
+	dialog.offset_bottom = 220
+	dialog.z_index = 1000
+	add_child(dialog)
+
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 25)
+	dialog.add_child(vbox)
+
+	# Title
+	var title = Label.new()
+	title.text = "Saved Games Found"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	vbox.add_child(title)
+
+	# Message
+	var message = Label.new()
+	message.text = "You have saved games in progress.\nWhat would you like to do?"
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 28)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(message)
+
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(spacer)
+
+	# Button container for horizontal layout
+	var button_container = HBoxContainer.new()
+	button_container.add_theme_constant_override("separation", 20)
+	vbox.add_child(button_container)
+
+	# Continue button
+	var continue_btn = Button.new()
+	continue_btn.text = "Continue"
+	continue_btn.custom_minimum_size = Vector2(180, 70)
+	continue_btn.add_theme_font_size_override("font_size", 28)
+	continue_btn.pressed.connect(func():
+		_handle_continue_game(saved_games[0])  # Continue the first saved game
+		dialog.queue_free()
+	)
+	button_container.add_child(continue_btn)
+
+	# New Game button
+	var new_game_btn = Button.new()
+	new_game_btn.text = "New Game"
+	new_game_btn.custom_minimum_size = Vector2(180, 70)
+	new_game_btn.add_theme_font_size_override("font_size", 28)
+	new_game_btn.pressed.connect(func():
+		# Clear all saves and proceed with new game
+		for game_type in saved_games:
+			PlayerData.clear_saved_game(game_type)
+		dialog.queue_free()
+	)
+	button_container.add_child(new_game_btn)
+
+func _show_continue_game_dialog_for_type(game_type: String) -> void:
+	"""Show dialog offering to continue or start new game for a specific type"""
+	# Create notification panel matching ready notification style
+	var dialog = Panel.new()
+	dialog.name = "ContinueGameDialog"
+	dialog.set_anchors_preset(Control.PRESET_CENTER)
+	dialog.anchor_left = 0.5
+	dialog.anchor_top = 0.5
+	dialog.anchor_right = 0.5
+	dialog.anchor_bottom = 0.5
+	dialog.offset_left = -350
+	dialog.offset_top = -220
+	dialog.offset_right = 350
+	dialog.offset_bottom = 220
+	dialog.z_index = 1000
+	add_child(dialog)
+
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 25)
+	dialog.add_child(vbox)
+
+	# Title
+	var title = Label.new()
+	title.text = "Saved Game Found"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	vbox.add_child(title)
+
+	# Message
+	var message = Label.new()
+	message.text = "You have a saved %s game in progress.\nWhat would you like to do?" % game_type
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 28)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(message)
+
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(spacer)
+
+	# Button container for horizontal layout
+	var button_container = HBoxContainer.new()
+	button_container.add_theme_constant_override("separation", 20)
+	vbox.add_child(button_container)
+
+	# Continue button
+	var continue_btn = Button.new()
+	continue_btn.text = "Continue"
+	continue_btn.custom_minimum_size = Vector2(180, 70)
+	continue_btn.add_theme_font_size_override("font_size", 28)
+	continue_btn.pressed.connect(func():
+		_handle_continue_game(game_type)
+		dialog.queue_free()
+	)
+	button_container.add_child(continue_btn)
+
+	# New Game button
+	var new_game_btn = Button.new()
+	new_game_btn.text = "New Game"
+	new_game_btn.custom_minimum_size = Vector2(180, 70)
+	new_game_btn.add_theme_font_size_override("font_size", 28)
+	new_game_btn.pressed.connect(func():
+		PlayerData.clear_saved_game(game_type)
+		_start_new_game_after_dialog(game_type)
+		dialog.queue_free()
+	)
+	button_container.add_child(new_game_btn)
+
+func _start_new_game_after_dialog(game_type: String) -> void:
+	"""Start a new game after the continue/new game dialog is handled"""
+	# Update background based on game type
+	_update_game_background(game_type)
+
+	# Hide settings button when game starts
+	var settings_button = get_node_or_null("settings_button")
+	if settings_button:
+		settings_button.visible = false
+
+	# Hide menu button when game starts
+	if _menu_button:
+		_menu_button.visible = false
+
+	# Start game based on selection
+	if game_type == "Solitaire":
+		PlayerData.clear_saved_game("Solitaire")
+		MultiplayerGameManager.start_local_game(_current_difficulty)
+		_setup_single_player_game()
+	elif game_type == "Spider":
+		_setup_spider_game()
+	else:  # Sudoku
+		PlayerData.clear_saved_game("Sudoku")
+		_setup_single_player_sudoku()
+
+func _handle_continue_game(game_type: String) -> void:
+	"""Load and continue the specified saved game"""
+	var save_data = PlayerData.load_game(game_type)
+	_current_game_type = game_type
+	var difficulty = save_data.get("difficulty", "Medium")
+	# Convert difficulty to string if it's an integer (for Sudoku compatibility)
+	if difficulty is int:
+		match difficulty:
+			1: _current_difficulty = "Easy"
+			3: _current_difficulty = "Medium"
+			5: _current_difficulty = "Hard"
+			_: _current_difficulty = "Medium"
+	else:
+		_current_difficulty = str(difficulty)
+
+	print("Continuing saved game: ", game_type)
+	_hide_main_menu()
+
+	match game_type:
+		"Solitaire":
+			_setup_single_player_game()
+			# Load saved state into the game
+			if _game and not save_data.is_empty():
+				_game.restore_from_save(save_data)
+				_board.render()
+		"Spider":
+			_setup_spider_game()
+			# Load saved state into the game
+			if _spider_board and _spider_board._game and not save_data.is_empty():
+				_spider_board._game.restore_from_save(save_data)
+				_spider_board.render()
+		"Sudoku":
+			_setup_single_player_sudoku()
+			# Load saved state into the game
+			if _sudoku_game and not save_data.is_empty():
+				_sudoku_game.restore_from_save(save_data)
+				_sudoku_board.render()

@@ -26,6 +26,8 @@ var _auto_winning: bool = false  # Guard against recursive auto-win calls
 # Hint used by Board to play a reverse animation when undo is triggered
 var last_move_hint: Dictionary = {}
 
+var stock_index: int = 0  # Track stock position for save/load
+
 func set_difficulty(diff: String) -> void:
 	"""Set game difficulty"""
 	difficulty = diff
@@ -54,12 +56,12 @@ func new_game(seed: int = -1) -> void:
 func new_game_mirror(mirror_data: Dictionary) -> void:
 	"""Create a game with predefined shuffled deck for mirror mode"""
 	print("Game: Creating mirror mode game from original deck")
-	
+
 	# Use seed from mirror data
 	_rng.randomize()
 	if mirror_data.has("seed"):
 		_rng.seed = mirror_data["seed"]
-	
+
 	# Recreate the original shuffled deck from mirror data
 	var deck = []
 	if mirror_data.has("deck"):
@@ -78,7 +80,7 @@ func new_game_mirror(mirror_data: Dictionary) -> void:
 		deck = Deck.new_standard_deck()
 		Deck.shuffle(deck, _rng)
 		print("Fallback: Created standard shuffled deck")
-	
+
 	# Use the same dealing logic as normal new_game
 	_setup_game_from_deck(deck)
 
@@ -115,7 +117,7 @@ func _setup_game_from_deck(deck: Array) -> void:
 func get_mirror_data() -> Dictionary:
 	"""Get complete game state for mirror mode synchronization"""
 	var deck_data = []
-	
+
 	# Collect all cards from tableau
 	for pile_i in range(tableau.size()):
 		for card in tableau[pile_i]:
@@ -126,7 +128,7 @@ func get_mirror_data() -> Dictionary:
 				"pile_id": card.pile_id,
 				"stock": false
 			})
-	
+
 	# Collect stock cards
 	for card in stock:
 		deck_data.append({
@@ -136,7 +138,7 @@ func get_mirror_data() -> Dictionary:
 			"pile_id": -1,  # Stock pile
 			"stock": true
 		})
-	
+
 	# Collect waste cards
 	for card in waste:
 		deck_data.append({
@@ -146,7 +148,7 @@ func get_mirror_data() -> Dictionary:
 			"pile_id": -2,  # Waste pile
 			"stock": false
 		})
-	
+
 	return {
 		"deck": deck_data,
 		"seed": _rng.seed,
@@ -194,7 +196,7 @@ func _recycle_waste_to_stock() -> void:
 		c.stock = true  # Important: card is back in stock pile
 		stock.append(c)
 	waste.clear()
-	
+
 	# Play restart deck sound after recycling
 	if SoundManager:
 		SoundManager.play_restart_deck()
@@ -226,7 +228,7 @@ func card_texture_path(card: SolitaireCard) -> String:
 	if not card.face_up:
 		# Use card back for face-down cards
 		return "res://card_assets/Back1.png"
-	
+
 	# Reference project uses: {value}.{suit}.png where value is 1-13 and suit is 1-4
 	var value = card.rank  # 1-13
 	var suit = 0
@@ -235,7 +237,7 @@ func card_texture_path(card: SolitaireCard) -> String:
 		1: suit = 2  # DIAMONDS
 		2: suit = 3  # HEARTS
 		3: suit = 4  # SPADES
-	
+
 	return "res://card_assets/%d.%d.png" % [value, suit]
 
 func has_card_texture(card: SolitaireCard) -> bool:
@@ -245,7 +247,7 @@ func can_place_on_foundation(card: SolitaireCard, foundation_index: int) -> bool
 	var foundation = foundations[foundation_index]
 	if foundation.is_empty():
 		return card.rank == 1  # Only Ace on empty foundation
-	
+
 	var top_card = foundation[-1]
 	return card.suit == top_card.suit and card.rank == top_card.rank + 1
 
@@ -253,20 +255,20 @@ func can_place_on_tableau(card: SolitaireCard, tableau_index: int) -> bool:
 	var pile = tableau[tableau_index]
 	if pile.is_empty():
 		return card.rank == 13  # Only King on empty tableau
-	
+
 	var top_card = pile[-1]
 	if not top_card.face_up:
 		return false
-	
+
 	return card.is_red() != top_card.is_red() and card.rank == top_card.rank - 1
 
 func move_to_foundation(from_pile: String, from_index: int, foundation_index: int) -> bool:
 	last_move_hint = {"type": "to_foundation", "from_pile": from_pile,
 		"from_col": from_index, "foundation_col": foundation_index}
 	_save_state()
-	
+
 	var card: SolitaireCard
-	
+
 	match from_pile:
 		"tableau":
 			if from_index >= tableau.size() or tableau[from_index].is_empty():
@@ -278,10 +280,10 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 			card = waste[-1]
 		_:
 			return false
-	
+
 	if not can_place_on_foundation(card, foundation_index):
 		return false
-	
+
 	match from_pile:
 		"tableau":
 			tableau[from_index].pop_back()
@@ -289,139 +291,139 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 				tableau[from_index][-1].face_up = true
 		"waste":
 			waste.pop_back()
-	
+
 	foundations[foundation_index].append(card)
 	_moves_count += 1
 	card_moved.emit(from_pile, "foundation", 1)
 	_check_completion()
 	_check_auto_win()  # Check for auto-win after foundation move
-	
+
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
 		# Play foundation sound after card_place sound
 		SoundManager.play_foundation()
-	
+
 	return true
 
 func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) -> bool:
 	last_move_hint = {"type": "tableau_to_tableau",
 		"from_col": from_index, "to_col": to_index, "card_count": card_count}
 	_save_state()
-	
+
 	if from_index >= tableau.size() or to_index >= tableau.size():
 		return false
-	
+
 	var from_pile = tableau[from_index]
 	var to_pile = tableau[to_index]
-	
+
 	if card_count > from_pile.size() or card_count < 1:
 		return false
-	
+
 	var moving_cards = from_pile.slice(from_pile.size() - card_count)
 	var first_moving_card = moving_cards[0]
-	
+
 	if not first_moving_card.face_up:
 		return false
-	
+
 	if not can_place_on_tableau(first_moving_card, to_index):
 		return false
-	
+
 	# Move cards in correct order (not reversed)
 	for card in moving_cards:
 		to_pile.append(card)
-	
+
 	# Remove the moved cards from source pile
 	for i in range(card_count):
 		from_pile.pop_back()
-	
+
 	if not from_pile.is_empty():
 		from_pile[-1].face_up = true
-	
+
 	_moves_count += 1
 	card_moved.emit("tableau", "tableau", card_count)
-	
+
 	# Check for auto-win after cards are flipped
 	_check_auto_win()
-	
+
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
-	
+
 	return true
 
 func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bool:
 	# Save state before move
 	_save_state()
-	
+
 	if foundation_index >= foundations.size() or tableau_index >= tableau.size():
 		return false
-	
+
 	if foundations[foundation_index].is_empty():
 		return false
-	
+
 	var card = foundations[foundation_index][-1]
-	
+
 	if not can_place_on_tableau(card, tableau_index):
 		return false
-	
+
 	# Remove card from foundation
 	foundations[foundation_index].pop_back()
-	
+
 	# Add card to tableau
 	tableau[tableau_index].append(card)
-	
+
 	_moves_count += 1
 	card_moved.emit("foundation", "tableau", 1)
-	
+
 	# Check for auto-win after foundation move
 	_check_auto_win()
-	
+
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
-	
+
 	return true
 
 func move_waste_to_tableau(tableau_index: int) -> bool:
 	last_move_hint = {"type": "waste_to_tableau", "to_col": tableau_index}
 	_save_state()
-	
+
 	if waste.is_empty() or tableau_index >= tableau.size():
 		return false
-	
+
 	var card = waste[-1]
 	if not can_place_on_tableau(card, tableau_index):
 		return false
-	
+
 	tableau[tableau_index].append(waste.pop_back())
 	_moves_count += 1
 	card_moved.emit("waste", "tableau", 1)
-	
+
 	# Check for auto-win after waste move
 	_check_auto_win()
-	
+
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
-	
+
 	return true
 
 func _check_completion() -> void:
 	if _is_completed:
 		return
-	
+
 	for foundation in foundations:
 		if foundation.size() != 13:
 			return
-	
+
 	_is_completed = true
 	game_completed.emit()
-	
+
 	# Play win sound
 	if SoundManager:
 		SoundManager.play_win()
-	
+
 	print("Game completed! Moves: ", _moves_count, " Time: ", Time.get_ticks_msec() / 1000.0 - _start_time)
 
 func _check_auto_win() -> void:
@@ -456,11 +458,11 @@ func _auto_move_all_to_foundation() -> void:
 	"""Automatically move all remaining cards to foundation"""
 	var moved = true
 	var moves_made = 0
-	
+
 	# Keep moving until no more moves possible
 	while moved:
 		moved = false
-		
+
 		# Try moving waste cards to foundation
 		if not waste.is_empty():
 			var card = waste[-1]
@@ -468,7 +470,7 @@ func _auto_move_all_to_foundation() -> void:
 				move_to_foundation("waste", -1, card.suit)
 				moved = true
 				moves_made += 1
-		
+
 		# Try moving tableau cards to foundation
 		for i in range(tableau.size()):
 			if not tableau[i].is_empty():
@@ -477,7 +479,7 @@ func _auto_move_all_to_foundation() -> void:
 					move_to_foundation("tableau", i, card.suit)
 					moved = true
 					moves_made += 1
-	
+
 	print("Auto-win completed! Moved ", moves_made, " cards automatically")
 
 func get_game_time() -> float:
@@ -495,11 +497,11 @@ func get_game_state() -> Dictionary:
 	var foundation_sizes = []
 	for f in foundations:
 		foundation_sizes.append(f.size())
-	
+
 	var tableau_sizes = []
 	for pile in tableau:
 		tableau_sizes.append(pile.size())
-	
+
 	return {
 		"tableau_sizes": tableau_sizes,
 		"foundation_sizes": foundation_sizes,
@@ -513,10 +515,10 @@ func get_game_state() -> Dictionary:
 func auto_complete() -> bool:
 	if not _can_auto_complete():
 		return false
-	
+
 	while true:
 		var moved = false
-		
+
 		for i in range(tableau.size()):
 			if not tableau[i].is_empty() and tableau[i][-1].face_up:
 				var card = tableau[i][-1]
@@ -525,7 +527,7 @@ func auto_complete() -> bool:
 						move_to_foundation("tableau", i, j)
 						moved = true
 						break
-		
+
 		if not waste.is_empty():
 			var card = waste[-1]
 			for j in range(4):
@@ -533,10 +535,10 @@ func auto_complete() -> bool:
 					move_to_foundation("waste", -1, j)
 					moved = true
 					break
-		
+
 		if not moved:
 			break
-	
+
 	return _is_completed
 
 func _can_auto_complete() -> bool:
@@ -554,7 +556,7 @@ func get_hint() -> Dictionary:
 				for j in range(4):
 					if can_place_on_foundation(card, j):
 						return {"type": "tableau_to_foundation", "from": i, "to": j}
-	
+
 	for i in range(tableau.size()):
 		for j in range(tableau.size()):
 			if i != j and not tableau[i].is_empty():
@@ -563,17 +565,17 @@ func get_hint() -> Dictionary:
 					if tableau[i][card_index].face_up:
 						if can_place_on_tableau(tableau[i][card_index], j):
 							return {"type": "tableau_to_tableau", "from": i, "to": j, "count": card_count}
-	
+
 	if not waste.is_empty():
 		var card = waste[-1]
 		for i in range(tableau.size()):
 			if can_place_on_tableau(card, i):
 				return {"type": "waste_to_tableau", "to": i}
-		
+
 		for i in range(4):
 			if can_place_on_foundation(card, i):
 				return {"type": "waste_to_foundation", "to": i}
-	
+
 	return {"type": "none"}
 
 func _save_state() -> void:
@@ -651,7 +653,7 @@ func has_valid_moves() -> bool:
 	# Check if we can draw from stock
 	if not stock.is_empty():
 		return true
-	
+
 	# Check if waste can move to foundation
 	if not waste.is_empty():
 		var waste_card = waste[-1]
@@ -662,7 +664,7 @@ func has_valid_moves() -> bool:
 		for i in range(7):
 			if can_place_on_tableau(waste_card, i):
 				return true
-	
+
 	# Check if any tableau card can move to foundation
 	for pile_idx in range(7):
 		if not tableau[pile_idx].is_empty():
@@ -671,7 +673,7 @@ func has_valid_moves() -> bool:
 				for f_idx in range(4):
 					if can_place_on_foundation(top_card, f_idx):
 						return true
-	
+
 	# Check if any tableau cards can move to another tableau
 	for from_idx in range(7):
 		if tableau[from_idx].is_empty():
@@ -686,6 +688,107 @@ func has_valid_moves() -> bool:
 					continue
 				if can_place_on_tableau(card, to_idx):
 					return true
-	
+
 	# No valid moves found - player is jammed
 	return false
+
+func get_save_data() -> Dictionary:
+	"""Serialize game state for saving"""
+	var tableau_data: Array = []
+	for col in tableau:
+		var col_data: Array = []
+		for card in col:
+			col_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": card.face_up
+			})
+		tableau_data.append(col_data)
+
+	var stock_data: Array = []
+	for card in stock:
+		stock_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": card.face_up
+		})
+
+	var waste_data: Array = []
+	for card in waste:
+		waste_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": card.face_up
+		})
+
+	var foundation_data: Array = []
+	for col in foundations:
+		var col_data: Array = []
+		for card in col:
+			col_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": card.face_up
+			})
+		foundation_data.append(col_data)
+
+	return {
+		"tableau": tableau_data,
+		"stock": stock_data,
+		"waste": waste_data,
+		"foundations": foundation_data,
+		"stock_index": stock_index,
+		"difficulty": difficulty
+	}
+
+func restore_from_save(save_data: Dictionary) -> void:
+	"""Restore game state from saved data"""
+	if save_data.is_empty():
+		return
+
+	# Reconstruct tableau
+	tableau.clear()
+	for col_data in save_data.get("tableau", []):
+		var col: Array = []
+		for card_data in col_data:
+			var card = SolitaireCard.new()
+			card.suit = card_data.get("suit", 0)
+			card.rank = card_data.get("rank", 0)
+			card.face_up = card_data.get("face_up", false)
+			col.append(card)
+		tableau.append(col)
+
+	# Reconstruct stock
+	stock.clear()
+	for card_data in save_data.get("stock", []):
+		var card = SolitaireCard.new()
+		card.suit = card_data.get("suit", 0)
+		card.rank = card_data.get("rank", 0)
+		card.face_up = card_data.get("face_up", false)
+		stock.append(card)
+
+	# Reconstruct waste
+	waste.clear()
+	for card_data in save_data.get("waste", []):
+		var card = SolitaireCard.new()
+		card.suit = card_data.get("suit", 0)
+		card.rank = card_data.get("rank", 0)
+		card.face_up = card_data.get("face_up", false)
+		waste.append(card)
+
+	# Reconstruct foundations
+	foundations.clear()
+	for col_data in save_data.get("foundations", []):
+		var col: Array = []
+		for card_data in col_data:
+			var card = SolitaireCard.new()
+			card.suit = card_data.get("suit", 0)
+			card.rank = card_data.get("rank", 0)
+			card.face_up = card_data.get("face_up", false)
+			col.append(card)
+		foundations.append(col)
+
+	stock_index = save_data.get("stock_index", 0)
+	difficulty = save_data.get("difficulty", "Medium")
+	_can_undo = false
+	_last_move_state = {}

@@ -14,6 +14,11 @@ var stats: Dictionary = {
 	"multiplayer_losses": 0
 }
 
+# Saved game states (one per game type)
+var solitaire_save: Dictionary = {}
+var spider_save: Dictionary = {}
+var sudoku_save: Dictionary = {}
+
 func _ready() -> void:
 	load_data()
 
@@ -23,7 +28,10 @@ func save_data() -> void:
 		"player_name": player_name,
 		"theme": theme,
 		"background_music_enabled": background_music_enabled,
-		"stats": stats
+		"stats": stats,
+		"solitaire_save": solitaire_save,
+		"spider_save": spider_save,
+		"sudoku_save": sudoku_save
 	}
 
 	var file = FileAccess.open(SAVE_FILE_PATH, FileAccess.WRITE)
@@ -62,6 +70,16 @@ func load_data() -> void:
 
 			if data.has("stats"):
 				stats = data.stats
+
+			if data.has("solitaire_save"):
+				solitaire_save = data.solitaire_save
+
+			if data.has("spider_save"):
+				spider_save = data.spider_save
+
+			if data.has("sudoku_save"):
+				sudoku_save = data.sudoku_save
+
 			print("Player data loaded: ", player_name)
 		else:
 			print("Failed to parse player data JSON")
@@ -110,3 +128,49 @@ func set_background_music_enabled(enabled: bool) -> void:
 	"""Set background music and save"""
 	background_music_enabled = enabled
 	save_data()
+
+func save_game(game_type: String, state_data: Dictionary) -> void:
+	"""Save a game state for the specified game type"""
+	match game_type:
+		"Solitaire":
+			solitaire_save = state_data
+		"Spider":
+			spider_save = state_data
+		"Sudoku":
+			sudoku_save = state_data
+	save_data()
+	print("Game saved: ", game_type)
+
+func load_game(game_type: String) -> Dictionary:
+	"""Load a saved game state for the specified game type"""
+	match game_type:
+		"Solitaire":
+			return solitaire_save.duplicate(true)
+		"Spider":
+			return spider_save.duplicate(true)
+		"Sudoku":
+			return sudoku_save.duplicate(true)
+	return {}
+
+func has_saved_game(game_type: String) -> bool:
+	"""Check if there's a saved game for the specified game type"""
+	match game_type:
+		"Solitaire":
+			return not solitaire_save.is_empty()
+		"Spider":
+			return not spider_save.is_empty()
+		"Sudoku":
+			return not sudoku_save.is_empty()
+	return false
+
+func clear_saved_game(game_type: String) -> void:
+	"""Clear saved game for the specified game type"""
+	match game_type:
+		"Solitaire":
+			solitaire_save.clear()
+		"Spider":
+			spider_save.clear()
+		"Sudoku":
+			sudoku_save.clear()
+	save_data()
+	print("Game save cleared: ", game_type)

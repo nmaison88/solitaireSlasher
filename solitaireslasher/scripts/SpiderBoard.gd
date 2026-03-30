@@ -99,6 +99,9 @@ func new_game(difficulty_string: String = "Easy") -> void:
 			remove_child(child)
 			child.queue_free()
 
+	# Clear saved game when starting new game
+	PlayerData.clear_saved_game("Spider")
+
 	if _game == null:
 		_game = SpiderGame.new()
 		add_child(_game)
@@ -109,6 +112,8 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	_play_deal_animation()
 
 func _on_game_won() -> void:
+	# Clear saved game when won
+	PlayerData.clear_saved_game("Spider")
 	game_won.emit()
 	_show_win_screen()
 

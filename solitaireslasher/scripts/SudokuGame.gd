@@ -32,7 +32,7 @@ func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 	lives = max_lives  # Reset lives to 3
 	_create_empty_grid()
 	_fill_grid(solution_grid)
-	
+
 	# Check if mirror mode is enabled and we have mirror data
 	if not mirror_data.is_empty():
 		print("DEBUG: Sudoku new_game received mirror data with keys: ", mirror_data.keys())
@@ -49,7 +49,7 @@ func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 		# Normal puzzle generation
 		_create_puzzle(difficulty)
 		print("Sudoku: Generated new puzzle")
-	
+
 	_init_player_grid()
 	print("Sudoku game created with difficulty: ", difficulty, " with ", lives, " lives")
 
@@ -66,36 +66,36 @@ func set_cell(row: int, col: int, value: int) -> bool:
 	"""Set a cell value and check if it's correct"""
 	if puzzle[row][col] != 0:
 		return false  # Can't change pre-filled cells
-	
+
 	if lives <= 0:
 		return false  # Game over, no more moves allowed
-	
+
 	player_grid[row][col] = value
-	
+
 	# Special case: value=0 means erasing, don't check correctness or lose lives
 	if value == 0:
 		cell_filled.emit(row, col, value, true)  # Emit as "correct" to avoid red text
 		return true
-	
+
 	var is_correct = (value == solution_grid[row][col])
-	
+
 	# Lose a life if incorrect
 	if not is_correct:
 		lives -= 1
 		life_lost.emit(lives)
 		print("Incorrect move! Lives remaining: ", lives)
-		
+
 		if lives <= 0:
 			print("Game Over! No lives remaining")
 			game_over.emit()
 			return false
-	
+
 	cell_filled.emit(row, col, value, is_correct)
-	
+
 	# Check if puzzle is complete
 	if _is_puzzle_complete():
 		puzzle_completed.emit()
-	
+
 	return is_correct
 
 func _is_puzzle_complete() -> bool:
@@ -144,8 +144,8 @@ func _create_empty_grid():
 
 func is_valid(grd, row, col, num):
 	return (
-		num not in grd[row] and 
-		num not in get_column(grd, col) and 
+		num not in grd[row] and
+		num not in get_column(grd, col) and
 		num not in get_subgrid(grd, row, col)
 	)
 
@@ -212,7 +212,8 @@ func get_game_state() -> Dictionary:
 		"solution": solution_grid,
 		"player_grid": player_grid,
 		"difficulty": difficulty,
-		"show_hints": show_hints
+		"show_hints": show_hints,
+		"lives": lives
 	}
 
 func load_game_state(state: Dictionary):
@@ -222,3 +223,13 @@ func load_game_state(state: Dictionary):
 	player_grid = state.get("player_grid", [])
 	difficulty = state.get("difficulty", 3)
 	show_hints = state.get("show_hints", true)
+	lives = state.get("lives", max_lives)
+
+func get_save_data() -> Dictionary:
+	"""Serialize game state for saving (wrapper for consistency)"""
+	return get_game_state()
+
+func restore_from_save(save_data: Dictionary) -> void:
+	"""Restore game state from saved data (wrapper for consistency)"""
+	if not save_data.is_empty():
+		load_game_state(save_data)
