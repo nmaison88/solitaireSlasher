@@ -1464,8 +1464,6 @@ func _setup_multiplayer_game() -> void:
 		if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_race_board_ready):
 			MultiplayerGameManager.race_started.connect(_on_multiplayer_race_board_ready)
 
-		# Wire the board immediately if the game is already available
-		_on_multiplayer_race_board_ready()
 		print("Multiplayer Solitaire setup initiated - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
 
 func _on_multiplayer_race_board_ready() -> void:
