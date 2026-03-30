@@ -1464,10 +1464,6 @@ func _setup_multiplayer_game() -> void:
 		if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_race_board_ready):
 			MultiplayerGameManager.race_started.connect(_on_multiplayer_race_board_ready)
 
-		# If game is already ready (signal may have fired before connection), call handler immediately
-		if MultiplayerGameManager.get_local_game():
-			_on_multiplayer_race_board_ready()
-
 		print("Multiplayer Solitaire setup initiated - is_multiplayer: ", MultiplayerGameManager.is_multiplayer)
 
 func _on_multiplayer_race_board_ready() -> void:
@@ -1479,6 +1475,7 @@ func _on_multiplayer_race_board_ready() -> void:
 	_game = local_game
 	_board.set_game(_game)
 	_board.set_multiplayer_manager(MultiplayerGameManager)
+	_board.render()  # Render the board to display cards
 	if not _game.card_moved.is_connected(_on_multiplayer_card_moved):
 		_game.card_moved.connect(_on_multiplayer_card_moved)
 	_board.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1489,8 +1486,6 @@ func _on_multiplayer_race_board_ready() -> void:
 			child.tooltip_text = "Forfeit (Mark as Jammed)"
 	if _player_status_label:
 		_player_status_label.text = "Race in progress..."
-	# Render the board to display cards
-	_board.render()
 	print("Multiplayer Solitaire board wired - new round ready")
 
 func _on_multiplayer_sudoku_race_ready() -> void:
