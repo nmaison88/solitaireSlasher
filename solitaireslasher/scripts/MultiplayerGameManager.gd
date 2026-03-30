@@ -521,15 +521,23 @@ func _check_all_players_ready() -> void:
 	"""Check if all players are ready for next round"""
 	var all_ready = true
 	var total_players = network_manager.players.size()
-	
+
+	# Clean up stale player IDs that are no longer connected
+	var stale_players = []
+	for player_id in players_ready:
+		if not network_manager.players.has(player_id):
+			stale_players.append(player_id)
+	for player_id in stale_players:
+		players_ready.erase(player_id)
+
 	print("Checking ready status: ", players_ready.size(), "/", total_players, " players")
-	
+
 	for player_id in network_manager.players:
 		if not players_ready.get(player_id, false):
 			all_ready = false
 			print("  Player ", player_id, " not ready yet")
 			break
-	
+
 	if all_ready and total_players > 0:
 		print("All players ready! Starting new round...")
 		all_players_ready.emit()
