@@ -834,6 +834,13 @@ func _on_card_clicked(card_view: CardView) -> void:
 		if child is CardView and stack_cards.has(child.card):
 			stack_views.append(child)
 
+	# Sort views to match card order in pile (important for correct animation positions)
+	stack_views.sort_custom(func(a: CardView, b: CardView) -> bool:
+		var idx_a = stack_cards.find(a.card)
+		var idx_b = stack_cards.find(b.card)
+		return idx_a < idx_b
+	)
+
 	var card_count = stack_cards.size()
 	var seq_before = _game.sequences_completed
 	# Save destination size BEFORE move (move_cards calls _check_sequences which removes cards)
@@ -902,6 +909,13 @@ func _on_card_drag_started(card_view: CardView) -> void:
 	for child in get_children():
 		if child is CardView and _dragged_cards.has(child.card):
 			all_views.append(child)
+
+	# Sort views to match card order in pile (important for correct animation positions)
+	all_views.sort_custom(func(a: CardView, b: CardView) -> bool:
+		var idx_a = _dragged_cards.find(a.card)
+		var idx_b = _dragged_cards.find(b.card)
+		return idx_a < idx_b
+	)
 
 	_dragged_card_views = all_views
 	_dragged_card_offsets.clear()
