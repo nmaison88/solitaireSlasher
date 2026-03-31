@@ -677,10 +677,6 @@ func can_undo() -> bool:
 
 func has_valid_moves() -> bool:
 	"""Check if the player has any valid moves available (not jammed)"""
-	# Check if we can draw from stock
-	if not stock.is_empty():
-		return true
-
 	# Check if waste can move to foundation
 	if not waste.is_empty():
 		var waste_card = waste[-1]

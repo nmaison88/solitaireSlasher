@@ -991,18 +991,17 @@ func _on_host_game(game_type: String) -> void:
 	var mp_menu = get_node_or_null("MultiplayerMenu")
 	if mp_menu:
 		mp_menu.queue_free()
-	
+
 	# Set the current game type for multiplayer
 	_current_game_type = game_type
-	
+
 	var player_name = PlayerData.get_player_name()
 	if player_name == "":
 		player_name = "Player" + str(randi() % 1000)  # Fallback to random if no name set
-	if NetworkManager.host_game(player_name):
-		print("Hosting " + game_type + " multiplayer game")
-		_show_multiplayer_lobby(true, player_name)
-	else:
-		print("Failed to host game")
+
+	# Let MultiplayerLobby.setup_as_host() call NetworkManager.host_game() - don't duplicate it here
+	print("Hosting " + game_type + " multiplayer game")
+	_show_multiplayer_lobby(true, player_name)
 
 func _on_join_game(game_type: String) -> void:
 	# Hide multiplayer menu
@@ -1735,17 +1734,11 @@ func _show_leave_confirmation_dialog() -> void:
 func _on_back_to_menu_pressed() -> void:
 	# Clean up game state
 	_cleanup_game_state()
-	
-	# Disconnect from multiplayer if connected
+
+	# Properly leave multiplayer session (closes sockets, clears state)
 	if NetworkManager and is_instance_valid(NetworkManager):
-		if NetworkManager.multiplayer_peer:
-			NetworkManager.multiplayer_peer.close()
-			NetworkManager.multiplayer_peer = null
-		if multiplayer.multiplayer_peer:
-			multiplayer.multiplayer_peer = null
-		NetworkManager.is_host = false
-		NetworkManager.players.clear()
-	
+		NetworkManager.leave_game()
+
 	# Show main menu
 	_show_main_menu()
 	
@@ -1899,6 +1892,11 @@ func _setup_multiplayer_sudoku() -> void:
 	if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_sudoku_race_ready):
 		MultiplayerGameManager.race_started.connect(_on_multiplayer_sudoku_race_ready)
 
+	# If the game is already ready (signal may have fired before connection), call handler immediately
+	if MultiplayerGameManager.local_game and is_instance_valid(MultiplayerGameManager.local_game):
+		print("Sudoku game already ready, calling setup immediately")
+		_on_multiplayer_sudoku_race_ready()
+
 	# Hide menu buttons
 	_hide_menu_buttons()
 
@@ -1993,7 +1991,10 @@ func _on_multiplayer_sudoku_completed() -> void:
 	_status_label.text = "Puzzle Completed!"
 	if SoundManager:
 		SoundManager.play_win()
-	# TODO: Send completion to server for race tracking
+
+	# Report completion to multiplayer race system
+	var completion_time = _sudoku_game.get_game_time() if _sudoku_game else 0.0
+	NetworkManager.report_race_completion(completion_time)
 
 func _on_multiplayer_sudoku_game_over() -> void:
 	"""Handle Sudoku game over in multiplayer"""
@@ -2001,6 +2002,9 @@ func _on_multiplayer_sudoku_game_over() -> void:
 	_status_label.text = "Game Over - Out of Lives"
 	if SoundManager:
 		SoundManager.play_lose()
+
+	# Report to multiplayer race system that player is jammed
+	MultiplayerGameManager.forfeit_player()
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
@@ -2220,6 +2224,8 @@ func _on_all_players_ready() -> void:
 	if current_game_type == "Sudoku":
 		if _sudoku_board:
 			_sudoku_board.mouse_filter = Control.MOUSE_FILTER_STOP
+			# Render to clear any win/game-over overlays from the previous round
+			_sudoku_board.render()
 
 		# Check if mirror mode is enabled for restart
 		var mirror_mode_enabled = false
@@ -2261,9 +2267,11 @@ func _on_forfeit_pressed() -> void:
 	"""Handle forfeit button press in multiplayer"""
 	# Mark player as jammed
 	MultiplayerGameManager.forfeit_player()
-	
+
 	# Disable all game interactions
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _current_game_type == "Sudoku":
+		_sudoku_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	# Disable forfeit button
 	for child in get_children():

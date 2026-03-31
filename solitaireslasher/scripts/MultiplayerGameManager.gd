@@ -18,6 +18,7 @@ var local_game: Game
 var is_multiplayer: bool = false
 var race_start_time: float = 0.0
 var local_player_finished: bool = false
+var _race_ended: bool = false  # Guard against multiple race_ended emissions
 var player_statuses: Dictionary = {}  # player_id -> PlayerStatus
 var players_ready: Dictionary = {}  # player_id -> bool (for next round)
 var current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
@@ -28,10 +29,11 @@ var mirror_mode_enabled: bool = false  # Store mirror mode setting from lobby
 func _ready() -> void:
 	# NetworkManager is an autoload singleton, don't create a new instance
 	network_manager = NetworkManager
-	
+
 	network_manager.game_started.connect(_on_race_started)
 	network_manager.race_completed.connect(_on_race_completed)
 	network_manager.game_state_received.connect(_on_game_state_received)
+	network_manager.player_disconnected.connect(_on_player_disconnected_during_game)
 
 func host_multiplayer_game(player_name: String) -> bool:
 	if network_manager.host_game(player_name):
@@ -51,7 +53,11 @@ func start_local_game(difficulty: String = "Medium") -> void:
 	# Only set to false if we're truly in single player mode (not connected to network)
 	if not network_manager.is_host and network_manager.players.size() <= 1:
 		is_multiplayer = false
-	
+
+	# Clean up old game node if it exists
+	if local_game:
+		local_game.queue_free()
+
 	local_game = Game.new()
 	add_child(local_game)
 	local_game.set_difficulty(difficulty)
@@ -149,7 +155,7 @@ func _on_race_started() -> void:
 		print("DEBUG: Using local game type: ", game_type)
 		
 	print("DEBUG: MultiplayerGameManager._on_race_started() - game_type: ", game_type)
-	race_start_time = Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second
+	race_start_time = Time.get_ticks_msec() / 1000.0  # Use ticks instead of wall-clock time
 	local_player_finished = false
 	
 	# Only create and initialize game for Solitaire
@@ -209,57 +215,80 @@ func _on_local_game_completed() -> void:
 		return
 	
 	local_player_finished = true
-	var completion_time = Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second - race_start_time
+	var completion_time = (Time.get_ticks_msec() / 1000.0) - race_start_time  # Time elapsed in seconds
 	
 	if is_multiplayer:
 		# Mark as completed and broadcast
 		var local_player_id = network_manager.local_player_id
 		player_statuses[local_player_id] = PlayerStatus.COMPLETED
 		_broadcast_status_change(local_player_id, "completed")
-		
+
 		# Play win sound for winner
 		if SoundManager:
 			SoundManager.play_win()
-		
+
 		network_manager.report_race_completion(completion_time)
-		
+
+		# Get player name for the completion notification
+		var players = network_manager.get_players()
+		var player_name = players.get(local_player_id, {}).get("name", "You")
+
 		# Notify that game has ended for everyone
-		_end_multiplayer_race(local_player_id)
+		_end_multiplayer_race(local_player_id, player_name, completion_time)
 	else:
 		race_ended.emit(1, "You", completion_time)
 
 func _on_race_completed(player_id: int, time: float) -> void:
+	# Guard against double-processing
+	if local_player_finished:
+		return
+
 	var players = network_manager.get_players()
 	var player_name = "Unknown"
-	
+
 	if players.has(player_id):
 		player_name = players[player_id].name
-	
+
+	# Mark as finished early to guard against re-entrancy
+	if player_id == network_manager.local_player_id:
+		local_player_finished = true
+
 	# Update player status
 	player_statuses[player_id] = PlayerStatus.COMPLETED
-	
+
 	# If this is not the local player, they lost
 	if player_id != network_manager.local_player_id:
 		# Play lose sound for non-winners
 		if SoundManager:
 			SoundManager.play_lose()
-		
-		# End the race for this player
-		_end_multiplayer_race(player_id)
-	
-	race_ended.emit(player_id, player_name, time)
+
+		# End the race for this player (this will emit race_ended with proper data)
+		_end_multiplayer_race(player_id, player_name, time)
 	
 	if player_id == network_manager.local_player_id:
 		local_player_finished = true
 
-func _end_multiplayer_race(winner_id: int) -> void:
+func _end_multiplayer_race(winner_id: int, winner_name: String = "", time: float = 0.0) -> void:
 	"""End the multiplayer race for all players and show ready screen"""
+	# Guard against multiple race_ended emissions
+	if _race_ended:
+		return
+	_race_ended = true
+
+	# If no winner name provided, look it up from players dictionary
+	if winner_name == "":
+		var players = network_manager.get_players()
+		if players.has(winner_id):
+			winner_name = players[winner_id].name
+		else:
+			winner_name = "Unknown"
+
 	# Broadcast to all clients if we're the host
 	if network_manager.is_host:
 		network_manager.broadcast_race_ended(winner_id)
-	
-	# Signal to Main.gd to show ready screen
-	race_ended.emit(winner_id, "", 0.0)
+
+	# Signal to Main.gd to show ready screen with proper data
+	race_ended.emit(winner_id, winner_name, time)
 
 func _on_game_state_received(game_state: Dictionary) -> void:
 	if local_game:
@@ -295,7 +324,7 @@ func _calculate_progress() -> float:
 	return float(cards_in_foundations) / float(total_cards)
 
 func get_discovered_games() -> Array:
-	return network_manager.discover_games()
+	return await network_manager.discover_games()
 
 func get_connected_players() -> Dictionary:
 	return network_manager.get_players()
@@ -351,7 +380,7 @@ func _broadcast_status_change(player_id: int, status: String) -> void:
 func receive_player_status(player_id: int, status: String) -> void:
 	"""Receive player status update from network"""
 	print("Received status for player ", player_id, ": ", status)
-	
+
 	# Update player status
 	match status:
 		"playing":
@@ -360,9 +389,12 @@ func receive_player_status(player_id: int, status: String) -> void:
 			player_statuses[player_id] = PlayerStatus.JAMMED
 		"completed":
 			player_statuses[player_id] = PlayerStatus.COMPLETED
-	
+
 	# Emit signal for UI updates
 	player_status_changed.emit(player_id, status)
+
+	# Check if this status change affects last player standing (e.g., opponent forfeits)
+	_check_last_player_standing()
 	
 	# Check if this affects last player standing
 	_check_last_player_standing()
@@ -412,14 +444,20 @@ func receive_player_ready(player_id: int, ready: bool) -> void:
 	players_ready[player_id] = ready
 	_check_all_players_ready()
 
+func _on_player_disconnected_during_game(player_id: int) -> void:
+	"""Handle player disconnect during an active game"""
+	print("Player ", player_id, " disconnected during game - marking as jammed")
+	# Mark the disconnected player as jammed so the race can end
+	if is_multiplayer and player_statuses.has(player_id):
+		player_statuses[player_id] = PlayerStatus.JAMMED
+		_check_last_player_standing()
+
 func receive_race_ended(data: Dictionary) -> void:
 	"""Receive race ended notification from host"""
 	var winner_id = data.get("winner_id", -1)
 	print("MultiplayerGameManager: Received race ended - winner_id: ", winner_id)
-	# Emit the race ended signal for UI to handle
-	print("DEBUG: About to emit race_ended signal")
-	race_ended.emit(winner_id, "", 0.0)
-	print("DEBUG: race_ended signal emitted")
+	# End race on client side - this will properly emit race_ended with correct data
+	_end_multiplayer_race(winner_id)
 
 func receive_mirror_data(mirror_data: Dictionary) -> void:
 	"""Receive mirror mode data from host"""
@@ -480,31 +518,31 @@ func receive_mirror_data(mirror_data: Dictionary) -> void:
 			# Game not created yet, store for later and create it now
 			_pending_mirror_data = mirror_data
 			print("Stored mirror data and creating Solitaire game now")
-			
+
 			# Create the game now that we have mirror data
 			if not local_game:
 				local_game = Game.new()
 				add_child(local_game)
-			
-		if _pending_mirror_data.has("mirror_data"):
-			local_game.new_game_mirror(_pending_mirror_data["mirror_data"])
-			print("Created Solitaire game with mirror data")
-			
-			# Re-render the board to show the new layout
-			print("DEBUG: Attempting to re-render board after mirror data")
-			# Try to find the board in the scene tree
-			var main_scene = get_tree().current_scene
-			if main_scene:
-				print("DEBUG: Main scene found: ", main_scene.name)
-				var board = main_scene.get_node_or_null("Board")
-				if board:
-					print("DEBUG: Board found, calling render()")
-					board.render()
-					print("Re-rendered board with mirror layout")
+
+			if _pending_mirror_data.has("mirror_data"):
+				local_game.new_game_mirror(_pending_mirror_data["mirror_data"])
+				print("Created Solitaire game with mirror data")
+
+				# Re-render the board to show the new layout
+				print("DEBUG: Attempting to re-render board after mirror data")
+				# Try to find the board in the scene tree
+				var main_scene = get_tree().current_scene
+				if main_scene:
+					print("DEBUG: Main scene found: ", main_scene.name)
+					var board = main_scene.get_node_or_null("Board")
+					if board:
+						print("DEBUG: Board found, calling render()")
+						board.render()
+						print("Re-rendered board with mirror layout")
+					else:
+						print("DEBUG: Board node not found in main scene")
 				else:
-					print("DEBUG: Board node not found in main scene")
-			else:
-				print("DEBUG: Main scene not found")
+					print("DEBUG: Main scene not found")
 			
 			# Clear pending mirror data after use
 			_pending_mirror_data.clear()
@@ -522,6 +560,11 @@ func _check_all_players_ready() -> void:
 	var all_ready = true
 	var total_players = network_manager.players.size()
 
+	# Require at least 2 players to start a new round
+	if total_players < 2:
+		print("Not enough players for new round: ", total_players, "/2")
+		return
+
 	# Clean up stale player IDs that are no longer connected
 	var stale_players = []
 	for player_id in players_ready:
@@ -538,7 +581,7 @@ func _check_all_players_ready() -> void:
 			print("  Player ", player_id, " not ready yet")
 			break
 
-	if all_ready and total_players > 0:
+	if all_ready:
 		print("All players ready! Starting new round...")
 		all_players_ready.emit()
 		_start_new_round()
@@ -548,6 +591,7 @@ func _start_new_round() -> void:
 	players_ready.clear()
 	player_statuses.clear()
 	local_player_finished = false
+	_race_ended = false  # Reset for new round
 	_pending_mirror_data.clear()
 
 	# Free the previous game so start_multiplayer_race() starts fresh
@@ -556,6 +600,8 @@ func _start_new_round() -> void:
 		local_game = null
 
 	if network_manager.is_host:
+		# Give clients time to settle after receiving RACE_ENDED before sending GAME_START
+		await get_tree().create_timer(0.5).timeout
 		# Re-run the full race setup: generates a new seed, handles mirror mode,
 		# broadcasts GAME_SETTINGS + GAME_START, and (if mirrored) sends MIRROR_DATA.
 		start_multiplayer_race()

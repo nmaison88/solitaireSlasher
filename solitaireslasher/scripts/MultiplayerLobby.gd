@@ -511,11 +511,9 @@ func setup_as_client(player_name: String) -> void:
 		selected_game_type = main_scene._current_game_type
 	
 	print("Joining multiplayer game for: ", selected_game_type)
-	
-	# Initialize MultiplayerGameManager for multiplayer (but don't connect yet)
-	# The connection happens when the client actually joins via IP or QR
-	MultiplayerGameManager.is_multiplayer = true
-	print("MultiplayerGameManager initialized for joining")
+
+	# Don't set is_multiplayer yet - wait until connection actually succeeds
+	# It will be set in _on_client_connected()
 	
 	selected_difficulty = "Medium"
 	
@@ -529,7 +527,10 @@ func setup_as_client(player_name: String) -> void:
 func _on_client_connected() -> void:
 	"""Called after successfully connecting to host"""
 	is_host = false
-	
+
+	# Now that connection succeeded, mark as multiplayer
+	MultiplayerGameManager.is_multiplayer = true
+
 	# Show the connected host IP
 	var connected_ip = ip_input.text
 	host_label.text = "Connected to Host: " + connected_ip

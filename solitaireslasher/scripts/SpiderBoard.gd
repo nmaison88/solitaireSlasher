@@ -93,9 +93,16 @@ func new_game(difficulty_string: String = "Easy") -> void:
 	_foundation_stacks.clear()
 	_last_click_destination.clear()  # Reset click cycling for new game
 
-	# Clear any remaining foundation CardViews from previous game
+	# Clear any remaining CardViews and foundation-related objects from previous game
+	var children_to_remove = []
 	for child in get_children():
-		if child is CardView and child.has_meta("_foundation_card"):
+		if child is CardView:
+			children_to_remove.append(child)
+		elif child.has_meta("_foundation_animating"):
+			children_to_remove.append(child)
+
+	for child in children_to_remove:
+		if is_instance_valid(child):
 			remove_child(child)
 			child.queue_free()
 

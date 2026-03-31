@@ -15,10 +15,12 @@ var multiplayer_peer: ENetMultiplayerPeer
 var is_host: bool = false
 var players: Dictionary = {}
 var local_player_id: int = 1
+var _pending_player_name: String = ""  # Temporary storage for player name before handshake completes
 var game_session_active: bool = false
 var game_settings: Dictionary = {}  # Store current game settings
 var broadcast_timer: Timer
 var discovery_server: UDPServer
+var broadcast_peer: PacketPeerUDP  # Reusable UDP peer for broadcasting
 var custom_port: int = DEFAULT_PORT  # Can be overridden via command line (for hosting)
 var connect_port: int = DEFAULT_PORT  # Port to connect to when joining (always use host's port)
 
@@ -101,24 +103,19 @@ func join_game(host_ip: String, player_name: String) -> bool:
 	multiplayer_peer = ENetMultiplayerPeer.new()
 	# Always connect to DEFAULT_PORT (host's port), not custom_port
 	var error = multiplayer_peer.create_client(host_ip, DEFAULT_PORT)
-	
+
 	if error != OK:
 		print("Failed to create client: ", error)
 		print("Make sure host is running on port ", DEFAULT_PORT)
 		return false
-	
+
 	print("Attempting to connect to ", host_ip, ":", DEFAULT_PORT)
-	
+
 	multiplayer.multiplayer_peer = multiplayer_peer
-	local_player_id = multiplayer.get_unique_id()
-	
-	players[local_player_id] = {
-		"name": player_name,
-		"ready": false,
-		"completed": false,
-		"completion_time": 0.0
-	}
-	
+
+	# Store player name temporarily - local_player_id will be set after handshake in _on_connected_to_server()
+	_pending_player_name = player_name
+
 	print("Connecting to host at ", host_ip)
 	return true
 
@@ -130,39 +127,43 @@ func _setup_discovery_server() -> void:
 func _broadcast_session() -> void:
 	if not is_host or not discovery_server:
 		return
-	
+
+	# Create broadcast peer on first use
+	if broadcast_peer == null:
+		broadcast_peer = PacketPeerUDP.new()
+		broadcast_peer.set_broadcast_enabled(true)
+
 	discovery_server.poll()
-	var peer = PacketPeerUDP.new()
-	peer.set_broadcast_enabled(true)
-	
+
 	var session_data = {
 		"type": MessageType.SESSION_INFO,
 		"host_name": players[local_player_id].name,
 		"player_count": players.size(),
 		"port": DEFAULT_PORT
 	}
-	
+
 	var json_string = JSON.stringify(session_data)
 	var packet = json_string.to_utf8_buffer()
-	peer.set_dest_address("255.255.255.255", DEFAULT_PORT + 1)
-	peer.put_packet(packet)
+	broadcast_peer.set_dest_address("255.255.255.255", DEFAULT_PORT + 1)
+	broadcast_peer.put_packet(packet)
 
 func discover_games() -> Array:
 	var udp_peer = PacketPeerUDP.new()
 	udp_peer.set_broadcast_enabled(true)
 	udp_peer.listen(DEFAULT_PORT + 1, "0.0.0.0")
-	
+
 	var discovered_games = []
-	var start_time = Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second
-	
-	while Time.get_time_dict_from_system().hour * 3600 + Time.get_time_dict_from_system().minute * 60 + Time.get_time_dict_from_system().second - start_time < 3.0:  # Search for 3 seconds
+	var discovery_timer = get_tree().create_timer(3.0)  # 3 second discovery window, non-blocking
+
+	while not discovery_timer.is_stopped():
+		await get_tree().process_frame  # Yield control back to engine each frame
 		udp_peer.poll()
 		if udp_peer.get_available_packet_count() > 0:
 			var packet = udp_peer.get_packet()
 			var json_string = packet.get_string_from_utf8()
 			var json = JSON.new()
 			var parse_result = json.parse(json_string)
-			
+
 			if parse_result == OK:
 				var data = json.data
 				if data.has("type") and data.type == MessageType.SESSION_INFO:
@@ -172,7 +173,7 @@ func discover_games() -> Array:
 						"player_count": data.player_count,
 						"port": data.port
 					})
-	
+
 	udp_peer.close()
 	return discovered_games
 
@@ -254,8 +255,9 @@ func receive_message(message: Dictionary) -> void:
 	print("DEBUG: receive_message - sender_id: ", sender_id, ", is_host: ", is_host, ", message_type: ", message_type)
 	
 	# Host shouldn't process its own broadcast messages
-	if is_host and sender_id == 1:
-		print("DEBUG: Host ignoring own message")
+	# sender_id is 0 for local RPC calls, or 1 when the host is the sender over network
+	if is_host and (sender_id == 0 or sender_id == 1):
+		print("DEBUG: Host ignoring own message from sender_id: ", sender_id)
 		return
 	
 	match message_type:
@@ -381,8 +383,20 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	player_disconnected.emit(peer_id)
 
 func _on_connected_to_server() -> void:
+	# Now that handshake is complete, get the real peer ID from the server
+	local_player_id = multiplayer.get_unique_id()
 	print("✓ Successfully connected to server!")
 	print("  Local player ID: ", local_player_id)
+
+	# Add local player to players dictionary with the pending name
+	players[local_player_id] = {
+		"name": _pending_player_name,
+		"ready": false,
+		"completed": false,
+		"completion_time": 0.0
+	}
+	_pending_player_name = ""
+
 	var join_data = {
 		"player_id": local_player_id,
 		"player_name": players[local_player_id].name
@@ -396,6 +410,10 @@ func _on_connection_failed() -> void:
 	print("✗ Connection to server failed")
 	print("  Check that host is running and port ", DEFAULT_PORT, " is accessible")
 
+	# Properly clean up state on connection failure
+	leave_game()
+	MultiplayerGameManager.is_multiplayer = false
+
 func _on_server_disconnected() -> void:
 	print("Disconnected from server")
 	game_session_active = false
@@ -403,14 +421,19 @@ func _on_server_disconnected() -> void:
 func leave_game() -> void:
 	if multiplayer_peer:
 		multiplayer_peer.close()
-	
+
 	players.clear()
+	game_settings = {}  # Clear old settings for next session
 	game_session_active = false
 	is_host = false
-	
+
 	if broadcast_timer:
 		broadcast_timer.stop()
-	
+
+	if broadcast_peer:
+		broadcast_peer.close()
+		broadcast_peer = null
+
 	if discovery_server:
 		discovery_server.stop()  # UDPServer uses stop() not close()
 
