@@ -1649,87 +1649,121 @@ func _on_leave_game_button_pressed() -> void:
 	_show_leave_confirmation_dialog()
 
 func _show_leave_confirmation_dialog() -> void:
-	"""Create and show a confirmation dialog for leaving the game"""
-	# Create dialog panel
-	var dialog = ConfirmationDialog.new()
-	dialog.title = "Leave Game?"
-	dialog.dialog_text = "Are you sure you want to leave the game? Your progress will be lost."
-	dialog.get_ok_button().text = "Leave"
-	dialog.get_cancel_button().text = "Stay"
-	
-	# Make dialog much larger for iPhone
-	var viewport_size = get_viewport().get_visible_rect().size
-	var dialog_width = min(viewport_size.x * 0.8, 400)  # 80% of screen width, max 400px
-	var dialog_height = min(viewport_size.y * 0.3, 250)  # 30% of screen height, max 250px
-	
-	dialog.set_size(Vector2(dialog_width, dialog_height))
-	
-	# Style the dialog for mobile-friendly appearance
+	"""Create and show a confirmation dialog for leaving the game (matching ready screen style)"""
+	# Create notification panel (matching ready screen style)
+	var dialog = Panel.new()
+	dialog.name = "LeaveConfirmationDialog"
+	dialog.set_anchors_preset(Control.PRESET_CENTER)
+	dialog.anchor_left = 0.5
+	dialog.anchor_top = 0.5
+	dialog.anchor_right = 0.5
+	dialog.anchor_bottom = 0.5
+	dialog.offset_left = -250
+	dialog.offset_top = -180
+	dialog.offset_right = 250
+	dialog.offset_bottom = 180
+	dialog.z_index = 1000
+	add_child(dialog)
+
+	# Style panel with professional appearance
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.2, 0.95)  # Dark semi-transparent background
-	style.corner_radius_top_left = 16  # Larger rounded corners
+	style.bg_color = Color(0.15, 0.15, 0.15, 0.98)
+	style.corner_radius_top_left = 16
 	style.corner_radius_top_right = 16
 	style.corner_radius_bottom_left = 16
 	style.corner_radius_bottom_right = 16
-	style.border_width_left = 3  # Thicker borders
+	style.border_width_left = 3
 	style.border_width_right = 3
 	style.border_width_top = 3
 	style.border_width_bottom = 3
-	style.border_color = Color(0.5, 0.5, 0.5)
+	style.border_color = Color(0.6, 0.6, 0.6)
 	dialog.add_theme_stylebox_override("panel", style)
-	
-	# Make title and text larger for mobile
-	dialog.add_theme_font_size_override("title_font_size", 28)
-	dialog.add_theme_font_size_override("font_size", 20)
-	
-	# Style buttons for better mobile visibility
-	var ok_button = dialog.get_ok_button()
-	var cancel_button = dialog.get_cancel_button()
-	
-	# Make buttons much larger
-	var button_width = dialog_width * 0.35  # 35% of dialog width
-	var button_height = 60  # 60px tall for easy tapping
-	ok_button.custom_minimum_size = Vector2(button_width, button_height)
-	cancel_button.custom_minimum_size = Vector2(button_width, button_height)
-	
-	# Style OK button (Leave)
-	var ok_style = StyleBoxFlat.new()
-	ok_style.bg_color = Color(0.8, 0.3, 0.3)  # Red for leave action
-	ok_style.corner_radius_top_left = 12  # Larger rounded corners
-	ok_style.corner_radius_top_right = 12
-	ok_style.corner_radius_bottom_left = 12
-	ok_style.corner_radius_bottom_right = 12
-	ok_style.border_width_left = 2
-	ok_style.border_width_right = 2
-	ok_style.border_width_top = 2
-	ok_style.border_width_bottom = 2
-	ok_style.border_color = Color(0.6, 0.2, 0.2)  # Darker red border
-	ok_button.add_theme_stylebox_override("normal", ok_style)
-	ok_button.add_theme_color_override("font_color", Color.WHITE)
-	ok_button.add_theme_font_size_override("font_size", 22)  # Larger button text
-	
-	# Style Cancel button (Stay)
-	var cancel_style = StyleBoxFlat.new()
-	cancel_style.bg_color = Color(0.3, 0.3, 0.3)  # Gray for cancel
-	cancel_style.corner_radius_top_left = 12
-	cancel_style.corner_radius_top_right = 12
-	cancel_style.corner_radius_bottom_left = 12
-	cancel_style.corner_radius_bottom_right = 12
-	cancel_style.border_width_left = 2
-	cancel_style.border_width_right = 2
-	cancel_style.border_width_top = 2
-	cancel_style.border_width_bottom = 2
-	cancel_style.border_color = Color(0.2, 0.2, 0.2)  # Darker gray border
-	cancel_button.add_theme_stylebox_override("normal", cancel_style)
-	cancel_button.add_theme_color_override("font_color", Color.WHITE)
-	cancel_button.add_theme_font_size_override("font_size", 22)  # Larger button text
-	
-	# Connect the confirmed signal to actually leave the game
-	dialog.confirmed.connect(_on_leave_game_pressed)
-	
-	# Add to scene and show
-	add_child(dialog)
-	dialog.popup_centered()
+
+	# Create layout matching ready screen
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 25)
+	dialog.add_child(vbox)
+
+	# Add padding
+	var top_spacer = Control.new()
+	top_spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(top_spacer)
+
+	# Title
+	var title = Label.new()
+	title.text = "Leave Game?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 48)
+	vbox.add_child(title)
+
+	# Message
+	var message = Label.new()
+	message.text = "Are you sure you want to leave?\nYour progress will be lost."
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.add_theme_font_size_override("font_size", 28)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(message)
+
+	# Spacer
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(spacer)
+
+	# Button container for side-by-side buttons
+	var button_hbox = HBoxContainer.new()
+	button_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(button_hbox)
+
+	# Center spacer
+	var left_spacer = Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button_hbox.add_child(left_spacer)
+
+	# Stay button
+	var stay_button = Button.new()
+	stay_button.text = "Stay"
+	stay_button.custom_minimum_size = Vector2(140, 70)
+	stay_button.add_theme_font_size_override("font_size", 32)
+	var stay_style = StyleBoxFlat.new()
+	stay_style.bg_color = Color(0.3, 0.5, 0.3)
+	stay_style.corner_radius_top_left = 12
+	stay_style.corner_radius_top_right = 12
+	stay_style.corner_radius_bottom_left = 12
+	stay_style.corner_radius_bottom_right = 12
+	stay_button.add_theme_stylebox_override("normal", stay_style)
+	stay_button.add_theme_color_override("font_color", Color.WHITE)
+	stay_button.pressed.connect(func(): dialog.queue_free())
+	button_hbox.add_child(stay_button)
+
+	# Leave button
+	var leave_button = Button.new()
+	leave_button.text = "Leave"
+	leave_button.custom_minimum_size = Vector2(140, 70)
+	leave_button.add_theme_font_size_override("font_size", 32)
+	var leave_style = StyleBoxFlat.new()
+	leave_style.bg_color = Color(0.7, 0.3, 0.3)
+	leave_style.corner_radius_top_left = 12
+	leave_style.corner_radius_top_right = 12
+	leave_style.corner_radius_bottom_left = 12
+	leave_style.corner_radius_bottom_right = 12
+	leave_button.add_theme_stylebox_override("normal", leave_style)
+	leave_button.add_theme_color_override("font_color", Color.WHITE)
+	leave_button.pressed.connect(func():
+		dialog.queue_free()
+		_on_leave_game_pressed()
+	)
+	button_hbox.add_child(leave_button)
+
+	# Right spacer
+	var right_spacer = Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button_hbox.add_child(right_spacer)
+
+	# Bottom spacer
+	var bottom_spacer = Control.new()
+	bottom_spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(bottom_spacer)
 
 func _on_back_to_menu_pressed() -> void:
 	# Clean up game state
