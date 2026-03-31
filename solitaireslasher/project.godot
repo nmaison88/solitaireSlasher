@@ -13,6 +13,7 @@ config_version=5
 config/name="solitaireslasher"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+boot_splash/stretch_mode=2
 boot_splash/image="uid://c11m6wxrqwhcr"
 config/icon="uid://c11m6wxrqwhcr"
 

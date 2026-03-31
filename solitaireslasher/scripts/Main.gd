@@ -441,6 +441,9 @@ func _on_game_carousel_selection_changed(index: int = -1) -> void:
 					item.scale = Vector2(0.85, 0.85)
 					item.modulate = Color(0.75, 0.75, 0.75)
 
+		# Snap carousel to center the selected enlarged item with even spacing
+		game_carousel.go_to_index(index, true)
+
 func _on_game_selected() -> void:
 	"""Handle game selection from carousel - show game-specific menu"""
 	# Hide main menu
