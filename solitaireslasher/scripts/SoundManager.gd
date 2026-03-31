@@ -10,6 +10,7 @@ var incorrect_player: AudioStreamPlayer
 var place_player: AudioStreamPlayer
 var foundation_player: AudioStreamPlayer
 var restart_deck_player: AudioStreamPlayer
+var swipe_player: AudioStreamPlayer
 var music_player: AudioStreamPlayer
 
 func _ready() -> void:
@@ -62,6 +63,11 @@ func _setup_audio_players() -> void:
 	restart_deck_player.name = "RestartDeckPlayer"
 	add_child(restart_deck_player)
 
+	# Swipe sound (for carousel interactions)
+	swipe_player = AudioStreamPlayer.new()
+	swipe_player.name = "SwipePlayer"
+	add_child(swipe_player)
+
 	# Background music player
 	music_player = AudioStreamPlayer.new()
 	music_player.name = "MusicPlayer"
@@ -80,7 +86,8 @@ func _load_sound_files() -> void:
 		"incorrect": ["res://sounds/incorrect.wav", "res://sounds/incorrect.ogg"],
 		"place": ["res://sounds/place.wav", "res://sounds/place.ogg"],
 		"foundation": ["res://sounds/foundation.wav", "res://sounds/foundation.ogg"],
-		"restart_deck": ["res://sounds/restart_deck.wav", "res://sounds/restart_deck.ogg"]
+		"restart_deck": ["res://sounds/restart_deck.wav", "res://sounds/restart_deck.ogg"],
+		"swipe": ["res://sounds/swipe.wav", "res://sounds/swipe.ogg"]
 	}
 	
 	# Load card place sound
@@ -146,6 +153,13 @@ func _load_sound_files() -> void:
 			print("Loaded restart deck sound: ", path)
 			break
 
+	# Load swipe sound
+	for path in sound_paths["swipe"]:
+		if ResourceLoader.exists(path):
+			swipe_player.stream = load(path)
+			print("Loaded swipe sound: ", path)
+			break
+
 	# Load background music
 	var music_path = "res://sounds/App_Background_music.wav"
 	if ResourceLoader.exists(music_path):
@@ -187,6 +201,10 @@ func play_foundation() -> void:
 func play_restart_deck() -> void:
 	if restart_deck_player and restart_deck_player.stream:
 		restart_deck_player.play()
+
+func play_swipe() -> void:
+	if swipe_player and swipe_player.stream:
+		swipe_player.play()
 
 func play_background_music() -> void:
 	if music_player and music_player.stream and not music_player.playing:

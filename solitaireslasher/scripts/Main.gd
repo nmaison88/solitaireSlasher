@@ -427,6 +427,10 @@ func _on_game_carousel_selection_changed(index: int = -1) -> void:
 		_current_game_type = games[index]
 		print("Game selected: ", _current_game_type)
 
+	# Play swipe sound effect
+	if SoundManager:
+		SoundManager.play_swipe()
+
 	# Scale the selected item larger and unselected items smaller for visual emphasis
 	if game_carousel:
 		for i in range(game_carousel.get_child_count()):
