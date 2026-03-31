@@ -7,7 +7,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ## CRITICAL
 
-### [ ] C1 — `race_ended` signal fires 2–3 times per game end
+### [✓] C1 — `race_ended` signal fires 2–3 times per game end
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Functions:** `_on_local_game_completed()`, `_on_race_completed()`, `_end_multiplayer_race()`
@@ -17,7 +17,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] C2 — Sudoku multiplayer win is silently dropped
+### [✓] C2 — Sudoku multiplayer win is silently dropped
 
 - **Files:** `Main.gd`
 - **Function:** `_on_multiplayer_sudoku_completed()`
@@ -27,7 +27,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] C3 — Sudoku game-over (0 lives) in multiplayer is silently dropped
+### [✓] C3 — Sudoku game-over (0 lives) in multiplayer is silently dropped
 
 - **Files:** `Main.gd`
 - **Function:** `_on_multiplayer_sudoku_game_over()`
@@ -39,7 +39,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ## HIGH
 
-### [ ] H1 — `race_ended` emitted with inconsistent arguments
+### [✓] H1 — `race_ended` emitted with inconsistent arguments
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Callsites:** Lines ~229, ~250, ~262, ~421
@@ -49,7 +49,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H2 — Host calls `NetworkManager.host_game()` twice on startup
+### [✓] H2 — Host calls `NetworkManager.host_game()` twice on startup
 
 - **Files:** `Main.gd`, `MultiplayerGameManager.gd`
 - **Functions:** `Main._on_host_game()`, `MultiplayerGameManager.host_multiplayer_game()`
@@ -58,7 +58,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H3 — Client `local_player_id` read before handshake completes
+### [✓] H3 — Client `local_player_id` read before handshake completes
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `join_game()`
@@ -67,7 +67,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H4 — Disconnected player mid-game never removed from `player_statuses`
+### [✓] H4 — Disconnected player mid-game never removed from `player_statuses`
 
 - **Files:** `MultiplayerGameManager.gd`, `NetworkManager.gd`
 - **Function:** `MultiplayerGameManager` (no handler for `player_disconnected` signal)
@@ -76,7 +76,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H5 — Both players finishing simultaneously double-ends the race
+### [✓] H5 — Both players finishing simultaneously double-ends the race
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Functions:** `_on_local_game_completed()`, `_on_race_completed()`
@@ -85,7 +85,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H6 — `game_settings` never cleared between sessions
+### [✓] H6 — `game_settings` never cleared between sessions
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `leave_game()`
@@ -95,7 +95,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] H7 — Forfeit only disables the Solitaire board, not the Sudoku board
+### [✓] H7 — Forfeit only disables the Solitaire board, not the Sudoku board
 
 - **Files:** `Main.gd`
 - **Function:** `_on_forfeit_pressed()`
@@ -106,7 +106,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ## MEDIUM
 
-### [ ] M1 — Race condition: `race_started` may fire before Main.gd connects its handler
+### [✓] M1 — Race condition: `race_started` may fire before Main.gd connects its handler
 
 - **Files:** `Main.gd`, `MultiplayerGameManager.gd`
 - **Root cause:** On the host, `start_multiplayer_race()` → `start_race()` → `race_started.emit()` all happen synchronously before `Main._setup_multiplayer_game()` has finished connecting signals. The host relies on a fallback `if local_game` check; clients have no such fallback.
@@ -114,7 +114,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M2 — `_check_all_players_ready` fires with 1 player if opponent disconnects during ready phase
+### [✓] M2 — `_check_all_players_ready` fires with 1 player if opponent disconnects during ready phase
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `_check_all_players_ready()`
@@ -123,7 +123,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M3 — `local_player_finished` set after `race_ended` emitted, not before
+### [✓] M3 — `local_player_finished` set after `race_ended` emitted, not before
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `_on_race_completed()`
@@ -132,7 +132,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M4 — `discover_games()` busy-waits on main thread for 3 seconds
+### [✓] M4 — `discover_games()` busy-waits on main thread for 3 seconds
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `discover_games()`
@@ -141,7 +141,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M5 — `_broadcast_session` leaks a UDP socket every 2 seconds
+### [✓] M5 — `_broadcast_session` leaks a UDP socket every 2 seconds
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `_broadcast_session()`
@@ -150,7 +150,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M6 — Solitaire mirror data double-applied due to indentation error
+### [✓] M6 — Solitaire mirror data double-applied due to indentation error
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `receive_mirror_data()`
@@ -159,7 +159,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M7 — "Last player standing" has a notification race window
+### [✓] M7 — "Last player standing" has a notification race window
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `_check_last_player_standing()`
@@ -168,7 +168,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] M9 — `_on_back_to_menu_pressed` bypasses `leave_game()`
+### [✓] M9 — `_on_back_to_menu_pressed` bypasses `leave_game()`
 
 - **Files:** `Main.gd`
 - **Function:** `_on_back_to_menu_pressed()`
@@ -179,7 +179,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ## LOW
 
-### [ ] L1 — Race timer wraps at midnight
+### [✓] L1 — Race timer wraps at midnight
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `_on_race_started()`, `_on_local_game_completed()`
@@ -188,7 +188,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L2 — Host processes its own broadcasts (wrong sender_id filter)
+### [✓] L2 — Host processes its own broadcasts (wrong sender_id filter)
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `receive_message()`
@@ -197,7 +197,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L3 — `start_local_game()` leaks old `Game` node if called repeatedly
+### [✓] L3 — `start_local_game()` leaks old `Game` node if called repeatedly
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `start_local_game()`
@@ -206,7 +206,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L4 — `is_multiplayer = true` set before connection succeeds
+### [✓] L4 — `is_multiplayer = true` set before connection succeeds
 
 - **Files:** `MultiplayerLobby.gd`
 - **Function:** `setup_as_client()`
@@ -215,7 +215,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L5 — Connection failure leaves UI stuck on "Connecting..."
+### [✓] L5 — Connection failure leaves UI stuck on "Connecting..."
 
 - **Files:** `NetworkManager.gd`
 - **Function:** `_on_connection_failed()`
@@ -224,7 +224,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L6 — `has_valid_moves()` always returns `true` if stock is non-empty
+### [✓] L6 — `has_valid_moves()` always returns `true` if stock is non-empty
 
 - **Files:** `Game.gd`
 - **Function:** `has_valid_moves()`
@@ -233,7 +233,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L8 — Sudoku win overlay persists into the next round for the winner
+### [✓] L8 — Sudoku win overlay persists into the next round for the winner
 
 - **Files:** `Main.gd`, `SudokuBoard.gd`
 - **Root cause:** `_on_multiplayer_race_ended` disables the Sudoku board but does not clear `win_overlay`. The next round starts with the win screen still showing.
@@ -242,7 +242,7 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 ---
 
-### [ ] L9 — Host sends `GAME_START` before client finishes processing `RACE_ENDED`
+### [✓] L9 — Host sends `GAME_START` before client finishes processing `RACE_ENDED`
 
 - **Files:** `MultiplayerGameManager.gd`
 - **Function:** `_start_new_round()`
@@ -255,29 +255,29 @@ Work top-to-bottom — Critical bugs break the core loop and should be fixed fir
 
 | ID  | Severity | Status | Description |
 |-----|----------|--------|-------------|
-| C1  | Critical | [ ] | `race_ended` fires 2–3× per game end |
-| C2  | Critical | [ ] | Sudoku win never reported to race system |
-| C3  | Critical | [ ] | Sudoku game-over never reported to race system |
-| H1  | High     | [ ] | `race_ended` args inconsistent across callsites |
-| H2  | High     | [ ] | Host calls `host_game()` twice on startup |
-| H3  | High     | [ ] | Client peer ID wrong until after handshake |
-| H4  | High     | [ ] | Disconnected player stays `PLAYING` in status dict |
-| H5  | High     | [ ] | Simultaneous finish double-ends race (covered by C1 fix) |
-| H6  | High     | [ ] | `game_settings` not cleared between sessions |
-| H7  | High     | [ ] | Forfeit doesn't disable Sudoku board input |
-| M1  | Medium   | [ ] | `race_started` signal race condition |
-| M2  | Medium   | [ ] | Ready-up with 1 player starts round immediately |
-| M3  | Medium   | [ ] | `local_player_finished` set after signal emitted |
-| M4  | Medium   | [ ] | `discover_games()` blocks main thread 3s |
-| M5  | Medium   | [ ] | UDP socket leaked every 2s in `_broadcast_session` |
-| M6  | Medium   | [ ] | Mirror data double-applied (indentation bug) |
-| M7  | Medium   | [ ] | Last-standing notification race window |
-| M9  | Medium   | [ ] | Back-to-menu bypasses `leave_game()` |
-| L1  | Low      | [ ] | Race timer wraps at midnight |
-| L2  | Low      | [ ] | Host processes own broadcasts |
-| L3  | Low      | [ ] | Old `Game` node leaked on `start_local_game()` |
-| L4  | Low      | [ ] | `is_multiplayer=true` set before connection |
-| L5  | Low      | [ ] | Connection failure leaves UI stuck |
-| L6  | Low      | [ ] | `has_valid_moves()` never false with stock cards |
-| L8  | Low      | [ ] | Sudoku win overlay persists into next round |
-| L9  | Low      | [ ] | Host sends `GAME_START` before client settles |
+| C1  | Critical | [✓] | `race_ended` fires 2–3× per game end |
+| C2  | Critical | [✓] | Sudoku win never reported to race system |
+| C3  | Critical | [✓] | Sudoku game-over never reported to race system |
+| H1  | High     | [✓] | `race_ended` args inconsistent across callsites |
+| H2  | High     | [✓] | Host calls `host_game()` twice on startup |
+| H3  | High     | [✓] | Client peer ID wrong until after handshake |
+| H4  | High     | [✓] | Disconnected player stays `PLAYING` in status dict |
+| H5  | High     | [✓] | Simultaneous finish double-ends race (covered by C1 fix) |
+| H6  | High     | [✓] | `game_settings` not cleared between sessions |
+| H7  | High     | [✓] | Forfeit doesn't disable Sudoku board input |
+| M1  | Medium   | [✓] | `race_started` signal race condition |
+| M2  | Medium   | [✓] | Ready-up with 1 player starts round immediately |
+| M3  | Medium   | [✓] | `local_player_finished` set after signal emitted |
+| M4  | Medium   | [✓] | `discover_games()` blocks main thread 3s |
+| M5  | Medium   | [✓] | UDP socket leaked every 2s in `_broadcast_session` |
+| M6  | Medium   | [✓] | Mirror data double-applied (indentation bug) |
+| M7  | Medium   | [✓] | Last-standing notification race window |
+| M9  | Medium   | [✓] | Back-to-menu bypasses `leave_game()` |
+| L1  | Low      | [✓] | Race timer wraps at midnight |
+| L2  | Low      | [✓] | Host processes own broadcasts |
+| L3  | Low      | [✓] | Old `Game` node leaked on `start_local_game()` |
+| L4  | Low      | [✓] | `is_multiplayer=true` set before connection |
+| L5  | Low      | [✓] | Connection failure leaves UI stuck |
+| L6  | Low      | [✓] | `has_valid_moves()` never false with stock cards |
+| L8  | Low      | [✓] | Sudoku win overlay persists into next round |
+| L9  | Low      | [✓] | Host sends `GAME_START` before client settles |
