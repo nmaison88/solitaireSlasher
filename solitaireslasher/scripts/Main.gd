@@ -484,7 +484,27 @@ func _show_game_menu(game_type: String) -> void:
 	else:
 		title.add_theme_font_size_override("font_size", 56)
 	game_menu.add_child(title)
-	
+
+	# Game description
+	var description = Label.new()
+	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.add_theme_font_size_override("font_size", 28)
+	description.modulate = Color(0.8, 0.8, 0.8)  # Slightly dimmed text
+
+	match game_type:
+		"Solitaire":
+			description.text = "Build sequences from King to Ace in the foundation piles"
+		"Spider":
+			description.text = "Create complete K→A sequences to move cards to foundation"
+		"Sudoku":
+			description.text = "Fill the grid so each row, column, and box has numbers 1–9"
+		_:
+			description.text = ""
+
+	if description.text != "":
+		game_menu.add_child(description)
+
 	# Add spacing
 	var spacer1 = Control.new()
 	spacer1.custom_minimum_size = Vector2(0, 40)
@@ -621,12 +641,31 @@ func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
 
 	parent_vbox.add_child(slider_row)
 
+	# Difficulty description label (small text explaining the selected difficulty)
+	var difficulty_description = Label.new()
+	difficulty_description.name = "DifficultyDescription"
+	difficulty_description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	difficulty_description.add_theme_font_size_override("font_size", 20)
+	difficulty_description.modulate = Color(0.7, 0.7, 0.7)  # Dimmed text for secondary info
+	difficulty_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	difficulty_description.custom_minimum_size = Vector2(500, 0)
+
+	# Set initial difficulty description
+	var difficulty_descriptions = {
+		0: "More cards visible, easier puzzle solving",
+		1: "Balanced challenge with strategic play",
+		2: "Limited visibility, high difficulty"
+	}
+	difficulty_description.text = difficulty_descriptions.get(current_index, "")
+	parent_vbox.add_child(difficulty_description)
+
 	# Wire up: update face icon + label + _current_difficulty on slide
 	slider.value_changed.connect(func(val: float) -> void:
 		var idx = int(val)
 		_current_difficulty = difficulties[idx]
 		face_label.text = difficulties[idx]
 		_set_difficulty_face(face_icon, idx)
+		difficulty_description.text = difficulty_descriptions.get(idx, "")
 		print("Difficulty changed to: ", _current_difficulty)
 	)
 

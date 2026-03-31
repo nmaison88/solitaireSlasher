@@ -2,6 +2,7 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "self:">
+      location = "self:solitaireslasher.xcodeproj">
    </FileRef>
 </Workspace>
+
