@@ -23,6 +23,7 @@ var _waiting_for_ready: bool = false
 
 # Spider Solitaire
 var _spider_board: SpiderBoard
+var _spider_mirror_mode_enabled: bool = false  # Track if Spider mirror mode is active
 
 # Game type and difficulty selection
 var _player_name_input: LineEdit
@@ -534,20 +535,19 @@ func _show_game_menu(game_type: String) -> void:
 	var spacer3 = Control.new()
 	spacer3.custom_minimum_size = Vector2(0, 20)
 	game_menu.add_child(spacer3)
-	
-	# Multiplayer button (not available for Spider Solitaire)
-	if game_type != "Spider":
-		var multiplayer_button = Button.new()
-		multiplayer_button.text = "Multiplayer"
-		# Larger button for iPhone
-		if OS.has_feature("mobile"):
-			multiplayer_button.custom_minimum_size = Vector2(500, 120)
-			multiplayer_button.add_theme_font_size_override("font_size", 48)
-		else:
-			multiplayer_button.custom_minimum_size = Vector2(400, 80)
-			multiplayer_button.add_theme_font_size_override("font_size", 36)
-		multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
-		game_menu.add_child(multiplayer_button)
+
+	# Multiplayer button
+	var multiplayer_button = Button.new()
+	multiplayer_button.text = "Multiplayer"
+	# Larger button for iPhone
+	if OS.has_feature("mobile"):
+		multiplayer_button.custom_minimum_size = Vector2(500, 120)
+		multiplayer_button.add_theme_font_size_override("font_size", 48)
+	else:
+		multiplayer_button.custom_minimum_size = Vector2(400, 80)
+		multiplayer_button.add_theme_font_size_override("font_size", 36)
+	multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
+	game_menu.add_child(multiplayer_button)
 
 	# Add spacing
 	var spacer4 = Control.new()
@@ -1525,6 +1525,8 @@ func _setup_multiplayer_game() -> void:
 	# Setup based on current game type
 	if _current_game_type == "Sudoku":
 		_setup_multiplayer_sudoku()
+	elif _current_game_type == "Spider":
+		_setup_multiplayer_spider()
 	else:  # Solitaire
 		# Ensure MultiplayerGameManager has the correct game type for synchronization
 		MultiplayerGameManager.current_game_type = "Solitaire"
@@ -1960,6 +1962,13 @@ func set_sudoku_mirror_mode(enabled: bool) -> void:
 	_sudoku_mirror_mode_enabled = enabled
 	print("Main: Sudoku mirror mode flag set to: ", enabled)
 
+
+func set_spider_mirror_mode(enabled: bool) -> void:
+	"""Set the Spider mirror mode flag to prevent double game creation"""
+	_spider_mirror_mode_enabled = enabled
+	print("Main: Spider mirror mode flag set to: ", enabled)
+
+
 func _setup_multiplayer_sudoku() -> void:
 	"""Setup multiplayer Sudoku game"""
 	print("Setting up multiplayer Sudoku...")
@@ -2102,6 +2111,144 @@ func _on_multiplayer_sudoku_game_over() -> void:
 	# Report to multiplayer race system that player is jammed
 	MultiplayerGameManager.forfeit_player()
 
+func _setup_multiplayer_spider() -> void:
+	"""Setup multiplayer Spider Solitaire game"""
+	print("Setting up multiplayer Spider...")
+	print("DEBUG: _spider_mirror_mode_enabled: ", _spider_mirror_mode_enabled)
+	print("DEBUG: _pending_mirror_data empty: ", MultiplayerGameManager._pending_mirror_data.is_empty())
+	print("DEBUG: is_host: ", MultiplayerGameManager.network_manager.is_host)
+
+	# Set game type in MultiplayerGameManager
+	MultiplayerGameManager.current_game_type = "Spider"
+
+	# Clear status label
+	_status_label.text = ""
+
+	# Always set up buttons and signals first
+	# Connect multiplayer signals
+	if not MultiplayerGameManager.player_status_changed.is_connected(_on_player_status_changed):
+		MultiplayerGameManager.player_status_changed.connect(_on_player_status_changed)
+	if not MultiplayerGameManager.last_player_standing.is_connected(_on_last_player_standing):
+		MultiplayerGameManager.last_player_standing.connect(_on_last_player_standing)
+	if not MultiplayerGameManager.race_ended.is_connected(_on_multiplayer_race_ended):
+		MultiplayerGameManager.race_ended.connect(_on_multiplayer_race_ended)
+	if not MultiplayerGameManager.all_players_ready.is_connected(_on_all_players_ready):
+		MultiplayerGameManager.all_players_ready.connect(_on_all_players_ready)
+	# race_started fires when the game is fully ready
+	if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_spider_race_ready):
+		MultiplayerGameManager.race_started.connect(_on_multiplayer_spider_race_ready)
+
+	# Hide menu buttons
+	_hide_menu_buttons()
+
+	# Show game buttons (menu button only)
+	_show_new_game_button()
+
+	# Setup multiplayer UI
+	_setup_multiplayer_ui()
+
+	# Get difficulty level
+	var difficulty_string = _current_difficulty  # "Easy", "Medium", or "Hard"
+
+	# Check if mirror mode is enabled
+	var mirror_mode_enabled = false
+	if MultiplayerGameManager.network_manager.is_host:
+		# Host uses the stored mirror mode setting from MultiplayerGameManager
+		mirror_mode_enabled = MultiplayerGameManager.mirror_mode_enabled
+	elif NetworkManager.game_settings.has("mirror_mode"):
+		# Client uses the setting from the host
+		mirror_mode_enabled = NetworkManager.game_settings["mirror_mode"]
+
+	# If mirror mode is already enabled (from receive_mirror_data), use the pending data
+	if _spider_mirror_mode_enabled and not MultiplayerGameManager._pending_mirror_data.is_empty():
+		print("Client: Using pending mirror data for Spider (flag set)")
+		var mirror_data = MultiplayerGameManager._pending_mirror_data.duplicate(true)
+		if mirror_data.has("deck"):
+			print("DEBUG: Mirror data has deck, using it")
+		else:
+			print("DEBUG: Mirror data missing deck key!")
+		# Clear pending data after duplicating
+		MultiplayerGameManager._pending_mirror_data.clear()
+		_spider_mirror_mode_enabled = false  # Reset flag
+		# Initialize board and create game with mirror data
+		_spider_board.new_game(difficulty_string)
+		_spider_board._game.new_game_mirror(mirror_data)
+		_spider_board.render()
+		print("Spider game created with mirror data (flag path)")
+		# Connect game signals
+		if not _spider_board.game_won.is_connected(_on_multiplayer_spider_completed):
+			_spider_board.game_won.connect(_on_multiplayer_spider_completed)
+		if not _spider_board._game.card_moved.is_connected(_on_multiplayer_spider_card_moved):
+			_spider_board._game.card_moved.connect(_on_multiplayer_spider_card_moved)
+		print("Multiplayer Spider game setup complete (flag path)")
+		return
+
+	if mirror_mode_enabled and MultiplayerGameManager._pending_mirror_data.is_empty() and not MultiplayerGameManager.network_manager.is_host:
+		# Client with mirror mode enabled but no data yet - wait for it
+		print("Client: Mirror mode enabled for Spider but no data yet, waiting...")
+		return
+
+	# Check if we have pending mirror data (client) or need to generate (host)
+	if MultiplayerGameManager.network_manager.is_host:
+		# Host: generate game and send mirror data to clients
+		_spider_board.new_game(difficulty_string)
+		if mirror_mode_enabled:
+			print("Host: Generating new Spider deck for mirror mode")
+			var host_mirror_data = _spider_board._game.get_mirror_data()
+			NetworkManager.send_mirror_data({"game_type": "Spider", "mirror_data": host_mirror_data})
+			print("Host: Generated Spider game and sent mirror data")
+		else:
+			print("Host: Mirror mode disabled, generating random game")
+	else:
+		# Client: check if we have mirror data or need to generate fallback
+		if not MultiplayerGameManager._pending_mirror_data.is_empty():
+			# Client: use mirror data from host
+			print("Client: Using mirror data for Spider game")
+			var mirror_data = MultiplayerGameManager._pending_mirror_data
+			_spider_board.new_game(difficulty_string)
+			_spider_board._game.new_game_mirror(mirror_data)
+			MultiplayerGameManager._pending_mirror_data.clear()  # Clear after use
+		else:
+			# Fallback: generate normally
+			print("Client: Fallback - generating Spider game normally")
+			_spider_board.new_game(difficulty_string)
+
+	# Connect Spider game signals
+	if _spider_board._game:
+		if not _spider_board.game_won.is_connected(_on_multiplayer_spider_completed):
+			_spider_board.game_won.connect(_on_multiplayer_spider_completed)
+		if not _spider_board._game.card_moved.is_connected(_on_multiplayer_spider_card_moved):
+			_spider_board._game.card_moved.connect(_on_multiplayer_spider_card_moved)
+
+	print("Multiplayer Spider game setup complete")
+
+func _on_multiplayer_spider_race_ready() -> void:
+	"""Called when multiplayer Spider race is ready"""
+	_setup_multiplayer_spider()
+	if _player_status_label:
+		_player_status_label.text = "Race in progress..."
+
+func _on_multiplayer_spider_completed() -> void:
+	"""Handle Spider completion in multiplayer"""
+	print("Multiplayer Spider game completed!")
+	_status_label.text = "Game Won!"
+	if SoundManager:
+		SoundManager.play_win()
+
+	# Report completion to multiplayer race system
+	var completion_time = (Time.get_ticks_msec() / 1000.0) - MultiplayerGameManager.race_start_time
+	NetworkManager.report_race_completion(completion_time)
+
+	if _player_status_label:
+		_player_status_label.text = "You won! Waiting for others..."
+
+func _on_multiplayer_spider_card_moved() -> void:
+	"""Handle card move event for Spider in multiplayer"""
+	# Check if player is jammed
+	if MultiplayerGameManager._pending_mirror_data.is_empty() or not _spider_board or not _spider_board._game:
+		return
+	MultiplayerGameManager.check_player_status()
+
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
 	# Player status label (top center)
@@ -2160,10 +2307,12 @@ func _setup_multiplayer_ui() -> void:
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
 	print("DEBUG: _on_multiplayer_race_ended called - winner_id: ", winner_id, ", winner_name: ", winner_name)
-	# Disable all game interactions for both Solitaire and Sudoku
+	# Disable all game interactions for Solitaire, Sudoku, and Spider
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _sudoku_board:
 		_sudoku_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _spider_board:
+		_spider_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	# Disable all game buttons
 	for child in get_children():
@@ -2343,6 +2492,18 @@ func _on_all_players_ready() -> void:
 		# Just reset the status label here.
 		if _player_status_label:
 			_player_status_label.text = "Race in progress..."
+	elif current_game_type == "Spider":
+		if _spider_board:
+			_spider_board.mouse_filter = Control.MOUSE_FILTER_STOP
+
+		# Re-enable forfeit button
+		for child in get_children():
+			if child is Button and child.name == "new_game":
+				child.disabled = false
+				child.tooltip_text = "Forfeit (Mark as Jammed)"
+
+		if _player_status_label:
+			_player_status_label.text = "Race in progress..."
 	else:  # Solitaire
 		# Re-enable board interactions after forfeit
 		if _board:
@@ -2368,6 +2529,9 @@ func _on_forfeit_pressed() -> void:
 	_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _current_game_type == "Sudoku":
 		_sudoku_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	elif _current_game_type == "Spider":
+		if _spider_board:
+			_spider_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	# Disable forfeit button
 	for child in get_children():

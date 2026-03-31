@@ -30,6 +30,31 @@ var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _foundation_stacks: Array = []     # Array[Array[SolitaireCard]] - tracks completed sequences (max 4)
 var _last_click_destination: Dictionary = {}  # Tracks last destination for each card (card_id -> col_index)
+var _multiplayer_manager: Node = null
+
+# ── Multiplayer support ─────────────────────────────────────────────────────────
+
+func set_game(game: SpiderGame) -> void:
+	"""Set an externally-managed SpiderGame instance"""
+	# Disconnect old game signals if needed
+	if _game and is_instance_valid(_game):
+		if _game.game_won.is_connected(_on_game_won):
+			_game.game_won.disconnect(_on_game_won)
+		if _game.sequence_completed.is_connected(_on_sequence_completed):
+			_game.sequence_completed.disconnect(_on_sequence_completed)
+
+	_game = game
+	if _game:
+		if not _game.game_won.is_connected(_on_game_won):
+			_game.game_won.connect(_on_game_won)
+		if not _game.sequence_completed.is_connected(_on_sequence_completed):
+			_game.sequence_completed.connect(_on_sequence_completed)
+
+
+func set_multiplayer_manager(mgr: Node) -> void:
+	"""Store reference to multiplayer manager for status checks"""
+	_multiplayer_manager = mgr
+
 
 # ── Layout helpers ─────────────────────────────────────────────────────────────
 

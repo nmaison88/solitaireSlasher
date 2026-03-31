@@ -116,6 +116,10 @@ func start_multiplayer_race() -> void:
 			# Sudoku handles its own mirror data in Main.gd, so don't prepare it here
 			prepared_mirror_data = null
 			print("Host: Sudoku handles mirror data separately, skipping preparation")
+		elif current_game_type == "Spider":
+			# Spider handles its own mirror data in Main.gd, so don't prepare it here
+			prepared_mirror_data = null
+			print("Host: Spider handles mirror data separately, skipping preparation")
 		else:
 			print("Host: Unknown game type for mirror data: ", current_game_type)
 	else:
@@ -157,9 +161,9 @@ func _on_race_started() -> void:
 	print("DEBUG: MultiplayerGameManager._on_race_started() - game_type: ", game_type)
 	race_start_time = Time.get_ticks_msec() / 1000.0  # Use ticks instead of wall-clock time
 	local_player_finished = false
-	
+
 	# Only create and initialize game for Solitaire
-	# For Sudoku, the game is already set up in Main.gd
+	# For Sudoku and Spider, the game is already set up in Main.gd
 	if game_type == "Solitaire":
 		if not local_game:
 			local_game = Game.new()
@@ -486,6 +490,30 @@ func receive_mirror_data(mirror_data: Dictionary) -> void:
 					print("ERROR: Could not find Main scene or set_sudoku_mirror_mode method")
 			else:
 				print("ERROR: Could not find Main scene or _setup_multiplayer_sudoku method")
+	elif game_type == "Spider":
+		# Unwrap mirror data if it's in the {"game_type": "Spider", "mirror_data": {...}} format
+		var actual_mirror_data = mirror_data
+		if mirror_data.has("mirror_data"):
+			actual_mirror_data = mirror_data["mirror_data"]
+
+		# Store mirror data for when Spider game is created (client side)
+		_pending_mirror_data = actual_mirror_data
+		print("Stored mirror data for Spider game")
+
+		# If client is waiting for Spider mirror data, create the game now
+		if not network_manager.is_host and _pending_mirror_data.has("deck"):
+			print("Client: Creating Spider game with received mirror data")
+			# Trigger Spider game creation by calling Main's setup function
+			var main_scene = get_tree().current_scene
+			if main_scene and main_scene.has_method("_setup_multiplayer_spider"):
+				# Set a flag to prevent double creation
+				if main_scene.has_method("set_spider_mirror_mode"):
+					main_scene.set_spider_mirror_mode(true)
+					main_scene._setup_multiplayer_spider()
+				else:
+					print("ERROR: Could not find Main scene or set_spider_mirror_mode method")
+			else:
+				print("ERROR: Could not find Main scene or _setup_multiplayer_spider method")
 	elif game_type == "Solitaire":
 		# Apply mirror data to Solitaire game
 		if local_game and mirror_data.has("mirror_data"):
@@ -573,8 +601,20 @@ func _check_all_players_ready() -> void:
 	for player_id in stale_players:
 		players_ready.erase(player_id)
 
+	# Also clean up stale players from network_manager that disconnected before registering
+	stale_players.clear()
+	for player_id in network_manager.players:
+		if not player_statuses.has(player_id):
+			stale_players.append(player_id)
+	for player_id in stale_players:
+		network_manager.players.erase(player_id)
+
+	# Update total_players after cleanup
+	total_players = network_manager.players.size()
+
 	print("Checking ready status: ", players_ready.size(), "/", total_players, " players")
 
+	# Only check players that are actually in the game
 	for player_id in network_manager.players:
 		if not players_ready.get(player_id, false):
 			all_ready = false

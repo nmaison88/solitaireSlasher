@@ -3,6 +3,8 @@ class_name SpiderGame
 
 signal game_won
 signal sequence_completed(col: int, suit: int)  # Emitted when a sequence (K-A) is completed
+signal game_completed
+signal card_moved
 
 const TABLEAU_COUNT = 7
 const SEQUENCES_TO_WIN = 4
@@ -12,6 +14,7 @@ var stock: Array = []          # Array[SolitaireCard]
 var sequences_completed: int = 0
 var _difficulty: String = "Easy"
 var _start_time: float = 0.0  # Time when game started (in seconds)
+var _seed: int = -1  # Seed used for RNG (for mirror mode)
 
 var _history: Array = []    # stack of state snapshots for undo
 var _redo_stack: Array = [] # stack of state snapshots for redo
@@ -65,8 +68,9 @@ func redo() -> void:
 
 # ── Game logic ────────────────────────────────────────────────────────────────
 
-func new_game(difficulty_string: String = "Easy") -> void:
+func new_game(difficulty_string: String = "Easy", seed: int = -1) -> void:
 	_difficulty = difficulty_string
+	_seed = seed
 	sequences_completed = 0
 	_history.clear()
 	_redo_stack.clear()
@@ -101,9 +105,27 @@ func new_game(difficulty_string: String = "Easy") -> void:
 				c.stock = false
 				deck.append(c)
 
-	# Shuffle
-	deck.shuffle()
+	# Shuffle with seed support
+	if seed != -1:
+		var rng = RandomNumberGenerator.new()
+		rng.seed = seed
+		_seed = seed
+		# Manual Fisher-Yates shuffle with seeded RNG
+		for i in range(deck.size() - 1, 0, -1):
+			var j = rng.randi_range(0, i)
+			var temp = deck[i]
+			deck[i] = deck[j]
+			deck[j] = temp
+	else:
+		deck.shuffle()
+		_seed = -1
 
+	# Use common deal logic
+	_deal_from_deck(deck)
+
+
+func _deal_from_deck(deck: Array) -> void:
+	"""Common deal logic for new_game() and new_game_mirror()"""
 	# Deal Klondike-style:
 	# col 0 gets 1 card, col 1 gets 2, ..., col 6 gets 7 (28 total)
 	var deal_index = 0
@@ -207,6 +229,7 @@ func move_cards(from_col: int, card_idx: int, to_col: int) -> bool:
 
 	# Check for completed sequences
 	_check_sequences()
+	card_moved.emit()
 	return true
 
 
@@ -242,6 +265,8 @@ func deal_from_stock() -> bool:
 
 	# Check for completed sequences after dealing
 	_check_sequences()
+	if dealt:
+		card_moved.emit()
 	return dealt
 
 
@@ -290,8 +315,93 @@ func _check_sequences() -> void:
 					new_top.face_up = true
 
 			if sequences_completed >= SEQUENCES_TO_WIN:
+				game_completed.emit()
 				game_won.emit()
 				return
+
+func is_completed() -> bool:
+	"""Check if the game is completed (all sequences found)"""
+	return sequences_completed >= SEQUENCES_TO_WIN
+
+
+func has_valid_moves() -> bool:
+	"""Check if there are any valid moves available"""
+	if not stock.is_empty():
+		return true
+	for from_col in range(TABLEAU_COUNT):
+		var col = tableaus[from_col]
+		if col.is_empty():
+			continue
+		var card_idx = col.size() - 1
+		# Find the first face-up card to try moving
+		while card_idx >= 0:
+			var card = col[card_idx]
+			if not card.face_up:
+				break
+			for to_col in range(TABLEAU_COUNT):
+				if from_col == to_col:
+					continue
+				if can_place_on(card, to_col):
+					return true
+			card_idx -= 1
+	return false
+
+
+func get_mirror_data() -> Dictionary:
+	"""Get game state as mirror data for synchronization"""
+	var deck_data = []
+	# Tableau cards first (col 0, col 1, ..., col 6)
+	for col in tableaus:
+		for card in col:
+			deck_data.append({
+				"suit": card.suit,
+				"rank": card.rank,
+				"face_up": card.face_up,
+				"stock": false
+			})
+	# Stock cards
+	for card in stock:
+		deck_data.append({
+			"suit": card.suit,
+			"rank": card.rank,
+			"face_up": card.face_up,
+			"stock": true
+		})
+	return {
+		"deck": deck_data,
+		"seed": _seed,
+		"difficulty": _difficulty
+	}
+
+
+func new_game_mirror(mirror_data: Dictionary) -> void:
+	"""Reconstruct game from mirror data"""
+	var difficulty = mirror_data.get("difficulty", "Easy")
+	_difficulty = difficulty
+	sequences_completed = 0
+	_history.clear()
+	_redo_stack.clear()
+	_start_time = Time.get_ticks_msec() / 1000.0
+
+	# Reset tableaus and stock
+	tableaus.clear()
+	for _i in range(TABLEAU_COUNT):
+		tableaus.append([])
+	stock.clear()
+
+	# Rebuild deck from mirror data
+	var deck: Array = []
+	for entry in mirror_data.get("deck", []):
+		var c = SolitaireCard.new()
+		c.suit = entry.get("suit", 0)
+		c.rank = entry.get("rank", 0)
+		c.face_up = entry.get("face_up", false)
+		c.stock = entry.get("stock", false)
+		deck.append(c)
+
+	# Use common deal logic
+	_deal_from_deck(deck)
+
 
 func get_game_time() -> float:
 	"""Get elapsed time in seconds since game start"""
