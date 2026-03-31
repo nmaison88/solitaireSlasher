@@ -216,11 +216,11 @@ func _setup_main_menu() -> void:
 	var screen_size = DisplayServer.screen_get_size()
 	var max_dimension = min(screen_size.x, screen_size.y)  # Use smaller dimension for square icons
 
-	# Use full screen dimensions but avoid settings button area
-	game_carousel.custom_minimum_size = Vector2(screen_size.x * 0.9, screen_size.y - 120)  # 90% width, avoid top 120px for settings
+	# Use full screen width for proper centering of scaled items
+	game_carousel.custom_minimum_size = Vector2(screen_size.x, screen_size.y - 120)  # Full width for centered scaling
 	game_carousel.position = Vector2(0, 120)  # Start below settings button area
-	game_carousel.item_size = Vector2(max_dimension * 0.45, max_dimension * 0.45)  # Smaller for peek at neighbors
-	game_carousel.item_seperation = screen_size.x * 0.05  # Reduced to show neighboring items
+	game_carousel.item_size = Vector2(max_dimension * 0.40, max_dimension * 0.40)  # Slightly smaller for better spacing
+	game_carousel.item_seperation = screen_size.x * 0.08  # Increased spacing for even padding around scaled item
 	
 	# Enable carousel movement and interaction with smooth looping
 	game_carousel.carousel_angle = 0  # Horizontal
@@ -239,7 +239,7 @@ func _setup_main_menu() -> void:
 	game_carousel.manual_carousel_ease_type = Tween.EASE_OUT
 	
 	# Add game icons as clickable TextureRect children - smaller size to show adjacent games
-	var item_size_vec = Vector2(max_dimension * 0.45, max_dimension * 0.45)
+	var item_size_vec = Vector2(max_dimension * 0.40, max_dimension * 0.40)
 
 	var solitaire_icon = TextureRect.new()
 	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
