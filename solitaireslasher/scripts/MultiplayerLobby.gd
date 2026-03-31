@@ -63,13 +63,18 @@ func _ready() -> void:
 	_connect_signals()
 
 func _create_ui() -> void:
-	# Main container
+	# Main container with responsive margins
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 80)
-	margin.add_theme_constant_override("margin_right", 80)
-	margin.add_theme_constant_override("margin_top", 80)
-	margin.add_theme_constant_override("margin_bottom", 80)
+
+	# Use smaller margins on mobile devices (narrow screens)
+	var horizontal_margin = 40 if get_viewport().get_visible_rect().size.x < 600 else 80
+	var vertical_margin = 40 if get_viewport().get_visible_rect().size.y < 900 else 80
+
+	margin.add_theme_constant_override("margin_left", horizontal_margin)
+	margin.add_theme_constant_override("margin_right", horizontal_margin)
+	margin.add_theme_constant_override("margin_top", vertical_margin)
+	margin.add_theme_constant_override("margin_bottom", vertical_margin)
 	add_child(margin)
 	
 	# Add scroll container to ensure all content is accessible
