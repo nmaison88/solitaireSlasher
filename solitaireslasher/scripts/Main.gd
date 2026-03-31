@@ -211,16 +211,16 @@ func _setup_main_menu() -> void:
 	# Create game carousel (taking up most of the screen)
 	var game_carousel = Carousel.new()
 	game_carousel.name = "GameCarousel"
-	
+
 	# Get actual screen size, not viewport size (more accurate for mobile)
 	var screen_size = DisplayServer.screen_get_size()
 	var max_dimension = min(screen_size.x, screen_size.y)  # Use smaller dimension for square icons
-	
+
 	# Use full screen dimensions but avoid settings button area
 	game_carousel.custom_minimum_size = Vector2(screen_size.x * 0.9, screen_size.y - 120)  # 90% width, avoid top 120px for settings
 	game_carousel.position = Vector2(0, 120)  # Start below settings button area
-	game_carousel.item_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
-	game_carousel.item_seperation = screen_size.x * 0.1  # 10% of screen width separation
+	game_carousel.item_size = Vector2(max_dimension * 0.45, max_dimension * 0.45)  # Smaller for peek at neighbors
+	game_carousel.item_seperation = screen_size.x * 0.05  # Reduced to show neighboring items
 	
 	# Enable carousel movement and interaction with smooth looping
 	game_carousel.carousel_angle = 0  # Horizontal
@@ -238,20 +238,22 @@ func _setup_main_menu() -> void:
 	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC
 	game_carousel.manual_carousel_ease_type = Tween.EASE_OUT
 	
-	# Add game icons as clickable TextureRect children (2/3 screen size)
+	# Add game icons as clickable TextureRect children - smaller size to show adjacent games
+	var item_size_vec = Vector2(max_dimension * 0.45, max_dimension * 0.45)
+
 	var solitaire_icon = TextureRect.new()
 	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
-	solitaire_icon.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
+	solitaire_icon.custom_minimum_size = item_size_vec
 	solitaire_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	solitaire_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	solitaire_icon.name = "Solitaire"
 	solitaire_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
 	solitaire_icon.gui_input.connect(_on_solitaire_icon_clicked)
 	game_carousel.add_child(solitaire_icon)
-	
+
 	var sudoku_icon = TextureRect.new()
 	sudoku_icon.texture = load("res://game icons/sudoku_icon.png")
-	sudoku_icon.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)  # 2/3 of screen size
+	sudoku_icon.custom_minimum_size = item_size_vec
 	sudoku_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	sudoku_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	sudoku_icon.name = "Sudoku"
@@ -261,7 +263,7 @@ func _setup_main_menu() -> void:
 
 	var spider_icon_tex = TextureRect.new()
 	spider_icon_tex.texture = load("res://game icons/spider_icon.png")
-	spider_icon_tex.custom_minimum_size = Vector2(max_dimension * 0.66, max_dimension * 0.66)
+	spider_icon_tex.custom_minimum_size = item_size_vec
 	spider_icon_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	spider_icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	spider_icon_tex.name = "Spider"
@@ -273,7 +275,10 @@ func _setup_main_menu() -> void:
 	game_carousel.manual_end.connect(_on_game_carousel_selection_changed)
 	game_carousel.snap_end.connect(_on_game_carousel_selection_changed)
 	_menu_container.add_child(game_carousel)
-	
+
+	# Initialize item scales (Solitaire is default, index 0)
+	_on_game_carousel_selection_changed(0)
+
 	# Add spacing
 	var spacer2 = Control.new()
 	spacer2.custom_minimum_size = Vector2(0, 20)
@@ -408,19 +413,33 @@ func _on_spider_icon_clicked(event: InputEvent) -> void:
 					_on_game_selected()
 
 func _on_game_carousel_selection_changed(index: int = -1) -> void:
-	"""Handle game carousel selection change"""
+	"""Handle game carousel selection change and update icon scales"""
 	# If no index provided, get current index from carousel
+	var game_carousel = get_node_or_null("MainMenuContainer/GameCarousel")
 	if index == -1:
-		var game_carousel = get_node_or_null("MainMenuContainer/GameCarousel")
 		if game_carousel and game_carousel.get_child_count() > 0:
 			index = game_carousel.get_current_carousel_index()
 		else:
 			return
-	
+
 	var games = ["Solitaire", "Sudoku", "Spider"]
 	if index >= 0 and index < games.size():
 		_current_game_type = games[index]
 		print("Game selected: ", _current_game_type)
+
+	# Scale the selected item larger and unselected items smaller for visual emphasis
+	if game_carousel:
+		for i in range(game_carousel.get_child_count()):
+			var item = game_carousel.get_child(i)
+			if item is TextureRect:
+				if i == index:
+					# Selected item: larger scale
+					item.scale = Vector2(1.15, 1.15)
+					item.modulate = Color.WHITE
+				else:
+					# Unselected items: smaller scale and slightly dimmed
+					item.scale = Vector2(0.85, 0.85)
+					item.modulate = Color(0.75, 0.75, 0.75)
 
 func _on_game_selected() -> void:
 	"""Handle game selection from carousel - show game-specific menu"""
