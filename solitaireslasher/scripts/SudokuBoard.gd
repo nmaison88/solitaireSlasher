@@ -14,6 +14,7 @@ var game_over_overlay: Panel
 var win_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
 var erase_button: Button  # Erase button for incorrect values
+var _number_buttons: Dictionary = {}  # number (1-9) -> Button reference
 
 # Theme colors
 var theme_colors: Dictionary = {}
@@ -247,6 +248,7 @@ func _create_ui():
 		var font_size = int(number_button_size * 0.3)  # Smaller font to fit in original buttons
 		btn.add_theme_font_size_override("font_size", font_size)
 		btn.pressed.connect(_on_number_selected.bind(i))
+		_number_buttons[i] = btn  # Store reference for disabling when complete
 		number_selector.add_child(btn)
 	
 	# SECTION 4: Fix border overlay scaling
@@ -302,7 +304,10 @@ func set_game(sudoku_game: SudokuGame):
 func render():
 	if not game:
 		return
-	
+
+	# Reset all number buttons to enabled state for new game
+	_reset_number_buttons()
+
 	# Hide game over overlay if visible
 	if game_over_overlay:
 		game_over_overlay.visible = false
@@ -586,6 +591,8 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 	if is_correct and value != 0:
 		print("Checking for completions at (", row, ",", col, ")")
 		_check_for_completions(row, col)
+		# Check if all 9 instances of this number are now correctly placed
+		_check_and_disable_number(value)
 
 	# Keep gray background consistent with other cells
 	var stylebox = StyleBoxFlat.new()
@@ -744,6 +751,25 @@ func _is_section_complete(start_row: int, start_col: int) -> bool:
 			if game.get_cell_value(r, c) != game.get_solution_value(r, c):
 				return false
 	return true
+
+func _check_and_disable_number(value: int) -> void:
+	"""Check if all 9 of a number are correctly placed and disable its button if so"""
+	var count = 0
+	for row in range(GRID_SIZE):
+		for col in range(GRID_SIZE):
+			if game.get_cell_value(row, col) == value and game.get_solution_value(row, col) == value:
+				count += 1
+	if count == 9:
+		var btn = _number_buttons.get(value)
+		if btn and is_instance_valid(btn):
+			btn.disabled = true
+			print("Number ", value, " complete - button disabled")
+
+func _reset_number_buttons() -> void:
+	"""Re-enable all number selector buttons for a new game"""
+	for btn in _number_buttons.values():
+		if is_instance_valid(btn):
+			btn.disabled = false
 
 func _animate_completion(cells: Array[Vector2i]) -> void:
 	"""Animate stars appearing and fading for completed cells"""

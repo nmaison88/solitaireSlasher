@@ -176,7 +176,17 @@ func get_subgrid(grd, row, col):
 
 func _create_puzzle(diff):
 	puzzle = solution_grid.duplicate(true)
-	var removals = diff * 10  # Easy=10, Medium=30, Hard=50
+	# Scale difficulty by removing more cards: Easy=71 shown, Medium=30 shown, Hard=26 shown
+	var removals = 0
+	match diff:
+		1:  # Easy
+			removals = 10  # 71 cells shown
+		3:  # Medium
+			removals = 51  # 30 cells shown
+		5:  # Hard
+			removals = 55  # 26 cells shown
+		_:
+			removals = 30  # Fallback
 	while removals > 0:
 		var row = randi_range(0, 8)
 		var col = randi_range(0, 8)
