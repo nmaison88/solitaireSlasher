@@ -1110,6 +1110,19 @@ func _show_main_menu() -> void:
 	if game_bg:
 		game_bg.visible = false
 	
+	# Hide game boards
+	if _board:
+		_board.visible = false
+	if _spider_board:
+		_spider_board.visible = false
+	if _sudoku_board:
+		_sudoku_board.visible = false
+
+	# Clear and hide status label
+	if _status_label:
+		_status_label.text = ""
+		_status_label.visible = false
+
 	# Hide game control buttons
 	for child in get_children():
 		if child is Button and (child.name == "new_game" or child.name == "undo_button" or child.name == "menu_button"):
@@ -1268,12 +1281,16 @@ func _setup_single_player_sudoku() -> void:
 	# Start new Sudoku game
 	_sudoku_game.new_game(difficulty_level, true)
 	_sudoku_board.set_game(_sudoku_game)
-	
+
 	# Connect signals
 	if not _sudoku_game.puzzle_completed.is_connected(_on_sudoku_completed):
 		_sudoku_game.puzzle_completed.connect(_on_sudoku_completed)
 	if not _sudoku_game.game_over.is_connected(_on_sudoku_game_over):
 		_sudoku_game.game_over.connect(_on_sudoku_game_over)
+	if not _sudoku_board.play_again_requested.is_connected(_new_game):
+		_sudoku_board.play_again_requested.connect(_new_game)
+	if not _sudoku_board.main_menu_requested.is_connected(_show_main_menu):
+		_sudoku_board.main_menu_requested.connect(_show_main_menu)
 	
 	# Hide menu buttons
 	_hide_menu_buttons()

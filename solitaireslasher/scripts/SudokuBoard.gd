@@ -10,11 +10,10 @@ var grid_container: GridContainer
 var number_selector: GridContainer
 var hearts_container: HBoxContainer
 var heart_icons = []  # Array of 3 heart labels
-var game_over_overlay: Panel
-var win_overlay: Panel
 var border_overlay: Control  # Overlay for 3x3 subgrid borders
 var erase_button: Button  # Erase button for incorrect values
 var _number_buttons: Dictionary = {}  # number (1-9) -> Button reference
+var _result_overlay: Control = null  # Win/lose result screen
 
 # Theme colors
 var theme_colors: Dictionary = {}
@@ -25,6 +24,8 @@ var number_button_size: float  # Dynamic button size
 var spacing: int = 2  # Grid spacing
 
 signal game_completed
+signal play_again_requested
+signal main_menu_requested
 
 func _init_theme_colors() -> void:
 	"""Initialize theme colors based on player settings"""
@@ -111,72 +112,6 @@ func _create_ui():
 	hearts_container.visible = true
 	print("Hearts container created at position: ", hearts_container.position)
 	
-	# Create game over overlay (hidden by default)
-	game_over_overlay = Panel.new()
-	game_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	game_over_overlay.visible = false
-	add_child(game_over_overlay)
-	
-	# Matrix-style shader background
-	var shader_bg = ColorRect.new()
-	shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	
-	# Load and apply shader
-	var shader = load("res://shaders/matrix_background.gdshader")
-	var shader_material = ShaderMaterial.new()
-	shader_material.shader = shader
-	shader_material.set_shader_parameter("columns", 40.0)
-	shader_material.set_shader_parameter("rows", 30.0)
-	shader_material.set_shader_parameter("speed", 3.0)
-	shader_material.set_shader_parameter("char_color", Color(1.0, 0.0, 0.0, 1.0))  # Red for lose
-	shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
-	shader_bg.material = shader_material
-	shader_bg.z_index = 0
-	game_over_overlay.add_child(shader_bg)
-	
-	# "YOU LOST!" text in center (on top of shader) - larger for mobile
-	var lost_label = Label.new()
-	lost_label.text = "YOU LOST!"
-	lost_label.add_theme_font_size_override("font_size", 128)
-	lost_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
-	lost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lost_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lost_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	lost_label.z_index = 1
-	game_over_overlay.add_child(lost_label)
-	
-	# Create win overlay (hidden by default)
-	win_overlay = Panel.new()
-	win_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	win_overlay.visible = false
-	add_child(win_overlay)
-	
-	# Matrix-style shader background for win (green/cyan)
-	var win_shader_bg = ColorRect.new()
-	win_shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	
-	var win_shader = load("res://shaders/matrix_background.gdshader")
-	var win_shader_material = ShaderMaterial.new()
-	win_shader_material.shader = win_shader
-	win_shader_material.set_shader_parameter("columns", 40.0)
-	win_shader_material.set_shader_parameter("rows", 30.0)
-	win_shader_material.set_shader_parameter("speed", 3.0)
-	win_shader_material.set_shader_parameter("char_color", Color(0.0, 1.0, 0.8, 1.0))  # Cyan for win
-	win_shader_material.set_shader_parameter("bg_color", Color(0.0, 0.0, 0.0, 0.9))
-	win_shader_bg.material = win_shader_material
-	win_shader_bg.z_index = 0
-	win_overlay.add_child(win_shader_bg)
-	
-	# "YOU WON!" text in center - larger for mobile
-	var win_label = Label.new()
-	win_label.text = "YOU WON!"
-	win_label.add_theme_font_size_override("font_size", 128)
-	win_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White text
-	win_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	win_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	win_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	win_label.z_index = 1
-	win_overlay.add_child(win_label)
 	
 	# Main grid container for the 9x9 Sudoku grid
 	# Board: 9 cells * 80px + 8 gaps * 2px = 720 + 16 = 736px width
@@ -308,13 +243,8 @@ func render():
 	# Reset all number buttons to enabled state for new game
 	_reset_number_buttons()
 
-	# Hide game over overlay if visible
-	if game_over_overlay:
-		game_over_overlay.visible = false
-
-	# Hide win overlay if visible
-	if win_overlay:
-		win_overlay.visible = false
+	# Clear any result screen overlay
+	_clear_result_overlay()
 
 	# Reset hearts to full
 	_update_hearts(3)
@@ -667,18 +597,17 @@ func _update_hearts(lives_remaining: int):
 			print("Heart ", i + 1, " set to lost (gray)")
 
 func _on_game_over():
-	"""Handle game over - disable input and show overlay"""
+	"""Handle game over - disable input and show result screen"""
 	print("Sudoku game over - no lives remaining!")
-	
+
 	# Notify multiplayer if in multiplayer mode
 	if MultiplayerGameManager and MultiplayerGameManager.is_multiplayer:
 		print("Notifying multiplayer that player lost all lives")
 		MultiplayerGameManager.forfeit_player()
-	
-	# Show game over overlay
-	if game_over_overlay:
-		game_over_overlay.visible = true
-	
+
+	# Show result screen
+	_show_result_screen(false)
+
 	# Disable all grid buttons
 	for row in grid_buttons:
 		for btn in row:
@@ -687,17 +616,16 @@ func _on_game_over():
 
 func _on_puzzle_completed():
 	print("Sudoku puzzle completed!")
-	
-	# Show win overlay with Matrix shader effect
-	if win_overlay:
-		win_overlay.visible = true
-	
+
+	# Show result screen
+	_show_result_screen(true)
+
 	# Disable all grid buttons
 	for row in grid_buttons:
 		for btn in row:
 			if btn and not btn.disabled:
 				btn.disabled = true
-	
+
 	game_completed.emit()
 
 func _check_for_completions(row: int, col: int) -> void:
@@ -809,3 +737,180 @@ func _animate_completion(cells: Array[Vector2i]) -> void:
 	for item in stars_and_tweens:
 		await item.tween.finished
 		item.star.queue_free()
+
+func _format_time(seconds: float) -> String:
+	"""Format elapsed time as MM:SS"""
+	var m = int(seconds) / 60
+	var s = int(seconds) % 60
+	return "%d:%02d" % [m, s]
+
+func _clear_result_overlay() -> void:
+	"""Clean up result screen overlay"""
+	if is_instance_valid(_result_overlay):
+		_result_overlay.visible = false  # Hide immediately
+		_result_overlay.queue_free()
+	_result_overlay = null
+
+func _show_result_screen(won: bool) -> void:
+	"""Show a professional result screen with stats and buttons"""
+	if is_instance_valid(_result_overlay):
+		return  # Already showing
+
+	# Full-screen dimming overlay
+	var overlay = Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 10000
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_result_overlay = overlay
+	add_child(overlay)
+
+	# Dark semi-transparent background
+	var bg = ColorRect.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.0, 0.02, 0.08, 0.88)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(bg)
+
+	# Centered card (75% of screen size)
+	var card = PanelContainer.new()
+	var card_width = size.x * 0.75
+	var card_height = size.y * 0.75
+	card.custom_minimum_size = Vector2(card_width, card_height)
+	overlay.add_child(card)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.add_child(vbox)
+
+	# Add top spacer
+	var top_spacer = Control.new()
+	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(top_spacer)
+
+	# Title
+	var title = Label.new()
+	title.text = "Puzzle Complete!" if won else "Game Over"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 72)
+	title.add_theme_color_override("font_color",
+		Color(1.0, 0.85, 0.1) if won else Color(1.0, 0.3, 0.3))
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vbox.add_child(title)
+
+	vbox.add_child(HSeparator.new())
+
+	# Stats
+	var difficulty_map = {1: "Easy", 3: "Medium", 5: "Hard"}
+
+	# Difficulty with emoji
+	var diff_container = HBoxContainer.new()
+	diff_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	diff_container.add_theme_constant_override("separation", 12)
+	vbox.add_child(diff_container)
+
+	var diff_emoji = Label.new()
+	diff_emoji.text = "⚙️"
+	diff_emoji.add_theme_font_size_override("font_size", 44)
+	diff_container.add_child(diff_emoji)
+
+	var diff_label = Label.new()
+	var diff_text = difficulty_map.get(game.difficulty, "?")
+	diff_label.text = diff_text
+	diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	diff_label.add_theme_font_size_override("font_size", 48)
+	diff_label.add_theme_color_override("font_color", Color(0.7, 0.7, 1.0))  # Light blue
+	diff_container.add_child(diff_label)
+
+	# Time with emoji
+	var time_container = HBoxContainer.new()
+	time_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	time_container.add_theme_constant_override("separation", 12)
+	vbox.add_child(time_container)
+
+	var time_emoji = Label.new()
+	time_emoji.text = "⏱️"
+	time_emoji.add_theme_font_size_override("font_size", 44)
+	time_container.add_child(time_emoji)
+
+	var time_label = Label.new()
+	time_label.text = _format_time(game.get_game_time())
+	time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	time_label.add_theme_font_size_override("font_size", 48)
+	time_label.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7))  # Light green
+	time_container.add_child(time_label)
+
+	# Lives remaining row with emoji
+	var lives_row = HBoxContainer.new()
+	lives_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	lives_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(lives_row)
+
+	var lives_emoji = Label.new()
+	lives_emoji.text = "❤️"
+	lives_emoji.add_theme_font_size_override("font_size", 44)
+	lives_row.add_child(lives_emoji)
+
+	for i in range(game.max_lives):
+		var heart = FontAwesome.new()
+		heart.icon_name = "heart"
+		heart.icon_type = "solid"
+		heart.icon_size = 40
+		heart.modulate = Color(1.0, 0.0, 0.0) if i < game.lives else Color(0.4, 0.4, 0.4)
+		heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lives_row.add_child(heart)
+
+	vbox.add_child(HSeparator.new())
+
+	# Buttons
+	var play_btn = Button.new()
+	play_btn.text = "Play Again"
+	play_btn.custom_minimum_size = Vector2(0, 80)
+	play_btn.add_theme_font_size_override("font_size", 36)
+	play_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	play_btn.pressed.connect(_on_result_play_again)
+	vbox.add_child(play_btn)
+
+	var menu_btn = Button.new()
+	menu_btn.text = "Main Menu"
+	menu_btn.custom_minimum_size = Vector2(0, 80)
+	menu_btn.add_theme_font_size_override("font_size", 36)
+	menu_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	menu_btn.pressed.connect(_on_result_main_menu)
+	vbox.add_child(menu_btn)
+
+	# Add bottom spacer
+	var bottom_spacer = Control.new()
+	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(bottom_spacer)
+
+	# Position card after one frame so size is valid
+	await get_tree().process_frame
+	card.position = Vector2(
+		(size.x - card.size.x) * 0.5,
+		(size.y - card.size.y) * 0.5
+	)
+	card.pivot_offset = card.size * 0.5
+
+	# Animate: fade in + bounce card
+	overlay.modulate.a = 0.0
+	var fade = create_tween()
+	fade.tween_property(overlay, "modulate:a", 1.0, 0.4)
+
+	card.scale = Vector2(0.3, 0.3)
+	var bounce = card.create_tween()
+	bounce.set_ease(Tween.EASE_OUT)
+	bounce.set_trans(Tween.TRANS_BACK)
+	bounce.tween_property(card, "scale", Vector2(1.0, 1.0), 0.55)
+
+func _on_result_play_again() -> void:
+	"""Handle 'Play Again' button press"""
+	_clear_result_overlay()
+	play_again_requested.emit()
+
+func _on_result_main_menu() -> void:
+	"""Handle 'Main Menu' button press"""
+	_clear_result_overlay()
+	visible = false  # Hide the entire board immediately
+	main_menu_requested.emit()
