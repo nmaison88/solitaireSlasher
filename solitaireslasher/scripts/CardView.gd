@@ -137,6 +137,7 @@ func _on_gui_input(event: InputEvent) -> void:
 func _on_press_started(global_pos: Vector2) -> void:
 	if card and card.face_up and not card.stock:
 		original_position = global_position
+		# Store offset as center of card relative to finger
 		drag_offset = global_position - global_pos
 		mouse_press_position = global_pos
 
@@ -162,11 +163,14 @@ func _on_motion(global_pos: Vector2) -> void:
 		if mouse_press_position.distance_to(global_pos) > drag_threshold:
 			is_dragging = true
 			card_drag_started.emit(self)
+			# Recalculate drag_offset at start of drag for accurate tracking
+			drag_offset = original_position - mouse_press_position
 			print("DEBUG: CardView drag_started at ", global_pos, " original_position: ", original_position)
 	if is_dragging:
-		# Allow card to move off-screen to follow finger during edge drags
-		# This ensures 1-to-1 finger tracking even at screen boundaries
-		global_position = global_pos + drag_offset
+		# Track movement relative to press position, not absolute global position
+		# This ensures 1-to-1 finger tracking without drift
+		var delta = global_pos - mouse_press_position
+		global_position = original_position + delta
 		card_drag_moved.emit(self, global_position)  # Emit global_position not local position
 
 func _card_clicked() -> void:
