@@ -32,6 +32,39 @@ var _current_difficulty: String = "Medium"
 var _game_type_option: OptionButton
 var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
+# Main menu
+const GameCarouselScript = preload("res://scripts/GameCarousel.gd")
+const _MENU_GAMES: Array[String] = ["Solitaire", "Sudoku", "Spider"]
+const _MENU_GAME_INFO := {
+	"Solitaire": {
+		"title": "SOLITAIRE SLASHER",
+		"tagline": "Carve through the deck. Klondike, no mercy.",
+		"accent": Color(0.9, 0.18, 0.14),
+		"icon": "res://game icons/solitaire_icon.png",
+	},
+	"Sudoku": {
+		"title": "SUDOKU WASTELAND",
+		"tagline": "Nine by nine. Three lives. No second chances.",
+		"accent": Color(0.45, 0.95, 0.3),
+		"icon": "res://game icons/sudoku_icon.png",
+	},
+	"Spider": {
+		"title": "SPIDER SOLITAIRE",
+		"tagline": "Two decks. Eight runs. Don't get tangled.",
+		"accent": Color(0.95, 0.5, 0.15),
+		"icon": "res://game icons/spider_icon.png",
+	},
+}
+var _menu_bg_material: ShaderMaterial
+var _menu_carousel: Carousel
+var _menu_game_title: Label
+var _menu_game_tagline: Label
+var _menu_dots: Array[Panel] = []
+var _menu_play_style: StyleBoxFlat
+var _menu_selected_index: int = 0
+var _menu_accent: Color = Color(0.9, 0.18, 0.14)
+var _menu_accent_tween: Tween
+
 # Carousel swipe vs tap discrimination
 const _TAP_MAX_DISTANCE: float = 20.0
 var _icon_press_pos: Dictionary = {}  # icon name -> Vector2 of press start
@@ -124,10 +157,19 @@ func _ready() -> void:
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
 
 func _setup_main_menu() -> void:
-	# Add background for menu
+	var viewport_size := get_viewport_rect().size
+	var top_padding := 0.0
+	var left_padding := 0.0
+	var bottom_padding := 0.0
+	if OS.has_feature("mobile"):
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_padding = safe_area.position.y
+		left_padding = safe_area.position.x
+		bottom_padding = DisplayServer.screen_get_size().y - safe_area.end.y
+
+	# Background: theme color tinted by the wasteland shader, plus drifting embers
 	var menu_background = ColorRect.new()
 	menu_background.name = "MenuBackground"
-	# Set background color based on theme
 	var current_theme = PlayerData.get_theme()
 	if current_theme == "light":
 		menu_background.color = Color(0.2, 0.4, 0.7)  # Blue background
@@ -136,24 +178,21 @@ func _setup_main_menu() -> void:
 	menu_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_background.z_index = -2  # Behind game background
 	menu_background.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
+	_menu_bg_material = ShaderMaterial.new()
+	_menu_bg_material.shader = load("res://shaders/menu_wasteland.gdshader")
+	menu_background.material = _menu_bg_material
+	menu_background.add_child(_create_menu_embers())
 	add_child(menu_background)
-	
+	menu_background.resized.connect(_on_menu_background_resized)
+	_on_menu_background_resized.call_deferred()
+
 	# Add settings button in top left with iPhone notch padding
 	var settings_button = Button.new()
 	settings_button.name = "settings_button"
-	
-	# Position with iPhone notch padding
-	var top_padding = 0
-	var left_padding = 0
-	if OS.has_feature("mobile"):
-		var safe_area = DisplayServer.get_display_safe_area()
-		top_padding = safe_area.position.y
-		left_padding = safe_area.position.x
-	
 	settings_button.position = Vector2(10 + left_padding, 10 + top_padding)
 	settings_button.size = Vector2(100, 100)
 	settings_button.tooltip_text = "Settings"
-	
+
 	# Make button background transparent
 	var transparent_style = StyleBoxFlat.new()
 	transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
@@ -161,68 +200,59 @@ func _setup_main_menu() -> void:
 	settings_button.add_theme_stylebox_override("normal", transparent_style)
 	settings_button.add_theme_stylebox_override("hover", transparent_style)
 	settings_button.add_theme_stylebox_override("pressed", transparent_style)
-	
+
 	# Ensure settings button catches mouse events
 	settings_button.mouse_filter = Control.MOUSE_FILTER_STOP
-	
+
 	# Add FontAwesome gear icon for settings (FontAwesome 6 naming)
 	var settings_icon = FontAwesome.new()
 	settings_icon.icon_name = "gear"
-	settings_icon.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))  # White color
+	settings_icon.add_theme_color_override("font_color", Color(0.93, 0.87, 0.72))  # Bone white
 	settings_icon.icon_size = 64
 	settings_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	settings_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	settings_button.add_child(settings_icon)
-	
+
 	settings_button.pressed.connect(_on_settings_button_pressed)
 	# Don't add to scene tree yet - will add after menu container
-	
-	# Create centered menu container
+
+	# Full-screen menu container for maximum swipe area
 	_menu_container = VBoxContainer.new()
 	_menu_container.name = "MainMenuContainer"
-	# Make menu container full screen for maximum swipe area
 	_menu_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_menu_container.offset_left = 0
-	_menu_container.offset_top = 0
-	_menu_container.offset_right = 0
-	_menu_container.offset_bottom = 0
-	_menu_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_menu_container.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_menu_container.add_theme_constant_override("separation", 0)
 	add_child(_menu_container)
-	
+
 	# Now add settings button on top of everything
 	add_child(settings_button)
-	
-	# Add title
-	var title = Label.new()
-	title.text = "Choose Your Game"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		title.add_theme_font_size_override("font_size", 80)
-	else:
-		title.add_theme_font_size_override("font_size", 64)
+
+	var top_spacer = Control.new()
+	top_spacer.custom_minimum_size = Vector2(0, top_padding + 130)
+	_menu_container.add_child(top_spacer)
+
+	var is_mobile := OS.has_feature("mobile")
+	var title := _make_menu_label("CHOOSE YOUR FATE", 84 if is_mobile else 68, Color(0.93, 0.87, 0.72), 6, 10)
+	title.add_theme_color_override("font_shadow_color", Color(0.6, 0.05, 0.03, 0.8))
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 6)
 	_menu_container.add_child(title)
-	
-	# Add spacing
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 40)
-	_menu_container.add_child(spacer1)
-	
-	# Create game carousel (taking up most of the screen)
-	var game_carousel = Carousel.new()
+
+	var subtitle := _make_menu_label("— swipe to pick your poison —", 30, Color(0.93, 0.87, 0.72, 0.55), 2)
+	_menu_container.add_child(subtitle)
+
+	# Flexible spacers above the carousel and below the button center that group on tall screens
+	var upper_flex = Control.new()
+	upper_flex.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_menu_container.add_child(upper_flex)
+
+	# Game carousel; GameCarousel scales/dims/tilts items by distance from center
+	var item_side := minf(viewport_size.x * 0.6, viewport_size.y * 0.3)
+	var game_carousel: Carousel = GameCarouselScript.new()
 	game_carousel.name = "GameCarousel"
+	game_carousel.custom_minimum_size = Vector2(0, item_side * 1.3)
+	game_carousel.item_size = Vector2(item_side, item_side)
+	game_carousel.item_seperation = viewport_size.x * 0.02  # Side games peek in from the edges
 
-	# Get actual screen size, not viewport size (more accurate for mobile)
-	var screen_size = DisplayServer.screen_get_size()
-	var max_dimension = min(screen_size.x, screen_size.y)  # Use smaller dimension for square icons
-
-	# Use full screen width for proper centering of scaled items
-	game_carousel.custom_minimum_size = Vector2(screen_size.x, screen_size.y - 120)  # Full width for centered scaling
-	game_carousel.position = Vector2(0, 120)  # Start below settings button area
-	game_carousel.item_size = Vector2(max_dimension * 0.40, max_dimension * 0.40)  # Slightly smaller for better spacing
-	game_carousel.item_seperation = screen_size.x * 0.08  # Increased spacing for even padding around scaled item
-	
 	# Enable carousel movement and interaction with smooth looping
 	game_carousel.carousel_angle = 0  # Horizontal
 	game_carousel.allow_loop = true
@@ -238,52 +268,102 @@ func _setup_main_menu() -> void:
 	game_carousel.manual_carousel_duration = 0.35
 	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC
 	game_carousel.manual_carousel_ease_type = Tween.EASE_OUT
-	
-	# Add game icons as clickable TextureRect children - smaller size to show adjacent games
-	var item_size_vec = Vector2(max_dimension * 0.40, max_dimension * 0.40)
 
-	var solitaire_icon = TextureRect.new()
-	solitaire_icon.texture = load("res://game icons/solitaire_icon.png")
-	solitaire_icon.custom_minimum_size = item_size_vec
-	solitaire_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	solitaire_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	solitaire_icon.name = "Solitaire"
-	solitaire_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
-	solitaire_icon.gui_input.connect(_on_solitaire_icon_clicked)
-	game_carousel.add_child(solitaire_icon)
-
-	var sudoku_icon = TextureRect.new()
-	sudoku_icon.texture = load("res://game icons/sudoku_icon.png")
-	sudoku_icon.custom_minimum_size = item_size_vec
-	sudoku_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	sudoku_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sudoku_icon.name = "Sudoku"
-	sudoku_icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
-	sudoku_icon.gui_input.connect(_on_sudoku_icon_clicked)
-	game_carousel.add_child(sudoku_icon)
-
-	var spider_icon_tex = TextureRect.new()
-	spider_icon_tex.texture = load("res://game icons/spider_icon.png")
-	spider_icon_tex.custom_minimum_size = item_size_vec
-	spider_icon_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	spider_icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	spider_icon_tex.name = "Spider"
-	spider_icon_tex.mouse_filter = Control.MOUSE_FILTER_PASS
-	spider_icon_tex.gui_input.connect(_on_spider_icon_clicked)
-	game_carousel.add_child(spider_icon_tex)
+	# Add game icons as clickable TextureRect children
+	var icon_handlers := {
+		"Solitaire": _on_solitaire_icon_clicked,
+		"Sudoku": _on_sudoku_icon_clicked,
+		"Spider": _on_spider_icon_clicked,
+	}
+	for game in _MENU_GAMES:
+		var icon = TextureRect.new()
+		icon.texture = load(_MENU_GAME_INFO[game].icon)
+		icon.custom_minimum_size = Vector2(item_side, item_side)
+		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.name = game
+		icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
+		icon.gui_input.connect(icon_handlers[game])
+		game_carousel.add_child(icon)
 
 	# Connect to carousel change signals
 	game_carousel.manual_end.connect(_on_game_carousel_selection_changed)
 	game_carousel.snap_end.connect(_on_game_carousel_selection_changed)
+	game_carousel.resized.connect(_update_menu_glow_position)
+	game_carousel.item_rect_changed.connect(_update_menu_glow_position)
 	_menu_container.add_child(game_carousel)
+	_menu_carousel = game_carousel
 
-	# Initialize item scales (Solitaire is default, index 0)
-	_on_game_carousel_selection_changed(0)
+	# Selected game name and tagline
+	_menu_game_title = _make_menu_label("", 64 if is_mobile else 54, Color.WHITE, 4, 8)
+	_menu_container.add_child(_menu_game_title)
 
-	# Add spacing
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 20)
-	_menu_container.add_child(spacer2)
+	_menu_game_tagline = _make_menu_label("", 32 if is_mobile else 26, Color(0.93, 0.87, 0.72, 0.85), 1)
+	_menu_game_tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_menu_container.add_child(_menu_game_tagline)
+
+	# Page dots
+	var dots_spacer = Control.new()
+	dots_spacer.custom_minimum_size = Vector2(0, 28)
+	_menu_container.add_child(dots_spacer)
+
+	var dots = HBoxContainer.new()
+	dots.alignment = BoxContainer.ALIGNMENT_CENTER
+	dots.add_theme_constant_override("separation", 14)
+	_menu_container.add_child(dots)
+	_menu_dots.clear()
+	for i in range(_MENU_GAMES.size()):
+		var dot_style = StyleBoxFlat.new()
+		dot_style.set_corner_radius_all(8)
+		var dot = Panel.new()
+		dot.custom_minimum_size = Vector2(16, 16)
+		dot.add_theme_stylebox_override("panel", dot_style)
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dots.add_child(dot)
+		_menu_dots.append(dot)
+
+	var play_spacer = Control.new()
+	play_spacer.custom_minimum_size = Vector2(0, 36)
+	_menu_container.add_child(play_spacer)
+
+	# ENTER button: dark metal with an accent-colored border and glow
+	_menu_play_style = StyleBoxFlat.new()
+	_menu_play_style.bg_color = Color(0.12, 0.1, 0.09, 0.92)
+	_menu_play_style.set_border_width_all(4)
+	_menu_play_style.set_corner_radius_all(14)
+	_menu_play_style.shadow_size = 18
+	var play_pressed_style := _menu_play_style.duplicate() as StyleBoxFlat
+	play_pressed_style.bg_color = Color(0.06, 0.05, 0.04, 0.95)
+	var play_button = Button.new()
+	play_button.name = "MenuPlayButton"
+	play_button.text = "ENTER"
+	play_button.custom_minimum_size = Vector2(440, 112)
+	play_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	play_button.add_theme_font_override("font", _get_menu_font(8))
+	play_button.add_theme_font_size_override("font_size", 48)
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		play_button.add_theme_color_override(state, Color(0.93, 0.87, 0.72))
+	play_button.add_theme_stylebox_override("normal", _menu_play_style)
+	play_button.add_theme_stylebox_override("hover", _menu_play_style)
+	play_button.add_theme_stylebox_override("focus", _menu_play_style)
+	play_button.add_theme_stylebox_override("pressed", play_pressed_style)
+	play_button.pressed.connect(_on_menu_play_pressed)
+	_menu_container.add_child(play_button)
+	# Keep the pressed style's border/glow in sync with the accent color
+	_menu_play_style.changed.connect(func():
+		play_pressed_style.border_color = _menu_play_style.border_color
+		play_pressed_style.shadow_color = _menu_play_style.shadow_color)
+
+	var lower_flex = Control.new()
+	lower_flex.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_menu_container.add_child(lower_flex)
+
+	var bottom_spacer = Control.new()
+	bottom_spacer.custom_minimum_size = Vector2(0, bottom_padding + 70)
+	_menu_container.add_child(bottom_spacer)
+
+	# Initialize selection (Solitaire is default, index 0)
+	_set_menu_selection(0, false)
 
 func create_carousel_item(item_name: String) -> Control:
 	"""Create a carousel item with icon and text"""
@@ -423,28 +503,145 @@ func _on_game_carousel_selection_changed(index: int = -1) -> void:
 		else:
 			return
 
-	var games = ["Solitaire", "Sudoku", "Spider"]
-	if index >= 0 and index < games.size():
-		_current_game_type = games[index]
-		print("Game selected: ", _current_game_type)
+	if index < 0 or index >= _MENU_GAMES.size():
+		return
+	_current_game_type = _MENU_GAMES[index]
+	print("Game selected: ", _current_game_type)
 
-	# Play swipe sound effect
-	if SoundManager:
-		SoundManager.play_swipe()
+	# Item scale/dim/tilt is handled continuously by GameCarousel
+	if index != _menu_selected_index:
+		if SoundManager:
+			SoundManager.play_swipe()
+		_set_menu_selection(index)
 
-	# Scale the selected item larger and unselected items smaller for visual emphasis
-	if game_carousel:
-		for i in range(game_carousel.get_child_count()):
-			var item = game_carousel.get_child(i)
-			if item is TextureRect:
-				if i == index:
-					# Selected item: larger scale
-					item.scale = Vector2(1.15, 1.15)
-					item.modulate = Color.WHITE
-				else:
-					# Unselected items: smaller scale and slightly dimmed
-					item.scale = Vector2(0.85, 0.85)
-					item.modulate = Color(0.75, 0.75, 0.75)
+func _set_menu_selection(index: int, animate: bool = true) -> void:
+	"""Update the game name, tagline, page dots and accent color for the selected game"""
+	_menu_selected_index = index
+	var info: Dictionary = _MENU_GAME_INFO[_MENU_GAMES[index]]
+	_menu_game_title.text = info.title
+	_menu_game_tagline.text = info.tagline
+
+	for i in range(_menu_dots.size()):
+		var dot: Panel = _menu_dots[i]
+		var dot_style := dot.get_theme_stylebox("panel") as StyleBoxFlat
+		dot_style.bg_color = info.accent if i == index else Color(0.93, 0.87, 0.72, 0.3)
+		var dot_width := 44.0 if i == index else 16.0
+		if animate:
+			create_tween().tween_property(dot, "custom_minimum_size:x", dot_width, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		else:
+			dot.custom_minimum_size.x = dot_width
+
+	if _menu_accent_tween and _menu_accent_tween.is_valid():
+		_menu_accent_tween.kill()
+	if animate:
+		_menu_game_title.modulate.a = 0.0
+		_menu_game_tagline.modulate.a = 0.0
+		_menu_accent_tween = create_tween().set_parallel()
+		_menu_accent_tween.tween_method(_apply_menu_accent, _menu_accent, info.accent, 0.35)
+		_menu_accent_tween.tween_property(_menu_game_title, "modulate:a", 1.0, 0.25)
+		_menu_accent_tween.tween_property(_menu_game_tagline, "modulate:a", 1.0, 0.25).set_delay(0.08)
+	else:
+		_apply_menu_accent(info.accent)
+
+func _apply_menu_accent(color: Color) -> void:
+	_menu_accent = color
+	if _menu_bg_material:
+		_menu_bg_material.set_shader_parameter("glow_color", color)
+	_menu_game_title.add_theme_color_override("font_color", color.lightened(0.15))
+	_menu_play_style.border_color = color
+	_menu_play_style.shadow_color = Color(color, 0.45)
+
+func _on_menu_play_pressed() -> void:
+	_current_game_type = _MENU_GAMES[_menu_selected_index]
+	_on_game_selected()
+
+func _on_menu_background_resized() -> void:
+	var menu_bg := get_node_or_null("MenuBackground") as Control
+	if not menu_bg or menu_bg.size.y <= 0.0:
+		return
+	var embers := menu_bg.get_node_or_null("Embers") as CPUParticles2D
+	if embers:
+		embers.position = Vector2(menu_bg.size.x * 0.5, menu_bg.size.y + 20.0)
+		embers.emission_rect_extents = Vector2(menu_bg.size.x * 0.5, 20.0)
+	_menu_bg_material.set_shader_parameter("aspect", menu_bg.size.x / menu_bg.size.y)
+	_update_menu_glow_position()
+
+func _update_menu_glow_position() -> void:
+	"""Keep the background glow centered behind the carousel's focused item"""
+	var menu_bg := get_node_or_null("MenuBackground") as Control
+	if not menu_bg or not _menu_carousel or menu_bg.size.y <= 0.0:
+		return
+	var bg_rect := menu_bg.get_global_rect()
+	var center := _menu_carousel.get_global_rect().get_center()
+	_menu_bg_material.set_shader_parameter("glow_center", (center - bg_rect.position) / bg_rect.size)
+	_menu_bg_material.set_shader_parameter("glow_radius", _menu_carousel.item_size.y * 0.8 / bg_rect.size.y)
+
+func _create_menu_embers() -> CPUParticles2D:
+	"""Embers drifting up from the bottom of the menu, mostly orange with a few toxic-green specks"""
+	var embers := CPUParticles2D.new()
+	embers.name = "Embers"
+	embers.amount = 70
+	embers.lifetime = 9.0
+	embers.preprocess = 9.0
+	embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	embers.direction = Vector2(0, -1)
+	embers.spread = 25.0
+	embers.gravity = Vector2(18, -12)  # Gentle wind drift
+	embers.initial_velocity_min = 60.0
+	embers.initial_velocity_max = 160.0
+	embers.scale_amount_min = 0.25
+	embers.scale_amount_max = 0.8
+
+	var falloff := Gradient.new()
+	falloff.set_color(0, Color.WHITE)
+	falloff.set_color(1, Color(1, 1, 1, 0))
+	var dot := GradientTexture2D.new()
+	dot.width = 32
+	dot.height = 32
+	dot.fill = GradientTexture2D.FILL_RADIAL
+	dot.fill_from = Vector2(0.5, 0.5)
+	dot.fill_to = Vector2(0.5, 0.0)
+	dot.gradient = falloff
+	embers.texture = dot
+
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.15, Color(1, 1, 1, 0.9))
+	fade.add_point(0.7, Color(1, 1, 1, 0.5))
+	embers.color_ramp = fade
+
+	var tints := Gradient.new()
+	tints.set_color(0, Color(1.0, 0.45, 0.1))
+	tints.set_color(1, Color(0.5, 1.0, 0.3))
+	tints.add_point(0.8, Color(1.0, 0.7, 0.25))
+	embers.color_initial_ramp = tints
+
+	var additive := CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	embers.material = additive
+	return embers
+
+func _get_menu_font(letter_spacing: int = 0) -> FontVariation:
+	var base := SystemFont.new()
+	base.font_names = PackedStringArray(["Avenir Next Condensed", "Impact", "Arial Narrow", "sans-serif"])
+	base.font_weight = 800
+	var font := FontVariation.new()
+	font.base_font = base
+	font.spacing_glyph = letter_spacing
+	return font
+
+func _make_menu_label(text: String, font_size: int, color: Color, letter_spacing: int = 0, outline: int = 0) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", _get_menu_font(letter_spacing))
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	if outline > 0:
+		label.add_theme_constant_override("outline_size", outline)
+		label.add_theme_color_override("font_outline_color", Color(0.08, 0.05, 0.04))
+	return label
 
 func _on_game_selected() -> void:
 	"""Handle game selection from carousel - show game-specific menu"""
@@ -1092,6 +1289,10 @@ func _show_main_menu() -> void:
 	
 	if _menu_container:
 		_menu_container.visible = true
+		_menu_container.modulate.a = 0.0
+		create_tween().tween_property(_menu_container, "modulate:a", 1.0, 0.35)
+	if _menu_carousel:
+		_set_menu_selection(_menu_carousel.get_current_carousel_index(), false)
 	
 	# Show settings button only on main menu (if it exists)
 	var settings_button = get_node_or_null("settings_button")

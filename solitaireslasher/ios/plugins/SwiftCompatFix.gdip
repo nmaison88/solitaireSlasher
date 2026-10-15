@@ -1,0 +1,22 @@
+; Works around Xcode 27 launch crash: "Symbol not found: __ZN5swift19_swift_tsan_acquireEPv"
+; Source and rebuild script: SwiftCompatFix_src/
+
+[config]
+name="SwiftCompatFix"
+binary="SwiftCompatFix.xcframework"
+
+initialization="swift_compat_fix_init"
+deinitialization="swift_compat_fix_deinit"
+
+[dependencies]
+linked=[]
+embedded=[]
+system=[]
+
+capabilities=[]
+
+files=[]
+
+linker_flags=["-Wl,-ignore_auto_link_library,swiftCompatibility56"]
+
+[plist]

@@ -42,15 +42,21 @@ extern void native_camera_plugin_deinit();
 extern void qr_plugin_init();
 extern void qr_plugin_deinit();
 
+// Plugin: SwiftCompatFix
+extern void swift_compat_fix_init();
+extern void swift_compat_fix_deinit();
+
 // Use Plugins
 void godot_apple_embedded_plugins_initialize() {
 	native_camera_plugin_init();
 	qr_plugin_init();
+	swift_compat_fix_init();
 }
 
 void godot_apple_embedded_plugins_deinitialize() {
 	native_camera_plugin_deinit();
 	qr_plugin_deinit();
+	swift_compat_fix_deinit();
 }
 
 
