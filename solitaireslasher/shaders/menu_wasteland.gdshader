@@ -7,6 +7,7 @@ shader_type canvas_item;
 uniform vec2 glow_center = vec2(0.5, 0.45);
 uniform vec4 glow_color : source_color = vec4(0.9, 0.18, 0.14, 1.0);
 uniform float glow_radius = 0.2;
+uniform float glow_strength = 0.55;
 uniform vec4 haze_color : source_color = vec4(0.35, 0.75, 0.2, 1.0);
 uniform float aspect = 0.5; // width / height of the rect
 
@@ -47,7 +48,7 @@ void fragment() {
 	d.x *= aspect;
 	float glow = exp(-dot(d, d) / max(glow_radius * glow_radius, 0.0001));
 	float pulse = 0.85 + 0.15 * sin(TIME * 2.0);
-	col += glow_color.rgb * glow * 0.55 * pulse;
+	col += glow_color.rgb * glow * glow_strength * pulse;
 
 	vec2 v = (uv - 0.5) * vec2(1.2, 1.0);
 	col *= mix(0.45, 1.0, smoothstep(0.85, 0.25, length(v)));

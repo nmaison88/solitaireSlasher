@@ -10,6 +10,7 @@ signal card_drag_moved(card_view: CardView, new_position: Vector2)
 @onready var _card_back: TextureRect = $CardBack
 
 static var _corner_shader: Shader = null
+const _BACK_SHADER = preload("res://shaders/card_back_slasher.gdshader")
 
 var card: SolitaireCard
 var is_dragging: bool = false
@@ -40,6 +41,7 @@ shader_type canvas_item;
 uniform vec2 card_size = vec2(120.0, 160.0);
 uniform float radius = 10.0;
 uniform float border_width = 3.5;
+uniform vec3 tint = vec3(1.0, 0.965, 0.9);  // Slight parchment warmth
 void fragment() {
 	vec2 px = UV * card_size;
 	vec2 half = card_size * 0.5;
@@ -47,6 +49,7 @@ void fragment() {
 	float dist = length(max(d, vec2(0.0))) - radius;
 	float a = 1.0 - smoothstep(-1.0, 1.0, dist);
 	COLOR = texture(TEXTURE, UV);
+	COLOR.rgb *= tint;
 	// Dark border: ramps from 0 deep inside to 1 at the edge
 	float border = smoothstep(-(border_width + 1.5), 0.0, dist) * a;
 	COLOR.rgb = mix(COLOR.rgb, vec3(0.0), border * 0.75);
@@ -57,8 +60,25 @@ void fragment() {
 	mat.shader = _corner_shader
 	_texture_rect.material = mat
 	var mat2 = ShaderMaterial.new()
-	mat2.shader = _corner_shader
+	mat2.shader = _BACK_SHADER
 	_card_back.material = mat2
+	_add_shadow()
+
+func _add_shadow() -> void:
+	"""Soft drop shadow behind the card for depth on stacked piles"""
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.0)
+	style.set_corner_radius_all(10)
+	style.shadow_color = Color(0, 0, 0, 0.45)
+	style.shadow_size = 8
+	style.shadow_offset = Vector2(0, 4)
+	var shadow := Panel.new()
+	shadow.name = "Shadow"
+	shadow.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shadow.add_theme_stylebox_override("panel", style)
+	add_child(shadow)
+	move_child(shadow, 0)
 
 func _refresh() -> void:
 	if not is_node_ready() or not card:

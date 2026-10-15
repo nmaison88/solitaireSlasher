@@ -70,6 +70,9 @@ func _get_tableau_card_pos(column: int, card_idx_in_pile: int) -> Vector2:
 			y += FACE_DOWN_GAP_Y
 	return Vector2(x, y)
 
+const WastelandStyle = preload("res://scripts/WastelandStyle.gd")
+const SLOT_BORDER = Color(0.93, 0.87, 0.72, 0.22)  # Faint bone outline for empty piles
+
 # Reference to our project's Card class to avoid conflicts with Card Framework
 const SolitaireCard = preload("res://scripts/Card.gd")
 
@@ -174,44 +177,50 @@ func _show_win_screen() -> void:
 	if is_instance_valid(_win_overlay):
 		return
 
+	var accent = WastelandStyle.accent_for("Solitaire")
 	var overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 10000
+	overlay.z_index = 3000  # Board is 1000; total must stay under the 4096 z cap
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_win_overlay = overlay
 	add_child(overlay)
 
 	var bg = ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.0, 0.05, 0.15, 0.88)
+	bg.color = Color(0.05, 0.02, 0.02, 0.86)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.add_child(bg)
 
-	var msg_label = Label.new()
-	msg_label.text = WIN_MESSAGES[randi() % WIN_MESSAGES.size()]
-	msg_label.add_theme_font_size_override("font_size", 52)
-	msg_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
-	msg_label.set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER)
-	overlay.add_child(msg_label)
+	var box = VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.add_theme_constant_override("separation", 24)
+	overlay.add_child(box)
 
-	var play_btn = Button.new()
-	play_btn.text = "Play Again"
-	play_btn.add_theme_font_size_override("font_size", 28)
-	play_btn.custom_minimum_size = Vector2(240, 70)
+	var msg_label = WastelandStyle.title(WIN_MESSAGES[randi() % WIN_MESSAGES.size()], 72)
+	msg_label.add_theme_color_override("font_color", accent.lightened(0.2))
+	box.add_child(msg_label)
+
+	var seconds = int(game.get_game_time()) if game else 0
+	var stats = "%d MOVES  ·  %d:%02d" % [game.get_moves_count() if game else 0, seconds / 60, seconds % 60]
+	box.add_child(WastelandStyle.label(stats, 34, WastelandStyle.BONE_MUTED, 3))
+
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 30)
+	box.add_child(spacer)
+
+	var play_btn = WastelandStyle.make_button("PLAY AGAIN", accent, true, Vector2(440, 112), 44)
 	play_btn.pressed.connect(_restart_game)
-	overlay.add_child(play_btn)
-
-	# Position after one frame so size is valid
-	await get_tree().process_frame
-	msg_label.position = Vector2((size.x - msg_label.size.x) * 0.5, size.y * 0.35)
-	msg_label.pivot_offset = msg_label.size * 0.5
-	play_btn.position = Vector2((size.x - 240.0) * 0.5, size.y * 0.55)
+	box.add_child(play_btn)
 
 	# Animate in
 	overlay.modulate.a = 0.0
 	var fade = create_tween()
 	fade.tween_property(overlay, "modulate:a", 1.0, 0.4)
 
+	await get_tree().process_frame
+	msg_label.pivot_offset = msg_label.size * 0.5
 	msg_label.scale = Vector2(0.3, 0.3)
 	var bounce = msg_label.create_tween()
 	bounce.set_ease(Tween.EASE_OUT)
@@ -452,49 +461,23 @@ func render() -> void:
 func _on_test_button_pressed():
 	print("TEST BUTTON PRESSED! Mouse input works!")
 
-func _draw_slot(pos: Vector2) -> void:
-	# Use ColorRect instead of Panel — Panel has implicit theme margins that offset content
-	var bg = ColorRect.new()
-	bg.position = pos
-	bg.size = CARD_SIZE
-	bg.color = Color(0.0, 0.0, 0.0, 0.0)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-
-	# Draw white border as four thin rects (top, bottom, left, right)
-	var bw = 2.0
-	for border_rect in [
-		Rect2(pos, Vector2(CARD_SIZE.x, bw)),                         # top
-		Rect2(pos + Vector2(0, CARD_SIZE.y - bw), Vector2(CARD_SIZE.x, bw)),  # bottom
-		Rect2(pos, Vector2(bw, CARD_SIZE.y)),                          # left
-		Rect2(pos + Vector2(CARD_SIZE.x - bw, 0), Vector2(bw, CARD_SIZE.y))   # right
-	]:
-		var line = ColorRect.new()
-		line.position = border_rect.position
-		line.size = border_rect.size
-		line.color = Color(1.0, 1.0, 1.0, 0.6)
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(line)
-
-func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
-	# Rounded dark panel with semi-transparent black border
+func _draw_slot(pos: Vector2, strength: float = 1.0) -> Panel:
+	"""Empty-pile frame: translucent dark card shape with a faint bone outline"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.32 * strength)
+	style.set_border_width_all(2)
+	style.border_color = Color(SLOT_BORDER, SLOT_BORDER.a * strength)
+	style.set_corner_radius_all(10)
 	var slot_panel = Panel.new()
 	slot_panel.position = pos
 	slot_panel.size = CARD_SIZE
 	slot_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.0, 0.42)
-	style.border_width_left   = 2
-	style.border_width_right  = 2
-	style.border_width_top    = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.0, 0.0, 0.0, 0.6)
-	style.corner_radius_top_left     = 10
-	style.corner_radius_top_right    = 10
-	style.corner_radius_bottom_left  = 10
-	style.corner_radius_bottom_right = 10
 	slot_panel.add_theme_stylebox_override("panel", style)
 	add_child(slot_panel)
+	return slot_panel
+
+func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
+	var slot_panel = _draw_slot(pos)
 
 	# Suit icon: CenterContainer fills the panel and guarantees visual centering
 	var icon_paths = [
@@ -516,9 +499,9 @@ func _draw_foundation_slot(pos: Vector2, suit_index: int) -> void:
 		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# Alpha-mask the PNG to a flat white — all suits render same tint
+		# Alpha-mask the PNG to a flat bone tint — all suits render the same
 		var shader = Shader.new()
-		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tCOLOR = vec4(1.0, 1.0, 1.0, c.a * 0.38);\n}"
+		shader.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tCOLOR = vec4(0.93, 0.87, 0.72, c.a * 0.32);\n}"
 		var mat = ShaderMaterial.new()
 		mat.shader = shader
 		icon.material = mat
@@ -549,15 +532,13 @@ func _draw_stock(pos: Vector2) -> void:
 		recycle_btn.pressed.connect(_on_stock_pressed)
 		recycle_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		var circle = StyleBoxFlat.new()
-		circle.bg_color = Color(0.0, 0.0, 0.0, 0.45)
-		var r = btn_size / 2.0
-		circle.corner_radius_top_left     = r
-		circle.corner_radius_top_right    = r
-		circle.corner_radius_bottom_left  = r
-		circle.corner_radius_bottom_right = r
+		circle.bg_color = WastelandStyle.METAL
+		circle.set_border_width_all(3)
+		circle.border_color = Color(WastelandStyle.BONE, 0.35)
+		circle.set_corner_radius_all(int(btn_size / 2.0))
 		recycle_btn.add_theme_stylebox_override("normal", circle)
 		var circle_pressed = circle.duplicate()
-		circle_pressed.bg_color = Color(0.0, 0.0, 0.0, 0.65)
+		circle_pressed.bg_color = WastelandStyle.METAL_DARK
 		recycle_btn.add_theme_stylebox_override("pressed", circle_pressed)
 		recycle_btn.add_theme_stylebox_override("hover",   circle)
 		# Redo icon via FontAwesome
@@ -565,6 +546,7 @@ func _draw_stock(pos: Vector2) -> void:
 		fa.icon_name = "rotate-right"
 		fa.icon_type = "solid"
 		fa.icon_size = 36
+		fa.add_theme_color_override("font_color", WastelandStyle.BONE)
 		fa.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		fa.set_anchors_preset(Control.PRESET_FULL_RECT)
 		recycle_btn.add_child(fa)
@@ -716,6 +698,8 @@ func _draw_foundation(pile: Array, pos: Vector2, foundation_index: int) -> void:
 
 func _draw_tableau_column(pile: Array, origin: Vector2, max_h: float, column_index: int) -> void:
 	_create_drop_zone("tableau_" + str(column_index), origin)
+	if pile.is_empty():
+		_draw_slot(origin, 0.7)  # Show where a King can go
 
 	var y = origin.y
 	for i in range(pile.size()):

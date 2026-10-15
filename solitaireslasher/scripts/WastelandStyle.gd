@@ -171,6 +171,47 @@ static func style_check_box(check: CheckBox, accent: Color, font_size: int = 36)
 	check.add_theme_icon_override("checked", _box_texture(48, accent, true))
 	check.add_theme_constant_override("h_separation", 18)
 
+static func style_switch(button: CheckButton, accent: Color, font_size: int = 34) -> void:
+	"""Full-width settings row: label on the left, pill switch on the right"""
+	var empty := StyleBoxEmpty.new()
+	for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
+		button.add_theme_stylebox_override(state, empty)
+	button.add_theme_font_override("font", font(4))
+	button.add_theme_font_size_override("font_size", font_size)
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		button.add_theme_color_override(state, BONE)
+	var on := _switch_texture(accent, true)
+	var off := _switch_texture(accent, false)
+	button.add_theme_icon_override("checked", on)
+	button.add_theme_icon_override("unchecked", off)
+	button.add_theme_icon_override("checked_mirrored", on)
+	button.add_theme_icon_override("unchecked_mirrored", off)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.custom_minimum_size.y = 80
+
+static func _switch_texture(accent: Color, on: bool) -> ImageTexture:
+	var w := 112
+	var h := 60
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var r := h * 0.5
+	var track := Color(accent, 0.85) if on else METAL_DARK
+	var rim := accent if on else Color(BONE, 0.4)
+	var knob_x := w - r if on else r
+	for y in h:
+		for x in w:
+			var p := Vector2(x + 0.5, y + 0.5)
+			# Capsule distance: segment between the two end-cap centers
+			var cx := clampf(p.x, r, w - r)
+			var d := p.distance_to(Vector2(cx, r))
+			var c := Color(0, 0, 0, 0)
+			if d <= r:
+				c = rim if d > r - 3.0 else track
+				var kd := p.distance_to(Vector2(knob_x, r))
+				c = c.lerp(BONE, clampf(r - 7.0 - kd, 0.0, 1.0))  # Anti-aliased knob
+				c.a *= clampf(r - d, 0.0, 1.0)
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
+
 static func _circle_texture(diameter: int, fill: Color, rim: Color) -> ImageTexture:
 	var img := Image.create(diameter, diameter, false, Image.FORMAT_RGBA8)
 	var r := diameter * 0.5

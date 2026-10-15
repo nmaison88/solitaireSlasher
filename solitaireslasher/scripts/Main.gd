@@ -65,6 +65,8 @@ var _menu_play_style: StyleBoxFlat
 var _menu_selected_index: int = 0
 var _menu_accent: Color = Color(0.9, 0.18, 0.14)
 var _menu_accent_tween: Tween
+var _game_bg_material: ShaderMaterial  # Atmosphere shader for the Solitaire table
+var _hud_stats_label: Label  # "MOVES · TIME" readout during single-player Solitaire
 
 
 func _ready() -> void:
@@ -147,12 +149,38 @@ func _ready() -> void:
 	_status_label.visible = false
 	
 	_setup_main_menu()
+	_create_hud_stats_label()
 	call_deferred("_show_main_menu")
 	
 	# Connect to NetworkManager signals for disconnect handling
 	if NetworkManager:
 		NetworkManager.multiplayer.server_disconnected.connect(_on_server_disconnected)
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
+
+func _create_hud_stats_label() -> void:
+	"""Top-center MOVES · TIME readout, shown only while a single-player Solitaire board is up"""
+	var top_padding := 10.0
+	if OS.has_feature("mobile"):
+		top_padding = maxf(10.0, DisplayServer.get_display_safe_area().position.y)
+	_hud_stats_label = WastelandStyle.label("", 34, Color(WastelandStyle.BONE, 0.85), 3, 6)
+	_hud_stats_label.name = "HudStats"
+	_hud_stats_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_hud_stats_label.offset_top = top_padding
+	_hud_stats_label.offset_bottom = top_padding + 100
+	_hud_stats_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hud_stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_stats_label.visible = false
+	add_child(_hud_stats_label)
+
+func _process(_delta: float) -> void:
+	if not _hud_stats_label:
+		return
+	var show_stats: bool = _board.visible and _current_game_type == "Solitaire" and is_instance_valid(_game) \
+		and not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer)
+	_hud_stats_label.visible = show_stats
+	if show_stats:
+		var seconds := int(_game.get_game_time())
+		_hud_stats_label.text = "%d MOVES  ·  %d:%02d" % [_game.get_moves_count(), seconds / 60, seconds % 60]
 
 func _setup_main_menu() -> void:
 	var viewport_size := get_viewport_rect().size
@@ -759,12 +787,23 @@ func _update_game_background(game_type: String) -> void:
 	
 	var current_theme = PlayerData.get_theme()
 	
+	# Solitaire gets the wasteland atmosphere (charcoal table, red glow in the empty lower area)
+	game_bg.material = null
 	if game_type == "Solitaire":
-		# Traditional green for Solitaire in light mode
 		if current_theme == "light":
 			game_bg.color = Color(0.0, 0.5, 0.2)  # Traditional green
 		else:
-			game_bg.color = Color(0.05, 0.2, 0.1)  # Darker green for dark mode
+			game_bg.color = Color(0.14, 0.1, 0.09)  # Warm charcoal
+		if _game_bg_material == null:
+			_game_bg_material = ShaderMaterial.new()
+			_game_bg_material.shader = load("res://shaders/menu_wasteland.gdshader")
+			_game_bg_material.set_shader_parameter("glow_center", Vector2(0.5, 1.0))
+			_game_bg_material.set_shader_parameter("glow_radius", 0.4)
+			_game_bg_material.set_shader_parameter("glow_strength", 0.3)
+			_game_bg_material.set_shader_parameter("glow_color", WastelandStyle.accent_for("Solitaire"))
+		var bg_size: Vector2 = game_bg.size
+		_game_bg_material.set_shader_parameter("aspect", bg_size.x / maxf(bg_size.y, 1.0))
+		game_bg.material = _game_bg_material
 	elif game_type == "Spider":
 		game_bg.color = Color(0.0, 0.28, 0.12) if current_theme == "light" else Color(0.02, 0.12, 0.05)
 	else:  # Sudoku
@@ -1417,13 +1456,14 @@ func _hide_menu_buttons():
 			child.visible = false
 
 func _circle_style(bg: Color, size: float) -> StyleBoxFlat:
+	"""Round HUD button: dark metal with a faint bone rim; darker bg alphas read as pressed/disabled"""
 	var s = StyleBoxFlat.new()
-	s.bg_color = bg
-	var r = size / 2.0
-	s.corner_radius_top_left     = r
-	s.corner_radius_top_right    = r
-	s.corner_radius_bottom_left  = r
-	s.corner_radius_bottom_right = r
+	s.bg_color = WastelandStyle.METAL_DARK if bg.a > 0.5 else Color(WastelandStyle.METAL, 0.85 if bg.a > 0.3 else 0.4)
+	s.set_border_width_all(3)
+	s.border_color = Color(WastelandStyle.BONE, 0.35 if bg.a > 0.3 else 0.15)
+	s.set_corner_radius_all(int(size / 2.0))
+	s.shadow_color = Color(0, 0, 0, 0.4)
+	s.shadow_size = 6
 	return s
 
 func _show_new_game_button():
@@ -1478,7 +1518,8 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 64  # 2x larger (was 32)
+		forfeit_icon.icon_size = 56
+		forfeit_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(forfeit_icon)
@@ -1491,7 +1532,8 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 64  # 2x larger (was 32)
+		retry_icon.icon_size = 52
+		retry_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(retry_icon)
@@ -1527,14 +1569,12 @@ func _show_new_game_button():
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 84
+	undo_icon.icon_size = 56
+	undo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_icon)
 
-	var undo_label = Label.new()
-	undo_label.text = "Undo"
-	undo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	undo_label.add_theme_font_size_override("font_size", 17)
+	var undo_label = WastelandStyle.label("UNDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
 	undo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_label)
 
@@ -1593,7 +1633,8 @@ func _show_new_game_button():
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "chevron-left"
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 52
+	menu_icon.icon_size = 48
+	menu_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
@@ -2656,21 +2697,10 @@ func _update_player_status_display() -> void:
 	_player_status_label.text = "Playing: %d | Jammed: %d | Completed: %d" % [playing, jammed, completed]
 
 func _on_settings_button_pressed() -> void:
-	"""Show professional settings menu with enhanced styling"""
-	# Clean up any existing settings menu first
+	"""Show the settings page over the menu backdrop"""
 	var existing_settings = get_node_or_null("SettingsMenu")
 	if existing_settings:
 		existing_settings.queue_free()
-	
-	# Also clean up any background panels
-	for child in get_children():
-		if child is Panel and child.get_child_count() > 0:
-			var grandchild = child.get_child(0)
-			if grandchild is MarginContainer and grandchild.get_child_count() > 0:
-				var settings = grandchild.get_child(0)
-				if settings.name == "SettingsMenu":
-					child.queue_free()
-					break
 	
 	# Hide main menu
 	_menu_container.visible = false
@@ -2680,293 +2710,110 @@ func _on_settings_button_pressed() -> void:
 	if settings_button:
 		settings_button.visible = false
 	
-	# Create settings menu container with professional styling
+	var is_mobile := OS.has_feature("mobile")
+	var accent := _menu_accent
+	var viewport_size := get_viewport_rect().size
+	var top_padding: float = DisplayServer.get_display_safe_area().position.y if is_mobile else 0.0
+	
+	# Full-screen page; the menu background shows through
+	var settings_root = MarginContainer.new()
+	settings_root.name = "SettingsMenu"
+	settings_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settings_root.add_theme_constant_override("margin_top", int(top_padding) + 60)
+	settings_root.add_theme_constant_override("margin_bottom", 60)
+	add_child(settings_root)
+	
+	var scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	settings_root.add_child(scroll)
+	
+	var center = CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(center)
+	
 	var settings_menu = VBoxContainer.new()
-	settings_menu.name = "SettingsMenu"
-	settings_menu.set_anchors_preset(Control.PRESET_CENTER)
-	settings_menu.anchor_left = 0.5
-	settings_menu.anchor_top = 0.5
-	settings_menu.anchor_right = 0.5
-	settings_menu.anchor_bottom = 0.5
-	settings_menu.offset_left = -350
-	settings_menu.offset_top = -300
-	settings_menu.offset_right = 350
-	settings_menu.offset_bottom = 300
+	settings_menu.custom_minimum_size = Vector2(minf(viewport_size.x - 100.0, 760.0), 0)
+	settings_menu.add_theme_constant_override("separation", 28)
+	center.add_child(settings_menu)
 	
-	# Add background panel for professional look
-	var background_panel = Panel.new()
-	background_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(background_panel)
-	background_panel.add_child(settings_menu)
+	settings_menu.add_child(WastelandStyle.title("SETTINGS", 84 if is_mobile else 68))
+	settings_menu.add_child(WastelandStyle.label("— tune the wasteland —", 30, WastelandStyle.BONE_MUTED, 2))
 	
-	# Style the background panel
-	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.2, 0.4, 0.7) if PlayerData.get_theme() == "light" else Color(0.15, 0.15, 0.15)
-	panel_style.corner_radius_top_left = 20
-	panel_style.corner_radius_top_right = 20
-	panel_style.corner_radius_bottom_left = 20
-	panel_style.corner_radius_bottom_right = 20
-	panel_style.border_width_left = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.1, 0.3, 0.6) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
-	background_panel.add_theme_stylebox_override("panel", panel_style)
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	settings_menu.add_child(spacer)
 	
-	# Add margin to settings menu
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 40)
-	margin.add_theme_constant_override("margin_right", 40)
-	margin.add_theme_constant_override("margin_top", 40)
-	margin.add_theme_constant_override("margin_bottom", 40)
-	background_panel.add_child(margin)
-	margin.add_child(settings_menu)
-	
-	# Title with professional styling
-	var title = Label.new()
-	title.text = "Settings"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 48)
-	title.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1) if PlayerData.get_theme() == "light" else Color(0.9, 0.9, 0.9))
-	settings_menu.add_child(title)
-	
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 30)
-	settings_menu.add_child(spacer1)
-	
-	# Add separator line
-	var separator1 = HSeparator.new()
-	separator1.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
-	settings_menu.add_child(separator1)
-	
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 30)
-	settings_menu.add_child(spacer2)
-	
-	# Player Name section with enhanced styling
-	var player_name_section = VBoxContainer.new()
-	player_name_section.add_theme_constant_override("separation", 15)
-	
-	var player_name_label = Label.new()
-	player_name_label.text = "Player Name"
-	player_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	player_name_label.add_theme_font_size_override("font_size", 28)
-	player_name_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
-	player_name_section.add_child(player_name_label)
-	
-	# Player name input container with better styling
-	var name_container = HBoxContainer.new()
-	name_container.add_theme_constant_override("separation", 15)
+	# Player card: name + save
+	var player_box = _settings_card(settings_menu, "PLAYER", accent)
+	var name_row = HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 18)
+	player_box.add_child(name_row)
 	
 	var player_name_input = LineEdit.new()
 	player_name_input.placeholder_text = "Enter your name"
 	player_name_input.text = PlayerData.get_player_name()
-	player_name_input.custom_minimum_size = Vector2(280, 50)
-	player_name_input.add_theme_font_size_override("font_size", 22)
+	player_name_input.custom_minimum_size = Vector2(0, 96)
+	player_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_name_input.max_length = 20
+	WastelandStyle.style_line_edit(player_name_input, accent)
+	name_row.add_child(player_name_input)
 	
-	# Style the input field
-	var input_style = StyleBoxFlat.new()
-	input_style.bg_color = Color(0.9, 0.9, 0.9) if PlayerData.get_theme() == "light" else Color(0.2, 0.2, 0.2)
-	input_style.corner_radius_top_left = 8
-	input_style.corner_radius_top_right = 8
-	input_style.corner_radius_bottom_left = 8
-	input_style.corner_radius_bottom_right = 8
-	input_style.border_width_left = 2
-	input_style.border_width_right = 2
-	input_style.border_width_top = 2
-	input_style.border_width_bottom = 2
-	input_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
-	player_name_input.add_theme_stylebox_override("normal", input_style)
+	var save_name_button = WastelandStyle.make_button("SAVE", accent, true, Vector2(180, 96), 34)
+	save_name_button.pressed.connect(_on_save_player_name.bind(player_name_input, save_name_button))
+	name_row.add_child(save_name_button)
 	
-	# Add text color styling for the input field
-	player_name_input.add_theme_color_override("font_color", Color.BLACK if PlayerData.get_theme() == "light" else Color.WHITE)
-	player_name_input.add_theme_color_override("font_placeholder_color", Color(0.5, 0.5, 0.5) if PlayerData.get_theme() == "light" else Color(0.7, 0.7, 0.7))
-	
-	name_container.add_child(player_name_input)
-	
-	var save_name_button = Button.new()
-	save_name_button.text = "Save"
-	save_name_button.custom_minimum_size = Vector2(100, 50)
-	save_name_button.add_theme_font_size_override("font_size", 20)
-	save_name_button.pressed.connect(_on_save_player_name.bind(player_name_input))
-	
-	# Style the save button
-	var save_style = StyleBoxFlat.new()
-	save_style.bg_color = Color(0.2, 0.6, 1.0)
-	save_style.corner_radius_top_left = 8
-	save_style.corner_radius_top_right = 8
-	save_style.corner_radius_bottom_left = 8
-	save_style.corner_radius_bottom_right = 8
-	save_style.border_width_left = 2
-	save_style.border_width_right = 2
-	save_style.border_width_top = 2
-	save_style.border_width_bottom = 2
-	save_style.border_color = Color(0.1, 0.4, 0.8)
-	save_name_button.add_theme_stylebox_override("normal", save_style)
-	save_name_button.add_theme_color_override("font_color", Color.WHITE)
-	
-	name_container.add_child(save_name_button)
-	player_name_section.add_child(name_container)
-	settings_menu.add_child(player_name_section)
-	
-	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 40)
-	settings_menu.add_child(spacer3)
-	
-	# Add separator line
-	var separator2 = HSeparator.new()
-	separator2.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
-	settings_menu.add_child(separator2)
-	
-	var spacer4 = Control.new()
-	spacer4.custom_minimum_size = Vector2(0, 30)
-	settings_menu.add_child(spacer4)
-	
-	# Theme section with enhanced styling
-	var theme_section = VBoxContainer.new()
-	theme_section.add_theme_constant_override("separation", 15)
-	
-	var theme_label = Label.new()
-	theme_label.text = "Appearance"
-	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	theme_label.add_theme_font_size_override("font_size", 28)
-	theme_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
-	theme_section.add_child(theme_label)
-	
-	# Dark mode toggle container with larger toggle
-	var theme_container = HBoxContainer.new()
-	theme_container.add_theme_constant_override("separation", 25)
-	theme_container.alignment = HBoxContainer.ALIGNMENT_CENTER
-	
-	var dark_mode_label = Label.new()
-	dark_mode_label.text = "Dark Mode"
-	dark_mode_label.custom_minimum_size = Vector2(120, 60)
-	dark_mode_label.add_theme_font_size_override("font_size", 24)
-	dark_mode_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
-	dark_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	theme_container.add_child(dark_mode_label)
-	
-	var dark_mode_toggle = CheckBox.new()
-	var current_theme = PlayerData.get_theme()
-	dark_mode_toggle.button_pressed = (current_theme == "dark")
-	dark_mode_toggle.custom_minimum_size = Vector2(80, 80)  # Much larger toggle
-	dark_mode_toggle.add_theme_font_size_override("font_size", 48)  # Larger checkmark
+	# Appearance card
+	var appearance_box = _settings_card(settings_menu, "APPEARANCE", accent)
+	var dark_mode_toggle = CheckButton.new()
+	dark_mode_toggle.text = "DARK MODE"
+	dark_mode_toggle.button_pressed = (PlayerData.get_theme() == "dark")
+	WastelandStyle.style_switch(dark_mode_toggle, accent)
 	dark_mode_toggle.toggled.connect(_on_dark_mode_toggled)
+	appearance_box.add_child(dark_mode_toggle)
 	
-	# Style the toggle for better visibility
-	var toggle_style = StyleBoxFlat.new()
-	toggle_style.bg_color = Color(0.7, 0.7, 0.7) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
-	toggle_style.corner_radius_top_left = 12
-	toggle_style.corner_radius_top_right = 12
-	toggle_style.corner_radius_bottom_left = 12
-	toggle_style.corner_radius_bottom_right = 12
-	toggle_style.border_width_left = 3
-	toggle_style.border_width_right = 3
-	toggle_style.border_width_top = 3
-	toggle_style.border_width_bottom = 3
-	toggle_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
-	dark_mode_toggle.add_theme_stylebox_override("normal", toggle_style)
-	
-	theme_container.add_child(dark_mode_toggle)
-	theme_section.add_child(theme_container)
-	settings_menu.add_child(theme_section)
-
-	var spacer5 = Control.new()
-	spacer5.custom_minimum_size = Vector2(0, 40)
-	settings_menu.add_child(spacer5)
-
-	# Add separator line
-	var separator3 = HSeparator.new()
-	separator3.add_theme_color_override("separator", Color(0.3, 0.3, 0.3) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4))
-	settings_menu.add_child(separator3)
-
-	var spacer6 = Control.new()
-	spacer6.custom_minimum_size = Vector2(0, 30)
-	settings_menu.add_child(spacer6)
-
-	# Sound section with background music toggle
-	var sound_section = VBoxContainer.new()
-	sound_section.add_theme_constant_override("separation", 15)
-
-	var sound_label = Label.new()
-	sound_label.text = "Sound"
-	sound_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sound_label.add_theme_font_size_override("font_size", 28)
-	sound_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
-	sound_section.add_child(sound_label)
-
-	# Background music toggle container
-	var music_container = HBoxContainer.new()
-	music_container.add_theme_constant_override("separation", 25)
-	music_container.alignment = HBoxContainer.ALIGNMENT_CENTER
-
-	var music_label = Label.new()
-	music_label.text = "Background Music"
-	music_label.custom_minimum_size = Vector2(200, 60)
-	music_label.add_theme_font_size_override("font_size", 24)
-	music_label.add_theme_color_override("font_color", Color.WHITE if PlayerData.get_theme() == "light" else Color(0.8, 0.8, 0.8))
-	music_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	music_container.add_child(music_label)
-
-	var music_toggle = CheckBox.new()
+	# Sound card
+	var sound_box = _settings_card(settings_menu, "SOUND", accent)
+	var music_toggle = CheckButton.new()
+	music_toggle.text = "BACKGROUND MUSIC"
 	music_toggle.button_pressed = PlayerData.is_background_music_enabled()
-	music_toggle.custom_minimum_size = Vector2(80, 80)
-	music_toggle.add_theme_font_size_override("font_size", 48)
+	WastelandStyle.style_switch(music_toggle, accent)
 	music_toggle.toggled.connect(_on_background_music_toggled)
-
-	# Style the toggle for better visibility
-	var music_toggle_style = StyleBoxFlat.new()
-	music_toggle_style.bg_color = Color(0.7, 0.7, 0.7) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
-	music_toggle_style.corner_radius_top_left = 12
-	music_toggle_style.corner_radius_top_right = 12
-	music_toggle_style.corner_radius_bottom_left = 12
-	music_toggle_style.corner_radius_bottom_right = 12
-	music_toggle_style.border_width_left = 3
-	music_toggle_style.border_width_right = 3
-	music_toggle_style.border_width_top = 3
-	music_toggle_style.border_width_bottom = 3
-	music_toggle_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.5, 0.5, 0.5)
-	music_toggle.add_theme_stylebox_override("normal", music_toggle_style)
-
-	music_container.add_child(music_toggle)
-	sound_section.add_child(music_container)
-	settings_menu.add_child(sound_section)
-
-	var spacer7 = Control.new()
-	spacer7.custom_minimum_size = Vector2(0, 50)
-	settings_menu.add_child(spacer7)
-
-	# Back button with professional styling
-	var back_button = Button.new()
-	back_button.text = "Back"
-	back_button.custom_minimum_size = Vector2(300, 70)
-	back_button.add_theme_font_size_override("font_size", 32)
+	sound_box.add_child(music_toggle)
+	
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 20)
+	settings_menu.add_child(spacer2)
+	
+	var back_button = WastelandStyle.make_button("BACK", accent, false, Vector2(360, 104), 40)
 	back_button.pressed.connect(_on_settings_back)
-	
-	# Style the back button
-	var back_style = StyleBoxFlat.new()
-	back_style.bg_color = Color(0.6, 0.6, 0.6) if PlayerData.get_theme() == "light" else Color(0.4, 0.4, 0.4)
-	back_style.corner_radius_top_left = 12
-	back_style.corner_radius_top_right = 12
-	back_style.corner_radius_bottom_left = 12
-	back_style.corner_radius_bottom_right = 12
-	back_style.border_width_left = 2
-	back_style.border_width_right = 2
-	back_style.border_width_top = 2
-	back_style.border_width_bottom = 2
-	back_style.border_color = Color(0.4, 0.4, 0.4) if PlayerData.get_theme() == "light" else Color(0.3, 0.3, 0.3)
-	back_button.add_theme_stylebox_override("normal", back_style)
-	back_button.add_theme_color_override("font_color", Color.WHITE)
-	
 	settings_menu.add_child(back_button)
+	
+	# Fade in
+	settings_root.modulate.a = 0.0
+	create_tween().tween_property(settings_root, "modulate:a", 1.0, 0.3)
 
-func _on_save_player_name(name_input: LineEdit) -> void:
+func _settings_card(parent: Control, heading: String, accent: Color) -> VBoxContainer:
+	"""Add a titled card to the settings page and return its content box"""
+	var card = WastelandStyle.card(accent)
+	parent.add_child(card)
+	var box = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 18)
+	card.add_child(box)
+	box.add_child(WastelandStyle.section_header(heading))
+	return box
+
+func _on_save_player_name(name_input: LineEdit, save_button: Button = null) -> void:
 	"""Save player name from input field"""
 	var new_name = name_input.text.strip_edges()
 	if new_name != "":
 		PlayerData.set_player_name(new_name)
 		print("Player name saved: ", new_name)
-		# Could add a "Saved!" notification here
+		if save_button:
+			save_button.text = "SAVED"
+			get_tree().create_timer(1.2).timeout.connect(func():
+				if is_instance_valid(save_button):
+					save_button.text = "SAVE")
 
 func _on_dark_mode_toggled(toggled_on: bool) -> void:
 	"""Handle dark mode toggle"""
@@ -2991,53 +2838,6 @@ func _on_dark_mode_toggled(toggled_on: bool) -> void:
 	if menu_bg:
 		menu_bg.color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.1, 0.1, 0.1)
 		print("Menu background updated to: ", menu_bg.color)
-	
-	# Also update the settings panel background color in real-time
-	print("DEBUG: Looking for settings panel... Total children: ", get_child_count())
-	# Look for any Panel that might be the settings background
-	for child in get_children():
-		print("DEBUG: Found child: ", child.name, " type: ", child.get_class())
-		if child is Panel:
-			print("DEBUG: Found Panel, checking children...")
-			# Check if this panel contains a settings menu (direct child or grandchild)
-			var is_settings_panel = false
-			for grandchild in child.get_children():
-				print("DEBUG: Panel grandchild: ", grandchild.name, " type: ", grandchild.get_class())
-				# Check if this grandchild is the SettingsMenu
-				if grandchild.name == "SettingsMenu":
-					print("DEBUG: FOUND SETTINGS MENU as direct grandchild!")
-					is_settings_panel = true
-					break
-				# Check if this grandchild is a MarginContainer that contains SettingsMenu
-				elif grandchild is MarginContainer:
-					print("DEBUG: Found MarginContainer, checking children...")
-					for great_grandchild in grandchild.get_children():
-						print("DEBUG: MarginContainer child: ", great_grandchild.name, " type: ", great_grandchild.get_class())
-						if great_grandchild.name == "SettingsMenu":
-							print("DEBUG: FOUND SETTINGS MENU in MarginContainer!")
-							is_settings_panel = true
-							break
-					if is_settings_panel:
-						break
-			
-			if is_settings_panel:
-				print("DEBUG: This is the settings panel, updating style...")
-				var panel_style = StyleBoxFlat.new()
-				panel_style.bg_color = Color(0.2, 0.4, 0.7) if new_theme == "light" else Color(0.15, 0.15, 0.15)
-				panel_style.corner_radius_top_left = 20
-				panel_style.corner_radius_top_right = 20
-				panel_style.corner_radius_bottom_left = 20
-				panel_style.corner_radius_bottom_right = 20
-				panel_style.border_width_left = 2
-				panel_style.border_width_right = 2
-				panel_style.border_width_top = 2
-				panel_style.border_width_bottom = 2
-				panel_style.border_color = Color(0.1, 0.3, 0.6) if new_theme == "light" else Color(0.5, 0.5, 0.5)
-				child.add_theme_stylebox_override("panel", panel_style)
-				print("Settings panel background updated for theme: ", new_theme)
-				break
-			else:
-				print("DEBUG: This Panel is not the settings panel")
 	
 	# Update Sudoku board theme if it exists
 	if _sudoku_board:
@@ -3064,51 +2864,9 @@ func _on_settings_back() -> void:
 	"""Handle settings back button"""
 	print("DEBUG: Settings back button PRESSED!")
 	
-	# Remove settings menu and its background panel
-	# Look for settings menu in the nested structure
-	var settings_menu = null
-	var background_panel = null
-	
-	print("DEBUG: Back button - looking for settings menu... Total children: ", get_child_count())
-	# Search through all children to find the settings structure
-	for child in get_children():
-		print("DEBUG: Back button - found child: ", child.name, " type: ", child.get_class())
-		if child is Panel:
-			print("DEBUG: Back button - found Panel, checking children...")
-			# This might be our background panel
-			for grandchild in child.get_children():
-				print("DEBUG: Back button - panel grandchild: ", grandchild.name, " type: ", grandchild.get_class())
-				# Check if this grandchild is the SettingsMenu (direct child)
-				if grandchild.name == "SettingsMenu":
-					print("DEBUG: Back button - FOUND SETTINGS MENU as direct grandchild!")
-					settings_menu = grandchild
-					background_panel = child
-					print("DEBUG: Found settings menu in nested structure")
-					break
-				# Check if this grandchild is a MarginContainer that contains SettingsMenu
-				elif grandchild is MarginContainer:
-					print("DEBUG: Back button - found MarginContainer, checking children...")
-					for great_grandchild in grandchild.get_children():
-						print("DEBUG: Back button - margin child: ", great_grandchild.name, " type: ", great_grandchild.get_class())
-						if great_grandchild.name == "SettingsMenu":
-							print("DEBUG: Back button - FOUND SETTINGS MENU in MarginContainer!")
-							settings_menu = great_grandchild
-							background_panel = child
-							print("DEBUG: Found settings menu in nested structure")
-							break
-					if settings_menu:
-						break
-			if settings_menu:
-				break
-	
-	if settings_menu and background_panel:
-		print("DEBUG: Found settings menu, removing background panel...")
-		background_panel.queue_free()
-	elif settings_menu:
-		print("DEBUG: Found settings menu, removing directly...")
+	var settings_menu = get_node_or_null("SettingsMenu")
+	if settings_menu:
 		settings_menu.queue_free()
-	else:
-		print("DEBUG: No settings menu found!")
 	
 	# Show settings button again
 	var settings_button = get_node_or_null("settings_button")
