@@ -158,6 +158,8 @@ func _ready() -> void:
 	_status_label.visible = false
 	
 	_setup_main_menu()
+	if OS.get_cmdline_user_args().size() > 0 and ResourceLoader.exists("res://_tmp_mp_driver.gd"):
+		add_child(load("res://_tmp_mp_driver.gd").new())
 	_create_hud_stats_label()
 	call_deferred("_show_main_menu")
 	
