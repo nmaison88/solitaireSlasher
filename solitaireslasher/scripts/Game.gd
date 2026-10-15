@@ -156,7 +156,10 @@ func get_mirror_data() -> Dictionary:
 	}
 
 func draw_from_stock_3() -> void:
+	if stock.is_empty() and waste.is_empty():
+		return  # Nothing to draw or recycle; keep the previous undo
 	# Save state before drawing
+	last_move_hint = {"type": "draw"}  # No undo animation; Board falls back to an instant undo
 	_save_state()
 
 	# If stock is empty, recycle waste pile back to stock
@@ -263,10 +266,6 @@ func can_place_on_tableau(card: SolitaireCard, tableau_index: int) -> bool:
 	return card.is_red() != top_card.is_red() and card.rank == top_card.rank - 1
 
 func move_to_foundation(from_pile: String, from_index: int, foundation_index: int) -> bool:
-	last_move_hint = {"type": "to_foundation", "from_pile": from_pile,
-		"from_col": from_index, "foundation_col": foundation_index}
-	_save_state()
-
 	var card: SolitaireCard
 
 	match from_pile:
@@ -283,6 +282,12 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 
 	if not can_place_on_foundation(card, foundation_index):
 		return false
+
+	# Snapshot for undo only once the move is known to be legal (a rejected move must not
+	# overwrite the single-level undo of the last real move)
+	last_move_hint = {"type": "to_foundation", "from_pile": from_pile,
+		"from_col": from_index, "foundation_col": foundation_index}
+	_save_state()
 
 	match from_pile:
 		"tableau":
@@ -307,10 +312,6 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 	return true
 
 func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) -> bool:
-	last_move_hint = {"type": "tableau_to_tableau",
-		"from_col": from_index, "to_col": to_index, "card_count": card_count}
-	_save_state()
-
 	if from_index >= tableau.size() or to_index >= tableau.size():
 		return false
 
@@ -328,6 +329,10 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 
 	if not can_place_on_tableau(first_moving_card, to_index):
 		return false
+
+	last_move_hint = {"type": "tableau_to_tableau",
+		"from_col": from_index, "to_col": to_index, "card_count": card_count}
+	_save_state()
 
 	# Move cards in correct order (not reversed)
 	for card in moving_cards:
@@ -353,9 +358,6 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 	return true
 
 func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bool:
-	# Save state before move
-	_save_state()
-
 	if foundation_index >= foundations.size() or tableau_index >= tableau.size():
 		return false
 
@@ -366,6 +368,9 @@ func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bo
 
 	if not can_place_on_tableau(card, tableau_index):
 		return false
+
+	last_move_hint = {"type": "foundation_to_tableau"}  # No undo animation; Board falls back to an instant undo
+	_save_state()
 
 	# Remove card from foundation
 	foundations[foundation_index].pop_back()
@@ -386,15 +391,15 @@ func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bo
 	return true
 
 func move_waste_to_tableau(tableau_index: int) -> bool:
-	last_move_hint = {"type": "waste_to_tableau", "to_col": tableau_index}
-	_save_state()
-
 	if waste.is_empty() or tableau_index >= tableau.size():
 		return false
 
 	var card = waste[-1]
 	if not can_place_on_tableau(card, tableau_index):
 		return false
+
+	last_move_hint = {"type": "waste_to_tableau", "to_col": tableau_index}
+	_save_state()
 
 	tableau[tableau_index].append(waste.pop_back())
 	_moves_count += 1
@@ -709,10 +714,45 @@ func has_valid_moves() -> bool:
 			for to_idx in range(7):
 				if from_idx == to_idx:
 					continue
+				# Moving a whole column onto an empty column changes nothing
+				if card_idx == 0 and tableau[to_idx].is_empty():
+					continue
 				if can_place_on_tableau(card, to_idx):
 					return true
 
+	# Drawing is always possible while the stock/waste has cards, but only matters if some card
+	# that would surface on the waste during a full draw cycle can actually be played
+	if _stock_cycle_has_playable_card():
+		return true
+
 	# No valid moves found - player is jammed
+	return false
+
+func _stock_cycle_has_playable_card() -> bool:
+	"""Simulate drawing through the stock (with recycling) on copies; true if any waste-top card is playable"""
+	var sim_stock: Array = stock.duplicate()
+	var sim_waste: Array = waste.duplicate()
+	var total = sim_stock.size() + sim_waste.size()
+	if total == 0:
+		return false
+	var step = maxi(draw_count, 1)
+	# Two passes' worth of draws covers every card that can reach the waste top from any starting point
+	var max_draws = 2 * (int(ceil(total / float(step))) + 1)
+	for _i in range(max_draws):
+		if sim_stock.is_empty():
+			# Recycle: waste goes back to stock in the same draw order
+			for j in range(sim_waste.size() - 1, -1, -1):
+				sim_stock.append(sim_waste[j])
+			sim_waste.clear()
+		for _k in range(mini(step, sim_stock.size())):
+			sim_waste.append(sim_stock.pop_back())
+		var top_card = sim_waste[-1]
+		for f_idx in range(4):
+			if can_place_on_foundation(top_card, f_idx):
+				return true
+		for t_idx in range(7):
+			if can_place_on_tableau(top_card, t_idx):
+				return true
 	return false
 
 func get_save_data() -> Dictionary:

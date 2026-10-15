@@ -2133,11 +2133,8 @@ func _setup_multiplayer_sudoku() -> void:
 	# race_started fires when the game is fully ready (initial round + new rounds with mirror data)
 	if not MultiplayerGameManager.race_started.is_connected(_on_multiplayer_sudoku_race_ready):
 		MultiplayerGameManager.race_started.connect(_on_multiplayer_sudoku_race_ready)
-
-	# If the game is already ready (signal may have fired before connection), call handler immediately
-	if MultiplayerGameManager.local_game and is_instance_valid(MultiplayerGameManager.local_game):
-		print("Sudoku game already ready, calling setup immediately")
-		_on_multiplayer_sudoku_race_ready()
+	# (No "already ready" shortcut here: local_game is the Solitaire game, which the host always
+	# creates, so calling _on_multiplayer_sudoku_race_ready() from here recursed forever.)
 
 	# Hide menu buttons
 	_hide_menu_buttons()
@@ -2381,10 +2378,10 @@ func _on_multiplayer_spider_completed() -> void:
 
 func _on_multiplayer_spider_card_moved() -> void:
 	"""Handle card move event for Spider in multiplayer"""
-	# Check if player is jammed
-	if MultiplayerGameManager._pending_mirror_data.is_empty() or not _spider_board or not _spider_board._game:
+	# Check the Spider game (not the Solitaire local_game) for jammed/completed
+	if not _spider_board or not is_instance_valid(_spider_board._game):
 		return
-	MultiplayerGameManager.check_player_status()
+	MultiplayerGameManager.check_player_status(_spider_board._game)
 
 func _setup_multiplayer_ui() -> void:
 	"""Setup UI elements specific to multiplayer mode"""
@@ -2531,6 +2528,8 @@ func _on_player_status_changed(player_id: int, status: String) -> void:
 
 func _on_last_player_standing(player_id: int) -> void:
 	"""Show notification when player is last one standing"""
+	if is_instance_valid(_last_standing_notification):
+		return  # Already showing
 	# Create notification panel (larger for mobile)
 	_last_standing_notification = Panel.new()
 	_last_standing_notification.name = "LastStandingNotification"

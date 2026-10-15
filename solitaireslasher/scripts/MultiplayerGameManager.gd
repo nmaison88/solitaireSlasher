@@ -162,6 +162,13 @@ func _on_race_started() -> void:
 	race_start_time = Time.get_ticks_msec() / 1000.0  # Use ticks instead of wall-clock time
 	local_player_finished = false
 
+	# Everyone in the session starts the round as PLAYING. Statuses otherwise only appear after a
+	# player's first move, so one forfeit could end the round for someone who hadn't moved yet
+	# (and the ready-up cleanup would drop status-less players from the session).
+	player_statuses.clear()
+	for player_id in network_manager.players:
+		player_statuses[player_id] = PlayerStatus.PLAYING
+
 	# Only create and initialize game for Solitaire
 	# For Sudoku and Spider, the game is already set up in Main.gd
 	if game_type == "Solitaire":
@@ -347,15 +354,19 @@ func get_local_game() -> Game:
 func is_host_player() -> bool:
 	return network_manager.is_host
 
-func check_player_status() -> void:
-	"""Check if local player is jammed and update status"""
-	if not is_multiplayer or not local_game:
+func check_player_status(game: Object = null) -> void:
+	"""Check if local player is jammed and update status.
+	game: the game to inspect (anything with is_completed()/has_valid_moves(), e.g. SpiderGame);
+	defaults to the Solitaire local_game."""
+	if game == null:
+		game = local_game
+	if not is_multiplayer or not is_instance_valid(game):
 		return
 	
 	var local_player_id = network_manager.local_player_id
 	
 	# Check if player completed
-	if local_game.is_completed():
+	if game.is_completed():
 		if player_statuses.get(local_player_id) != PlayerStatus.COMPLETED:
 			player_statuses[local_player_id] = PlayerStatus.COMPLETED
 			_broadcast_status_change(local_player_id, "completed")
@@ -364,7 +375,7 @@ func check_player_status() -> void:
 		return
 	
 	# Check if player is jammed
-	if not local_game.has_valid_moves():
+	if not game.has_valid_moves():
 		if player_statuses.get(local_player_id) != PlayerStatus.JAMMED:
 			player_statuses[local_player_id] = PlayerStatus.JAMMED
 			_broadcast_status_change(local_player_id, "jammed")
@@ -399,9 +410,6 @@ func receive_player_status(player_id: int, status: String) -> void:
 
 	# Check if this status change affects last player standing (e.g., opponent forfeits)
 	_check_last_player_standing()
-	
-	# Check if this affects last player standing
-	_check_last_player_standing()
 
 func _check_last_player_standing() -> void:
 	"""Check if only one player is still playing (others jammed or completed)"""
@@ -426,6 +434,8 @@ func _check_last_player_standing() -> void:
 func forfeit_player() -> void:
 	"""Mark local player as forfeited (jammed)"""
 	var local_player_id = network_manager.local_player_id
+	if player_statuses.get(local_player_id) == PlayerStatus.JAMMED:
+		return  # Already jammed (e.g. auto-detected); don't re-announce
 	player_statuses[local_player_id] = PlayerStatus.JAMMED
 	_broadcast_status_change(local_player_id, "jammed")
 	player_status_changed.emit(local_player_id, "jammed")

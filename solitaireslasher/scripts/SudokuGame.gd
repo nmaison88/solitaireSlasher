@@ -43,6 +43,10 @@ func new_game(diff: int = 3, hints: bool = true, mirror_data: Dictionary = {}):
 		if mirror_data.has("puzzle"):
 			# Load puzzle from mirror data
 			puzzle = mirror_data["puzzle"].duplicate(true)
+			# Entries are checked against solution_grid, so it must be the host's too (the random
+			# solution generated above belongs to a different puzzle)
+			if mirror_data.has("solution"):
+				solution_grid = mirror_data["solution"].duplicate(true)
 			print("Sudoku: Using mirror mode puzzle from host")
 		else:
 			print("DEBUG: Mirror data missing puzzle key, generating new puzzle")

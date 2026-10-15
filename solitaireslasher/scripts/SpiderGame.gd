@@ -340,10 +340,13 @@ func has_valid_moves() -> bool:
 		# Find the first face-up card to try moving
 		while card_idx >= 0:
 			var card = col[card_idx]
-			if not card.face_up:
-				break
+			if not card.face_up or not can_move_from(from_col, card_idx):
+				break  # Only same-suit runs can be picked up; nothing deeper can move either
 			for to_col in range(TABLEAU_COUNT):
 				if from_col == to_col:
+					continue
+				# Moving a whole column onto an empty column changes nothing
+				if card_idx == 0 and tableaus[to_col].is_empty():
 					continue
 				if can_place_on(card, to_col):
 					return true
