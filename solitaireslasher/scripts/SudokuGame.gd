@@ -175,47 +175,118 @@ func get_subgrid(grd, row, col):
 	return subgrid
 
 func _create_puzzle(diff):
-	puzzle = solution_grid.duplicate(true)
 	# Scale difficulty by removing more cards: Easy=71 shown, Medium=30 shown, Hard=26 shown
-	var removals = 0
+	var target_removals = 30  # Fallback
 	match diff:
 		1:  # Easy
-			removals = 10  # 71 cells shown
+			target_removals = 10  # 71 cells shown
 		3:  # Medium
-			removals = 51  # 30 cells shown
+			target_removals = 51  # 30 cells shown
 		5:  # Hard
-			removals = 55  # 26 cells shown
-		_:
-			removals = 30  # Fallback
-	while removals > 0:
-		var row = randi_range(0, 8)
-		var col = randi_range(0, 8)
-		if puzzle[row][col] != 0:
+			target_removals = 55  # 26 cells shown
+
+	# Try each cell once in random order, keeping the removal only if the solution stays unique.
+	# Some solutions can't reach the target, so regenerate a few times and keep the best attempt.
+	var best_puzzle: Array = []
+	var best_solution: Array = []
+	var best_removed = -1
+	for attempt in range(5):
+		if attempt > 0:
+			_create_empty_grid()
+			_fill_grid(solution_grid)
+		puzzle = solution_grid.duplicate(true)
+		var cells: Array = []
+		for i in range(GRID_SIZE * GRID_SIZE):
+			cells.append(i)
+		cells.shuffle()
+		var removed = 0
+		for cell in cells:
+			if removed >= target_removals:
+				break
+			var row = cell / GRID_SIZE
+			var col = cell % GRID_SIZE
 			var temp = puzzle[row][col]
 			puzzle[row][col] = 0
-			if not has_unique_solution(puzzle):
-				puzzle[row][col] = temp
+			if has_unique_solution(puzzle):
+				removed += 1
 			else:
-				removals -= 1
+				puzzle[row][col] = temp
+		if removed > best_removed:
+			best_removed = removed
+			best_puzzle = puzzle.duplicate(true)
+			best_solution = solution_grid.duplicate(true)
+		if removed >= target_removals:
+			break
+	puzzle = best_puzzle
+	solution_grid = best_solution
+	if best_removed < target_removals:
+		print("Sudoku: reached ", best_removed, "/", target_removals, " removals")
 
-func has_unique_solution(puzzle_grid):
+func has_unique_solution(puzzle_grid) -> bool:
+	"""True if the grid has exactly one solution (search stops at the second)"""
+	var cells := PackedInt32Array()
+	cells.resize(GRID_SIZE * GRID_SIZE)
+	var rows := PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
+	var cols := PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
+	var boxes := PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
+	for r in GRID_SIZE:
+		for c in GRID_SIZE:
+			var v: int = puzzle_grid[r][c]
+			cells[r * GRID_SIZE + c] = v
+			if v != 0:
+				var bit := 1 << v
+				rows[r] |= bit
+				cols[c] |= bit
+				boxes[(r / 3) * 3 + c / 3] |= bit
 	solution_count = 0
-	try_to_solve_grid(puzzle_grid.duplicate(true))
+	_count_solutions(cells, rows, cols, boxes)
 	return solution_count == 1
 
-func try_to_solve_grid(puzzle_grid):
-	for row in range(GRID_SIZE):
-		for col in range(GRID_SIZE):
-			if puzzle_grid[row][col] == 0:
-				for num in range(1, 10):
-					if is_valid(puzzle_grid, row, col, num):
-						puzzle_grid[row][col] = num
-						try_to_solve_grid(puzzle_grid)
-						puzzle_grid[row][col] = 0
-				return
-	solution_count += 1
-	if solution_count > 1:
+func _count_solutions(cells: PackedInt32Array, rows: PackedInt32Array, cols: PackedInt32Array, boxes: PackedInt32Array) -> void:
+	# Fill the empty cell with the fewest candidates first; digit d is bit (1 << d)
+	var best := -1
+	var best_free := 0
+	var best_count := 10
+	for i in GRID_SIZE * GRID_SIZE:
+		if cells[i] != 0:
+			continue
+		var r := i / GRID_SIZE
+		var c := i % GRID_SIZE
+		var free := ~(rows[r] | cols[c] | boxes[(r / 3) * 3 + c / 3]) & 0x3FE
+		var count := 0
+		var bits := free
+		while bits:
+			bits &= bits - 1
+			count += 1
+		if count == 0:
+			return  # Dead end
+		if count < best_count:
+			best = i
+			best_free = free
+			best_count = count
+			if count == 1:
+				break
+	if best == -1:
+		solution_count += 1  # No empty cells left: solved
 		return
+	var r := best / GRID_SIZE
+	var c := best % GRID_SIZE
+	var b := (r / 3) * 3 + c / 3
+	for d in range(1, 10):
+		var bit := 1 << d
+		if best_free & bit == 0:
+			continue
+		cells[best] = d
+		rows[r] |= bit
+		cols[c] |= bit
+		boxes[b] |= bit
+		_count_solutions(cells, rows, cols, boxes)
+		cells[best] = 0
+		rows[r] &= ~bit
+		cols[c] &= ~bit
+		boxes[b] &= ~bit
+		if solution_count > 1:
+			return  # Two solutions is enough to know it isn't unique
 
 func get_mirror_data() -> Dictionary:
 	"""Get puzzle data for mirror mode synchronization"""

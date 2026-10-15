@@ -19,6 +19,10 @@ var _result_overlay: Control = null  # Win/lose result screen
 var theme_colors: Dictionary = {}
 
 const GRID_SIZE = 9
+const WastelandStyle = preload("res://scripts/WastelandStyle.gd")
+const ERROR_TEXT := Color(1.0, 0.3, 0.25)  # Incorrect entries; also how erase-ability is detected
+const HEART_ALIVE := Color(0.9, 0.18, 0.14)
+const HEART_LOST := Color(0.35, 0.33, 0.3, 0.6)
 var cell_size: float  # Dynamic cell size calculated based on screen
 var number_button_size: float  # Dynamic button size
 var spacing: int = 2  # Grid spacing
@@ -35,21 +39,24 @@ func _init_theme_colors() -> void:
 		theme_colors = {
 			"cell": Color(0.75, 0.80, 0.90),  # Light blue-gray
 			"text": Color(0.0, 0.0, 0.0),  # Black text
-			"user_text": Color(0.0, 0.0, 0.0),  # Black text for user input (better visibility)
+			"user_text": Color(0.05, 0.35, 0.05),  # Dark green for user input
 			"highlight_row": Color(0.85, 0.90, 1.0),  # Bright blue
 			"highlight_match": Color(0.60, 0.70, 1.0),  # Darker blue
 			"selected": Color(0.7, 0.85, 1.0),  # Light blue highlight
+			"grid_line": Color(0.0, 0.0, 0.0, 0.6),
 			"border": Color(0.0, 0.0, 0.0)  # Black borders for 3x3 subgrids
 		}
-	else:  # dark mode
+	else:  # dark mode: slate cells, bone givens, toxic-green entries
+		var accent = WastelandStyle.accent_for("Sudoku")
 		theme_colors = {
-			"cell": Color(0.2, 0.2, 0.2),  # Dark gray cells
-			"text": Color(1.0, 1.0, 1.0),  # White text
-			"user_text": Color(1.0, 1.0, 1.0),  # White text for user input (matching seeded text)
-			"highlight_row": Color(0, 0.1, 0.2, 0.5),  # Dark blue highlight
-			"highlight_match": Color(0.1, 0.2, 0.4),  # Darker blue
-			"selected": Color(0.3, 0.4, 0.6),  # Medium blue
-			"border": Color(0.0, 0.0, 0.0)  # Black borders for 3x3 subgrids
+			"cell": Color(0.09, 0.09, 0.075, 0.92),
+			"text": WastelandStyle.BONE,
+			"user_text": accent,
+			"highlight_row": Color(0.14, 0.17, 0.11, 0.95),
+			"highlight_match": Color(0.2, 0.3, 0.14, 0.95),
+			"selected": Color(0.28, 0.46, 0.17),
+			"grid_line": Color(0.0, 0.0, 0.0, 0.7),
+			"border": Color(WastelandStyle.BONE, 0.45)  # 3x3 subgrid lines
 		}
 
 func _ready():
@@ -66,7 +73,7 @@ func _create_ui():
 	var screen_height = viewport_rect.size.y
 	
 	# Compute board size using the formula
-	var board_size = min(screen_width, screen_height * 0.6)
+	var board_size = min(screen_width - 48.0, screen_height * 0.6)  # Margin leaves room for the glowing frame
 	
 	# Compute cell size
 	cell_size = (board_size - spacing * (GRID_SIZE - 1)) / GRID_SIZE
@@ -98,7 +105,7 @@ func _create_ui():
 		heart_icon.icon_name = "heart"
 		heart_icon.icon_type = "solid"
 		heart_icon.icon_size = 60  # Larger since no background
-		heart_icon.modulate = Color(1.0, 0.0, 0.0)  # Red heart
+		heart_icon.modulate = HEART_ALIVE
 		heart_icon.custom_minimum_size = Vector2(80, 80)
 		heart_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		
@@ -130,6 +137,22 @@ func _create_ui():
 	
 	grid_container.add_theme_constant_override("h_separation", spacing)
 	grid_container.add_theme_constant_override("v_separation", spacing)
+
+	# Glowing frame behind the grid
+	var frame_style = StyleBoxFlat.new()
+	frame_style.bg_color = Color(0.0, 0.0, 0.0, 0.6)
+	frame_style.set_border_width_all(4)
+	frame_style.border_color = WastelandStyle.accent_for("Sudoku")
+	frame_style.set_corner_radius_all(10)
+	frame_style.shadow_color = Color(WastelandStyle.accent_for("Sudoku"), 0.35)
+	frame_style.shadow_size = 22
+	var frame = Panel.new()
+	frame.name = "GridFrame"
+	frame.position = grid_container.position - Vector2(8, 8)
+	frame.size = Vector2(grid_width, grid_width) + Vector2(16, 16)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_theme_stylebox_override("panel", frame_style)
+	add_child(frame)
 	add_child(grid_container)
 	
 	print("Grid positioned at: ", Vector2(grid_x, grid_y), " with width: ", grid_width)
@@ -146,14 +169,15 @@ func _create_ui():
 	erase_button.position = Vector2(erase_x, erase_y)
 	erase_button.disabled = true  # Start disabled
 	erase_button.pressed.connect(_on_erase_pressed)
+	_style_metal_key(erase_button, 40)
 	
 	# Add FontAwesome eraser icon
 	var erase_icon = FontAwesome.new()
 	erase_icon.icon_name = "eraser"
 	erase_icon.icon_type = "solid"
-	erase_icon.icon_size = 48
-	erase_icon.modulate = Color(1.0, 1.0, 1.0)  # White icon
-	erase_icon.position = Vector2(26, 16)  # Center in button
+	erase_icon.icon_size = 44
+	erase_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
+	erase_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	erase_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	erase_button.add_child(erase_icon)
 	add_child(erase_button)
@@ -180,8 +204,8 @@ func _create_ui():
 		var btn = Button.new()
 		btn.text = str(i)
 		btn.custom_minimum_size = Vector2(number_button_size, number_button_size)  # Back to original size
-		var font_size = int(number_button_size * 0.3)  # Smaller font to fit in original buttons
-		btn.add_theme_font_size_override("font_size", font_size)
+		_style_metal_key(btn, 14)
+		btn.add_theme_font_size_override("font_size", int(number_button_size * 0.55))
 		btn.pressed.connect(_on_number_selected.bind(i))
 		_number_buttons[i] = btn  # Store reference for disabling when complete
 		number_selector.add_child(btn)
@@ -270,63 +294,58 @@ func render():
 func _create_cell_button(row: int, col: int) -> Button:
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(cell_size, cell_size)
-	var font_size = int(cell_size * 0.6)
-	btn.add_theme_font_size_override("font_size", font_size)
+	btn.add_theme_font_override("font", WastelandStyle.font())
+	btn.add_theme_font_size_override("font_size", int(cell_size * 0.62))
 	
 	var value = game.get_cell_value(row, col)
 	if value != 0:
 		btn.text = str(value)
 	
-	# Create stylebox with proper borders for 3x3 subgrids
-	var stylebox = StyleBoxFlat.new()
-	
-	# Set background color and text color based on whether it's editable
-	if not game.is_cell_editable(row, col):
-		# Pre-filled cells - can be selected but not edited
-		stylebox.bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
-		btn.add_theme_color_override("font_color", theme_colors.get("text", Color(1,1,1)))
-		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))  # Allow selection
-	else:
-		# Editable cells - can be selected and edited
-		stylebox.bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
-		btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
-		btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 1.0)))
-	
-	# Add thicker borders for 3x3 subgrids (every 3rd row/column)
-	# Normal borders: 1px, Subgrid borders: 4px
-	stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black border for strong contrast
-	stylebox.draw_center = true  # Ensure background is drawn
-	
-	# Top border
-	if row % 3 == 0:
-		stylebox.border_width_top = 4  # Thick border at top of subgrid
-	else:
-		stylebox.border_width_top = 1  # Normal border
-	
-	# Left border
-	if col % 3 == 0:
-		stylebox.border_width_left = 4  # Thick border at left of subgrid
-	else:
-		stylebox.border_width_left = 1  # Normal border
-	
-	# Right border (thick at end of subgrid)
-	if (col + 1) % 3 == 0 or col == GRID_SIZE - 1:
-		stylebox.border_width_right = 4
-	else:
-		stylebox.border_width_right = 1
-	
-	# Bottom border (thick at end of subgrid)
-	if (row + 1) % 3 == 0 or row == GRID_SIZE - 1:
-		stylebox.border_width_bottom = 4
-	else:
-		stylebox.border_width_bottom = 1
-	
-	btn.add_theme_stylebox_override("normal", stylebox)
-	btn.add_theme_stylebox_override("hover", stylebox)
-	btn.add_theme_stylebox_override("pressed", stylebox)
-	btn.add_theme_stylebox_override("disabled", stylebox)
-	
+	# Givens and user entries use different text colors; both can be selected
+	var text_key = "user_text" if game.is_cell_editable(row, col) else "text"
+	btn.add_theme_color_override("font_color", theme_colors.get(text_key, Color(1, 1, 1)))
+	btn.add_theme_color_override("font_disabled_color", theme_colors.get(text_key, Color(1, 1, 1)))
+	btn.pressed.connect(_on_cell_pressed.bind(Vector2i(row, col)))
+	_apply_cell_style(btn, row, col, theme_colors.get("cell", Color(0.2, 0.2, 0.2)))
 	return btn
+
+func _apply_cell_style(btn: Button, row: int, col: int, bg_color: Color) -> void:
+	"""Cell background with thin grid lines, thicker on 3x3 subgrid edges"""
+	var stylebox = StyleBoxFlat.new()
+	stylebox.bg_color = bg_color
+	stylebox.border_color = theme_colors.get("grid_line", Color(0, 0, 0))
+	stylebox.border_width_top = 4 if row % 3 == 0 else 1
+	stylebox.border_width_left = 4 if col % 3 == 0 else 1
+	stylebox.border_width_right = 4 if (col + 1) % 3 == 0 else 1
+	stylebox.border_width_bottom = 4 if (row + 1) % 3 == 0 else 1
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		btn.add_theme_stylebox_override(state, stylebox)
+
+func _style_metal_key(btn: Button, corner_radius: int) -> void:
+	"""Dark metal key for the number pad and erase button"""
+	var normal = StyleBoxFlat.new()
+	normal.bg_color = WastelandStyle.METAL
+	normal.set_border_width_all(2)
+	normal.border_color = Color(WastelandStyle.BONE, 0.3)
+	normal.set_corner_radius_all(corner_radius)
+	var pressed = normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = WastelandStyle.METAL_DARK
+	pressed.border_color = WastelandStyle.accent_for("Sudoku")
+	var disabled = normal.duplicate() as StyleBoxFlat
+	disabled.bg_color = Color(WastelandStyle.METAL, 0.35)
+	disabled.border_color = Color(WastelandStyle.BONE, 0.1)
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", normal)
+	btn.add_theme_stylebox_override("focus", normal)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("hover_pressed", pressed)
+	btn.add_theme_stylebox_override("disabled", disabled)
+	btn.add_theme_font_override("font", WastelandStyle.font())
+	for state in ["font_color", "font_hover_color", "font_focus_color"]:
+		btn.add_theme_color_override(state, WastelandStyle.BONE)
+	btn.add_theme_color_override("font_pressed_color", WastelandStyle.accent_for("Sudoku"))
+	btn.add_theme_color_override("font_hover_pressed_color", WastelandStyle.accent_for("Sudoku"))
+	btn.add_theme_color_override("font_disabled_color", Color(WastelandStyle.BONE, 0.2))
 
 func _on_cell_pressed(pos: Vector2i):
 	selected_cell = pos
@@ -341,90 +360,23 @@ func _highlight_selected_cell():
 		if selected_btn.text != "":
 			selected_value = int(selected_btn.text)
 	
-	# Clear previous highlights and apply new ones
 	for row_idx in range(grid_buttons.size()):
 		for col_idx in range(grid_buttons[row_idx].size()):
 			var btn = grid_buttons[row_idx][col_idx]
-			if btn:
-				var stylebox = StyleBoxFlat.new()
-				
-				# Determine background color based on highlighting rules
-				var bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
-				
-				# Check if this cell should be highlighted
-				if selected_cell != Vector2i(-1, -1):
-					# Highlight row and column (brighter highlight)
-					if row_idx == selected_cell.x or col_idx == selected_cell.y:
-						bg_color = theme_colors.get("highlight_row", Color(0, 0.1, 0.2, 0.5))
-					
-					# Highlight matching numbers (even darker highlight) - overrides row/column
-					if selected_value > 0 and btn.text == str(selected_value):
-						bg_color = theme_colors.get("highlight_match", Color(0.60, 0.70, 1.0))
-				
-				stylebox.bg_color = bg_color
-				stylebox.border_color = Color(0.0, 0.0, 0.0)  # Black borders
-				stylebox.draw_center = true
-				
-				# Re-apply border widths
-				if row_idx % 3 == 0:
-					stylebox.border_width_top = 4
-				else:
-					stylebox.border_width_top = 1
-				
-				if col_idx % 3 == 0:
-					stylebox.border_width_left = 4
-				else:
-					stylebox.border_width_left = 1
-				
-				if (col_idx + 1) % 3 == 0 or col_idx == GRID_SIZE - 1:
-					stylebox.border_width_right = 4
-				else:
-					stylebox.border_width_right = 1
-				
-				if (row_idx + 1) % 3 == 0 or row_idx == GRID_SIZE - 1:
-					stylebox.border_width_bottom = 4
-				else:
-					stylebox.border_width_bottom = 1
-				
-				btn.add_theme_stylebox_override("normal", stylebox)
-				btn.add_theme_stylebox_override("hover", stylebox)
-				btn.add_theme_stylebox_override("pressed", stylebox)
-	
-	# Highlight selected cell with brightest blue (overrides all other highlights)
-	if selected_cell != Vector2i(-1, -1):
-		var btn = grid_buttons[selected_cell.x][selected_cell.y]
-		var stylebox = StyleBoxFlat.new()
-		stylebox.bg_color = theme_colors.get("selected", Color(0.7, 0.85, 1.0))
-		stylebox.border_color = Color(0.0, 0.0, 0.0)
-		stylebox.draw_center = true
-		
-		# Re-apply border widths for selected cell
-		var row_idx = selected_cell.x
-		var col_idx = selected_cell.y
-		
-		if row_idx % 3 == 0:
-			stylebox.border_width_top = 4
-		else:
-			stylebox.border_width_top = 1
-		
-		if col_idx % 3 == 0:
-			stylebox.border_width_left = 4
-		else:
-			stylebox.border_width_left = 1
-		
-		if (col_idx + 1) % 3 == 0 or col_idx == GRID_SIZE - 1:
-			stylebox.border_width_right = 4
-		else:
-			stylebox.border_width_right = 1
-		
-		if (row_idx + 1) % 3 == 0 or row_idx == GRID_SIZE - 1:
-			stylebox.border_width_bottom = 4
-		else:
-			stylebox.border_width_bottom = 1
-		
-		btn.add_theme_stylebox_override("normal", stylebox)
-		btn.add_theme_stylebox_override("hover", stylebox)
-		btn.add_theme_stylebox_override("pressed", stylebox)
+			if not btn:
+				continue
+			var bg_color = theme_colors.get("cell", Color(0.2, 0.2, 0.2))
+			if selected_cell != Vector2i(-1, -1):
+				# Row and column of the selection
+				if row_idx == selected_cell.x or col_idx == selected_cell.y:
+					bg_color = theme_colors.get("highlight_row", bg_color)
+				# Matching numbers override row/column
+				if selected_value > 0 and btn.text == str(selected_value):
+					bg_color = theme_colors.get("highlight_match", bg_color)
+				# The selected cell itself overrides everything
+				if Vector2i(row_idx, col_idx) == selected_cell:
+					bg_color = theme_colors.get("selected", bg_color)
+			_apply_cell_style(btn, row_idx, col_idx, bg_color)
 
 func _on_number_selected(number: int):
 	if selected_cell == Vector2i(-1, -1):
@@ -447,7 +399,7 @@ func _on_erase_pressed():
 	if game.is_cell_editable(row, col):
 		var btn = grid_buttons[row][col]
 		# Check if the cell has a value and it's incorrect (red text)
-		if btn.text != "" and btn.get_theme_color("font_color") == Color(1.0, 0.0, 0.0):
+		if btn.text != "" and btn.get_theme_color("font_color") == ERROR_TEXT:
 			# Set the cell to 0 (which will trigger _on_cell_filled)
 			game.set_cell(row, col, 0)
 
@@ -484,7 +436,7 @@ func _update_erase_button_state():
 	if game.is_cell_editable(row, col):
 		var btn = grid_buttons[row][col]
 		# Enable if cell has text and it's red (incorrect)
-		if btn.text != "" and btn.get_theme_color("font_color") == Color(1.0, 0.0, 0.0):
+		if btn.text != "" and btn.get_theme_color("font_color") == ERROR_TEXT:
 			erase_button.disabled = false
 		else:
 			erase_button.disabled = true
@@ -504,12 +456,16 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 		
 		# Set text color based on correctness and theme
 		if is_correct:
-			btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 0.0)))  # Use theme color for correct entries
+			# Use theme color for correct entries
+			btn.add_theme_color_override("font_color", theme_colors.get("user_text", Color(0.0, 0.0, 0.0)))
+			btn.add_theme_color_override("font_disabled_color", theme_colors.get("user_text", Color(0.0, 0.0, 0.0)))
 			# Play place sound for correct entries
 			if SoundManager:
 				SoundManager.play_place()
 		else:
-			btn.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0))  # Red for incorrect (always red)
+			# Incorrect entries are always red
+			btn.add_theme_color_override("font_color", ERROR_TEXT)
+			btn.add_theme_color_override("font_disabled_color", ERROR_TEXT)
 			# Play incorrect sound for wrong entries
 			if SoundManager:
 				SoundManager.play_incorrect()
@@ -524,44 +480,16 @@ func _on_cell_filled(row: int, col: int, value: int, is_correct: bool):
 		# Check if all 9 instances of this number are now correctly placed
 		_check_and_disable_number(value)
 
-	# Keep gray background consistent with other cells
-	var stylebox = StyleBoxFlat.new()
-	stylebox.bg_color = Color(0.85, 0.85, 0.85)  # Gray background (same as all cells)
-	
-	# Preserve borders
-	stylebox.border_color = Color(0.0, 0.0, 0.0)
-	stylebox.draw_center = true
-	
-	# Re-apply border widths based on position
-	if row % 3 == 0:
-		stylebox.border_width_top = 4
-	else:
-		stylebox.border_width_top = 1
-	
-	if col % 3 == 0:
-		stylebox.border_width_left = 4
-	else:
-		stylebox.border_width_left = 1
-	
-	if (col + 1) % 3 == 0 or col == GRID_SIZE - 1:
-		stylebox.border_width_right = 4
-	else:
-		stylebox.border_width_right = 1
-	
-	if (row + 1) % 3 == 0 or row == GRID_SIZE - 1:
-		stylebox.border_width_bottom = 4
-	else:
-		stylebox.border_width_bottom = 1
-	
-	btn.add_theme_stylebox_override("normal", stylebox)
-	btn.add_theme_stylebox_override("hover", stylebox)
-	btn.add_theme_stylebox_override("pressed", stylebox)
+	# Refresh highlights (the filled number may now match the selection)
+	_highlight_selected_cell()
 
 func update_theme() -> void:
 	"""Update theme colors and refresh display"""
 	_init_theme_colors()
 	_update_all_cell_colors()  # Update text colors for all cells
 	_highlight_selected_cell()
+	if border_overlay:
+		border_overlay.queue_redraw()
 
 func _update_all_cell_colors() -> void:
 	"""Update text colors for all existing cell buttons when theme changes"""
@@ -589,11 +517,11 @@ func _update_hearts(lives_remaining: int):
 		
 		if i < lives_remaining:
 			# Alive - red heart
-			heart_icon.modulate = Color(1.0, 0.0, 0.0)  # Red
+			heart_icon.modulate = HEART_ALIVE
 			print("Heart ", i + 1, " set to alive (red)")
 		else:
 			# Lost - gray heart
-			heart_icon.modulate = Color(0.5, 0.5, 0.5)  # Gray
+			heart_icon.modulate = HEART_LOST
 			print("Heart ", i + 1, " set to lost (gray)")
 
 func _on_game_over():
@@ -752,157 +680,79 @@ func _clear_result_overlay() -> void:
 	_result_overlay = null
 
 func _show_result_screen(won: bool) -> void:
-	"""Show a professional result screen with stats and buttons"""
+	"""Result screen: title, difficulty/time, remaining hearts, play again / main menu"""
 	if is_instance_valid(_result_overlay):
 		return  # Already showing
+
+	var accent = WastelandStyle.accent_for("Sudoku") if won else HEART_ALIVE
 
 	# Full-screen dimming overlay
 	var overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 10000
+	overlay.z_index = 3000  # Stay under the 4096 z cap
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_result_overlay = overlay
 	add_child(overlay)
 
-	# Dark semi-transparent background
 	var bg = ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.0, 0.02, 0.08, 0.88)
+	bg.color = Color(0.03, 0.04, 0.02, 0.88)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.add_child(bg)
 
-	# Centered card (75% of screen size)
-	var card = PanelContainer.new()
-	var card_width = size.x * 0.75
-	var card_height = size.y * 0.75
-	card.custom_minimum_size = Vector2(card_width, card_height)
-	overlay.add_child(card)
+	var box = VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.add_theme_constant_override("separation", 24)
+	overlay.add_child(box)
 
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 24)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	card.add_child(vbox)
+	var title = WastelandStyle.title("PUZZLE COMPLETE" if won else "GAME OVER", 76)
+	title.add_theme_color_override("font_color", accent.lightened(0.15))
+	box.add_child(title)
 
-	# Add top spacer
-	var top_spacer = Control.new()
-	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(top_spacer)
+	var difficulty_map = {1: "EASY", 3: "MEDIUM", 5: "HARD"}
+	var stats = "%s  ·  %s" % [difficulty_map.get(game.difficulty, "?"), _format_time(game.get_game_time())]
+	box.add_child(WastelandStyle.label(stats, 34, WastelandStyle.BONE_MUTED, 3))
 
-	# Title
-	var title = Label.new()
-	title.text = "Puzzle Complete!" if won else "Game Over"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 72)
-	title.add_theme_color_override("font_color",
-		Color(1.0, 0.85, 0.1) if won else Color(1.0, 0.3, 0.3))
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	vbox.add_child(title)
-
-	vbox.add_child(HSeparator.new())
-
-	# Stats
-	var difficulty_map = {1: "Easy", 3: "Medium", 5: "Hard"}
-
-	# Difficulty with emoji
-	var diff_container = HBoxContainer.new()
-	diff_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	diff_container.add_theme_constant_override("separation", 12)
-	vbox.add_child(diff_container)
-
-	var diff_emoji = Label.new()
-	diff_emoji.text = "⚙️"
-	diff_emoji.add_theme_font_size_override("font_size", 44)
-	diff_container.add_child(diff_emoji)
-
-	var diff_label = Label.new()
-	var diff_text = difficulty_map.get(game.difficulty, "?")
-	diff_label.text = diff_text
-	diff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	diff_label.add_theme_font_size_override("font_size", 48)
-	diff_label.add_theme_color_override("font_color", Color(0.7, 0.7, 1.0))  # Light blue
-	diff_container.add_child(diff_label)
-
-	# Time with emoji
-	var time_container = HBoxContainer.new()
-	time_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	time_container.add_theme_constant_override("separation", 12)
-	vbox.add_child(time_container)
-
-	var time_emoji = Label.new()
-	time_emoji.text = "⏱️"
-	time_emoji.add_theme_font_size_override("font_size", 44)
-	time_container.add_child(time_emoji)
-
-	var time_label = Label.new()
-	time_label.text = _format_time(game.get_game_time())
-	time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	time_label.add_theme_font_size_override("font_size", 48)
-	time_label.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7))  # Light green
-	time_container.add_child(time_label)
-
-	# Lives remaining row with emoji
+	# Remaining lives
 	var lives_row = HBoxContainer.new()
 	lives_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	lives_row.add_theme_constant_override("separation", 12)
-	vbox.add_child(lives_row)
-
-	var lives_emoji = Label.new()
-	lives_emoji.text = "❤️"
-	lives_emoji.add_theme_font_size_override("font_size", 44)
-	lives_row.add_child(lives_emoji)
-
+	lives_row.add_theme_constant_override("separation", 16)
+	box.add_child(lives_row)
 	for i in range(game.max_lives):
 		var heart = FontAwesome.new()
 		heart.icon_name = "heart"
 		heart.icon_type = "solid"
-		heart.icon_size = 40
-		heart.modulate = Color(1.0, 0.0, 0.0) if i < game.lives else Color(0.4, 0.4, 0.4)
+		heart.icon_size = 48
+		heart.modulate = HEART_ALIVE if i < game.lives else HEART_LOST
 		heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lives_row.add_child(heart)
 
-	vbox.add_child(HSeparator.new())
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 30)
+	box.add_child(spacer)
 
-	# Buttons
-	var play_btn = Button.new()
-	play_btn.text = "Play Again"
-	play_btn.custom_minimum_size = Vector2(0, 80)
-	play_btn.add_theme_font_size_override("font_size", 36)
-	play_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var play_btn = WastelandStyle.make_button("PLAY AGAIN", accent, true, Vector2(440, 112), 44)
 	play_btn.pressed.connect(_on_result_play_again)
-	vbox.add_child(play_btn)
+	box.add_child(play_btn)
 
-	var menu_btn = Button.new()
-	menu_btn.text = "Main Menu"
-	menu_btn.custom_minimum_size = Vector2(0, 80)
-	menu_btn.add_theme_font_size_override("font_size", 36)
-	menu_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var menu_btn = WastelandStyle.make_button("MAIN MENU", accent, false, Vector2(440, 104), 38)
 	menu_btn.pressed.connect(_on_result_main_menu)
-	vbox.add_child(menu_btn)
+	box.add_child(menu_btn)
 
-	# Add bottom spacer
-	var bottom_spacer = Control.new()
-	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(bottom_spacer)
-
-	# Position card after one frame so size is valid
-	await get_tree().process_frame
-	card.position = Vector2(
-		(size.x - card.size.x) * 0.5,
-		(size.y - card.size.y) * 0.5
-	)
-	card.pivot_offset = card.size * 0.5
-
-	# Animate: fade in + bounce card
+	# Animate: fade in + bounce title
 	overlay.modulate.a = 0.0
 	var fade = create_tween()
 	fade.tween_property(overlay, "modulate:a", 1.0, 0.4)
 
-	card.scale = Vector2(0.3, 0.3)
-	var bounce = card.create_tween()
+	await get_tree().process_frame
+	title.pivot_offset = title.size * 0.5
+	title.scale = Vector2(0.3, 0.3)
+	var bounce = title.create_tween()
 	bounce.set_ease(Tween.EASE_OUT)
 	bounce.set_trans(Tween.TRANS_BACK)
-	bounce.tween_property(card, "scale", Vector2(1.0, 1.0), 0.55)
+	bounce.tween_property(title, "scale", Vector2(1.0, 1.0), 0.55)
 
 func _on_result_play_again() -> void:
 	"""Handle 'Play Again' button press"""

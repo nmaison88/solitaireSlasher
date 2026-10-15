@@ -181,6 +181,12 @@ func _process(_delta: float) -> void:
 			stats_game = _game
 		elif _current_game_type == "Spider" and _spider_board.visible and is_instance_valid(_spider_board._game):
 			stats_game = _spider_board._game
+	if _current_game_type == "Sudoku" and _sudoku_board.visible and _sudoku_game and _sudoku_game.puzzle.size() > 0:
+		var difficulty_names = {1: "EASY", 3: "MEDIUM", 5: "HARD"}
+		var sudoku_seconds := int(_sudoku_game.get_game_time())
+		_hud_stats_label.visible = true
+		_hud_stats_label.text = "%s  ·  %d:%02d" % [difficulty_names.get(_sudoku_game.difficulty, ""), sudoku_seconds / 60, sudoku_seconds % 60]
+		return
 	_hud_stats_label.visible = stats_game != null
 	if stats_game:
 		var seconds := int(stats_game.get_game_time())
@@ -795,11 +801,13 @@ func _update_game_background(game_type: String) -> void:
 	# in the empty lower area. Card backs match the game (oxblood Solitaire, rust Spider).
 	game_bg.material = null
 	CardView.back_color = CardView.BACK_RUST if game_type == "Spider" else CardView.BACK_OXBLOOD
-	if game_type == "Solitaire" or game_type == "Spider":
+	if game_type in ["Solitaire", "Spider", "Sudoku"]:
 		if game_type == "Solitaire":
 			game_bg.color = Color(0.0, 0.5, 0.2) if current_theme == "light" else Color(0.14, 0.1, 0.09)  # Green felt / warm charcoal
-		else:
+		elif game_type == "Spider":
 			game_bg.color = Color(0.0, 0.28, 0.12) if current_theme == "light" else Color(0.11, 0.11, 0.08)  # Green felt / olive charcoal
+		else:
+			game_bg.color = Color(0.33, 0.41, 1.0) if current_theme == "light" else Color(0.1, 0.11, 0.09)  # Sky blue / wasteland slate
 		if _game_bg_material == null:
 			_game_bg_material = ShaderMaterial.new()
 			_game_bg_material.shader = load("res://shaders/menu_wasteland.gdshader")
@@ -810,12 +818,6 @@ func _update_game_background(game_type: String) -> void:
 		var bg_size: Vector2 = game_bg.size
 		_game_bg_material.set_shader_parameter("aspect", bg_size.x / maxf(bg_size.y, 1.0))
 		game_bg.material = _game_bg_material
-	else:  # Sudoku
-		# Sky blue for light mode, original dark for dark mode
-		if current_theme == "light":
-			game_bg.color = Color(0.33, 0.41, 1.0)  # Sky blue
-		else:
-			game_bg.color = Color(0.1, 0.1, 0.1)  # Original dark gray
 	
 	print("Updated ", game_type, " background to: ", game_bg.color)
 
@@ -1411,14 +1413,12 @@ func _setup_single_player_sudoku() -> void:
 
 func _on_sudoku_completed() -> void:
 	print("Sudoku puzzle completed!")
-	_status_label.text = "Puzzle Completed!"
 	PlayerData.clear_saved_game("Sudoku")
 	if SoundManager:
 		SoundManager.play_win()
 
 func _on_sudoku_game_over() -> void:
 	print("Sudoku game over - out of lives")
-	_status_label.text = "Game Over - Out of Lives"
 	PlayerData.clear_saved_game("Sudoku")  # Clear save on game over/loss
 	if SoundManager:
 		SoundManager.play_lose()
@@ -1446,8 +1446,6 @@ func _setup_spider_game() -> void:
 
 func _on_spider_game_won() -> void:
 	print("Spider Solitaire won!")
-	_status_label.text = "You Win!"
-	_status_label.visible = true
 	PlayerData.clear_saved_game("Spider")
 	if SoundManager:
 		SoundManager.play_win()
