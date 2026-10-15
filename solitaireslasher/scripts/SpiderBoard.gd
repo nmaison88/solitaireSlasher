@@ -20,7 +20,7 @@ const WIN_MESSAGES = [
 
 var _game: SpiderGame = null
 var _animating: bool = false
-var _animation_duration: float = 0.28
+var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
 var _drop_zones: Dictionary = {}       # col_index(int) -> ColorRect
 var _dragged_card_view: CardView = null
 var _dragged_cards: Array = []         # Array[SolitaireCard]
@@ -517,44 +517,47 @@ func _circle_style(color: Color, radius: float) -> StyleBoxFlat:
 	return s
 
 func _create_undo_redo_buttons() -> void:
-	var btn_size = 100.0
-	var bottom_offset = -160.0  # px up from bottom of SpiderBoard
+	# Large accent-rimmed pair centred low on the screen, raised off the bottom edge (matches Solitaire's undo)
+	var btn_size = 150.0
+	var bottom_offset = -300.0 - btn_size  # Circle top, px up from bottom of SpiderBoard
+	var pair_gap = 70.0
+	var accent = WastelandStyle.accent_for("Spider")
 
 	# ── Undo ──
 	var undo_btn = Button.new()
 	undo_btn.name = "spider_undo"
-	undo_btn.anchor_left   = 0.0
-	undo_btn.anchor_right  = 0.0
+	undo_btn.anchor_left   = 0.5
+	undo_btn.anchor_right  = 0.5
 	undo_btn.anchor_top    = 1.0
 	undo_btn.anchor_bottom = 1.0
-	undo_btn.offset_left   = 12.0
-	undo_btn.offset_right  = 12.0 + btn_size
+	undo_btn.offset_left   = -pair_gap * 0.5 - btn_size
+	undo_btn.offset_right  = -pair_gap * 0.5
 	undo_btn.offset_top    = bottom_offset
 	undo_btn.offset_bottom = bottom_offset + btn_size
 	undo_btn.pivot_offset  = Vector2(btn_size * 0.5, btn_size * 0.5)
 	undo_btn.tooltip_text  = "Undo"
-	undo_btn.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), btn_size))
-	undo_btn.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.55), btn_size))
-	undo_btn.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), btn_size))
-	undo_btn.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), btn_size))
-
-	var undo_vbox = VBoxContainer.new()
-	undo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	undo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	undo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_btn.add_child(undo_vbox)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var undo_style := _circle_style(Color(0, 0, 0, 0.65 if state == "pressed" else 0.45), btn_size)
+		undo_style.set_border_width_all(5)
+		undo_style.border_color = accent
+		undo_style.shadow_color = Color(accent, 0.4)
+		undo_style.shadow_size = 18
+		undo_btn.add_theme_stylebox_override(state, undo_style)
 
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 48
+	undo_icon.icon_size = 64
 	undo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
+	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_vbox.add_child(undo_icon)
+	undo_btn.add_child(undo_icon)
 
-	var undo_lbl = WastelandStyle.label("UNDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
+	var undo_lbl = WastelandStyle.label("UNDO", 30, WastelandStyle.BONE, 4, 6)
+	undo_lbl.position = Vector2(-40, btn_size + 10)
+	undo_lbl.size = Vector2(btn_size + 80, 40)
 	undo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_vbox.add_child(undo_lbl)
+	undo_btn.add_child(undo_lbl)
 
 	var _undo_tween: Tween = null
 	undo_btn.button_down.connect(func() -> void:
@@ -579,38 +582,38 @@ func _create_undo_redo_buttons() -> void:
 	# ── Redo ──
 	var redo_btn = Button.new()
 	redo_btn.name = "spider_redo"
-	redo_btn.anchor_left   = 0.0
-	redo_btn.anchor_right  = 0.0
+	redo_btn.anchor_left   = 0.5
+	redo_btn.anchor_right  = 0.5
 	redo_btn.anchor_top    = 1.0
 	redo_btn.anchor_bottom = 1.0
-	redo_btn.offset_left   = 12.0 + btn_size + 16.0
-	redo_btn.offset_right  = 12.0 + btn_size + 16.0 + btn_size
+	redo_btn.offset_left   = pair_gap * 0.5
+	redo_btn.offset_right  = pair_gap * 0.5 + btn_size
 	redo_btn.offset_top    = bottom_offset
 	redo_btn.offset_bottom = bottom_offset + btn_size
 	redo_btn.pivot_offset  = Vector2(btn_size * 0.5, btn_size * 0.5)
 	redo_btn.tooltip_text  = "Redo"
-	redo_btn.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), btn_size))
-	redo_btn.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.55), btn_size))
-	redo_btn.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), btn_size))
-	redo_btn.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), btn_size))
-
-	var redo_vbox = VBoxContainer.new()
-	redo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	redo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	redo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	redo_btn.add_child(redo_vbox)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var redo_style := _circle_style(Color(0, 0, 0, 0.65 if state == "pressed" else 0.45), btn_size)
+		redo_style.set_border_width_all(5)
+		redo_style.border_color = accent
+		redo_style.shadow_color = Color(accent, 0.4)
+		redo_style.shadow_size = 18
+		redo_btn.add_theme_stylebox_override(state, redo_style)
 
 	var redo_icon = FontAwesome.new()
 	redo_icon.icon_name = "rotate-right"
 	redo_icon.icon_type = "solid"
-	redo_icon.icon_size = 48
+	redo_icon.icon_size = 64
 	redo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
+	redo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	redo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	redo_vbox.add_child(redo_icon)
+	redo_btn.add_child(redo_icon)
 
-	var redo_lbl = WastelandStyle.label("REDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
+	var redo_lbl = WastelandStyle.label("REDO", 30, WastelandStyle.BONE, 4, 6)
+	redo_lbl.position = Vector2(-40, btn_size + 10)
+	redo_lbl.size = Vector2(btn_size + 80, 40)
 	redo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	redo_vbox.add_child(redo_lbl)
+	redo_btn.add_child(redo_lbl)
 
 	var _redo_tween: Tween = null
 	redo_btn.button_down.connect(func() -> void:
@@ -883,7 +886,7 @@ func _on_card_clicked(card_view: CardView) -> void:
 			sv.z_index = 500
 
 	var tween = create_tween()
-	tween.set_ease(Tween.EASE_OUT)
+	tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.set_parallel(true)
 	for k in range(stack_views.size()):
@@ -996,7 +999,7 @@ func _on_card_drag_ended(card_view: CardView, target_position: Vector2) -> void:
 
 			var dest_start = dest_size_before
 			var tween = create_tween()
-			tween.set_ease(Tween.EASE_OUT)
+			tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 			tween.set_trans(Tween.TRANS_CUBIC)
 			tween.set_parallel(true)
 			for k in range(_dragged_card_views.size()):

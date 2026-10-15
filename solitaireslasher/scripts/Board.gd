@@ -24,7 +24,7 @@ var _dragged_card_views: Array[CardView] = []  # Track all CardViews being dragg
 var _dragged_card_offsets: Dictionary = {}  # Store relative positions for stack dragging
 var _last_render_frame: int = -1
 var _stock_button: Button
-var _animation_duration: float = 0.28
+var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
 var _animating: bool = false
 var _win_overlay: Control = null
 
@@ -865,7 +865,7 @@ func _on_card_clicked(card_view: CardView) -> void:
 						if is_instance_valid(sv):
 							sv.z_index = 500
 					var tween = create_tween()
-					tween.set_ease(Tween.EASE_OUT)
+					tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 					tween.set_trans(Tween.TRANS_CUBIC)
 					tween.set_parallel(true)
 					for k in range(stack_views.size()):
@@ -920,7 +920,7 @@ func _anim_ghost(card: SolitaireCard, from_pos: Vector2, to_pos: Vector2) -> voi
 	# Re-render the board immediately so restored state is visible underneath
 	render()
 	var tween = ghost.create_tween()
-	tween.set_ease(Tween.EASE_OUT)
+	tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(ghost, "position", to_pos, _animation_duration)
 	await tween.finished
@@ -976,7 +976,7 @@ func _anim_undo_tableau_to_tableau(hint: Dictionary) -> void:
 	render()
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.set_ease(Tween.EASE_OUT)
+	tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 	tween.set_trans(Tween.TRANS_CUBIC)
 	for k in range(ghosts.size()):
 		tween.tween_property(ghosts[k], "position", target_positions[k], _animation_duration)
@@ -1023,7 +1023,7 @@ func _animate_single_card(card_view: CardView, target_pos: Vector2) -> void:
 	card_view.visible = false
 
 	var tween = temp.create_tween()
-	tween.set_ease(Tween.EASE_OUT)
+	tween.set_ease(Tween.EASE_IN_OUT)  # Glide rather than zip
 	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(temp, "position", target_pos, _animation_duration)
 	await tween.finished

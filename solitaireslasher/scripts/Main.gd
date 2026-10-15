@@ -66,6 +66,13 @@ var _menu_selected_index: int = 0
 var _menu_accent: Color = Color(0.9, 0.18, 0.14)
 var _menu_accent_tween: Tween
 var _game_bg_material: ShaderMaterial  # Atmosphere shader for the Solitaire table
+# In-game HUD layout: big top buttons with clear space above the cards so reaching for the
+# stock doesn't hit restart, and a large raised undo button
+const _HUD_BUTTON_SIZE := 120.0
+const _HUD_MARGIN := 24.0
+const _BOARD_TOP_CLEARANCE := 240.0  # Board starts this far below the safe area
+const _UNDO_SIZE := 150.0
+const _UNDO_BOTTOM_GAP := 300.0  # Undo circle's bottom edge above the screen bottom
 var _hud_stats_label: Label  # "MOVES · TIME" readout during single-player Solitaire
 
 
@@ -96,11 +103,13 @@ func _ready() -> void:
 		var top_padding = safe_area.position.y
 		print("Adding top padding: ", top_padding)
 		
-		# Offset Board to avoid notch and larger buttons (100px buttons + padding)
-		_board.offset_top = top_padding + 120  # Extra 120px for larger buttons
+		# Offset Board below the notch and HUD buttons
+		_board.offset_top = top_padding + _BOARD_TOP_CLEARANCE
 		
 		# Offset StatusLabel to avoid notch and buttons
-		_status_label.offset_top = 48 + top_padding + 120
+		_status_label.offset_top = 48 + top_padding + _BOARD_TOP_CLEARANCE
+	else:
+		_board.offset_top = _BOARD_TOP_CLEARANCE
 	
 	# Add background for both Solitaire and Sudoku
 	var game_background = ColorRect.new()
@@ -132,7 +141,7 @@ func _ready() -> void:
 	# Create Spider Solitaire board
 	_spider_board = SpiderBoard.new()
 	_spider_board.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_spider_board.offset_top = 120  # Match solitaire: clear menu + retry buttons (100px + padding)
+	_spider_board.offset_top = _BOARD_TOP_CLEARANCE  # Match solitaire: clear the HUD buttons
 	_spider_board.visible = false
 	add_child(_spider_board)
 	_spider_board.game_won.connect(_on_spider_game_won)
@@ -140,7 +149,7 @@ func _ready() -> void:
 	# Apply mobile safe-area offset on top of the base 120px clearance
 	if OS.has_feature("mobile"):
 		var safe_area = DisplayServer.get_display_safe_area()
-		_spider_board.offset_top = safe_area.position.y + 120
+		_spider_board.offset_top = safe_area.position.y + _BOARD_TOP_CLEARANCE
 
 	# Hide game elements on startup
 	_board.visible = false
@@ -166,7 +175,7 @@ func _create_hud_stats_label() -> void:
 	_hud_stats_label.name = "HudStats"
 	_hud_stats_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_hud_stats_label.offset_top = top_padding
-	_hud_stats_label.offset_bottom = top_padding + 100
+	_hud_stats_label.offset_bottom = top_padding + _HUD_BUTTON_SIZE
 	_hud_stats_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_hud_stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hud_stats_label.visible = false
@@ -1501,12 +1510,16 @@ func _show_new_game_button():
 		var safe_area = DisplayServer.get_display_safe_area()
 		top_padding = max(10, safe_area.position.y)
 	
-	new_game_button.position = Vector2(900, top_padding)
-	new_game_button.size = Vector2(100, 100)
-	new_game_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
-	new_game_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
-	new_game_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
-	new_game_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
+	new_game_button.anchor_left = 1.0
+	new_game_button.anchor_right = 1.0
+	new_game_button.offset_left = -_HUD_MARGIN - _HUD_BUTTON_SIZE
+	new_game_button.offset_right = -_HUD_MARGIN
+	new_game_button.offset_top = top_padding
+	new_game_button.offset_bottom = top_padding + _HUD_BUTTON_SIZE
+	new_game_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
+	new_game_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
+	new_game_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), _HUD_BUTTON_SIZE))
+	new_game_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), _HUD_BUTTON_SIZE))
 	
 	var is_multiplayer_mode = MultiplayerGameManager and MultiplayerGameManager.is_multiplayer
 	print("Creating game button - is_multiplayer: ", is_multiplayer_mode)
@@ -1520,7 +1533,7 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 56
+		forfeit_icon.icon_size = 64
 		forfeit_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1534,7 +1547,7 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 52
+		retry_icon.icon_size = 60
 		retry_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1542,46 +1555,46 @@ func _show_new_game_button():
 	
 	add_child(new_game_button)
 	
-	# Undo button (bottom centre) — circle bg + icon + "Undo" label
+	# Undo button (bottom centre, raised) — large accent-rimmed circle with "UNDO" underneath
 	var undo_button = Button.new()
 	undo_button.name = "undo_button"
 	undo_button.anchor_left   = 0.5
 	undo_button.anchor_right  = 0.5
 	undo_button.anchor_top    = 1.0
 	undo_button.anchor_bottom = 1.0
-	undo_button.offset_left   = -50
-	undo_button.offset_right  = 50
-	undo_button.offset_top    = -160  # 160px above bottom → 50px breathing room
-	undo_button.offset_bottom = -50
-	undo_button.custom_minimum_size = Vector2(100, 110)
+	undo_button.offset_left   = -_UNDO_SIZE * 0.5
+	undo_button.offset_right  = _UNDO_SIZE * 0.5
+	undo_button.offset_top    = -_UNDO_BOTTOM_GAP - _UNDO_SIZE
+	undo_button.offset_bottom = -_UNDO_BOTTOM_GAP
 	undo_button.tooltip_text = "Undo Last Move"
 	undo_button.pressed.connect(_on_undo_pressed)
 	undo_button.visible = (_current_game_type == "Solitaire")
-	undo_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
-	undo_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
-	undo_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
-	undo_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
-
-	var undo_vbox = VBoxContainer.new()
-	undo_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	undo_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	undo_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_button.add_child(undo_vbox)
+	var undo_accent := WastelandStyle.accent_for(_current_game_type)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var undo_style := _circle_style(Color(0, 0, 0, 0.65 if state == "pressed" else 0.45), _UNDO_SIZE)
+		undo_style.set_border_width_all(5)
+		undo_style.border_color = undo_accent
+		undo_style.shadow_color = Color(undo_accent, 0.4)
+		undo_style.shadow_size = 18
+		undo_button.add_theme_stylebox_override(state, undo_style)
 
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 56
+	undo_icon.icon_size = 64
 	undo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
+	undo_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_vbox.add_child(undo_icon)
+	undo_button.add_child(undo_icon)
 
-	var undo_label = WastelandStyle.label("UNDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
+	var undo_label = WastelandStyle.label("UNDO", 30, WastelandStyle.BONE, 4, 6)
 	undo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	undo_vbox.add_child(undo_label)
+	undo_label.position = Vector2(-40, _UNDO_SIZE + 10)
+	undo_label.size = Vector2(_UNDO_SIZE + 80, 40)
+	undo_button.add_child(undo_label)
 
 	# Pivot at center for scale animation
-	undo_button.pivot_offset = Vector2(50, 55)
+	undo_button.pivot_offset = Vector2(_UNDO_SIZE, _UNDO_SIZE) * 0.5
 
 	# Click animation: squish on press, spring back on release
 	var _undo_tween: Tween = null
@@ -1616,26 +1629,20 @@ func _show_new_game_button():
 	menu_button.name = "menu_button"
 	
 	# Adjust position for Sudoku to avoid number selector overlap
-	var menu_x = 10
-	var menu_y = top_padding
-	if _current_game_type == "Sudoku":
-		# In Sudoku mode, position menu button higher to avoid number selector
-		menu_y = top_padding - 50  # Move up higher
-	
-	menu_button.position = Vector2(menu_x, menu_y)
-	menu_button.size = Vector2(100, 100)  # 2x larger (was 50x50)
+	menu_button.position = Vector2(_HUD_MARGIN, top_padding)
+	menu_button.size = Vector2(_HUD_BUTTON_SIZE, _HUD_BUTTON_SIZE)
 	menu_button.tooltip_text = "Main Menu"
 	menu_button.pressed.connect(_on_back_to_menu_pressed)
 	
-	menu_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), 100))
-	menu_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), 100))
-	menu_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), 100))
-	menu_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), 100))
+	menu_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
+	menu_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
+	menu_button.add_theme_stylebox_override("pressed",  _circle_style(Color(0, 0, 0, 0.65), _HUD_BUTTON_SIZE))
+	menu_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), _HUD_BUTTON_SIZE))
 
 	var menu_icon = FontAwesome.new()
 	menu_icon.icon_name = "chevron-left"
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 48
+	menu_icon.icon_size = 56
 	menu_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
