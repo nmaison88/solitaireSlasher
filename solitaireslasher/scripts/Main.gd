@@ -34,24 +34,25 @@ var _current_game_type: String = "Solitaire"  # "Solitaire" or "Sudoku"
 
 # Main menu
 const GameCarouselScript = preload("res://scripts/GameCarousel.gd")
+const WastelandStyle = preload("res://scripts/WastelandStyle.gd")
 const _MENU_GAMES: Array[String] = ["Solitaire", "Sudoku", "Spider"]
 const _MENU_GAME_INFO := {
 	"Solitaire": {
-		"title": "SOLITAIRE SLASHER",
+		"title": WastelandStyle.DISPLAY_NAMES["Solitaire"],
 		"tagline": "Carve through the deck. Klondike, no mercy.",
-		"accent": Color(0.9, 0.18, 0.14),
+		"accent": WastelandStyle.ACCENTS["Solitaire"],
 		"icon": "res://game icons/solitaire_icon.png",
 	},
 	"Sudoku": {
-		"title": "SUDOKU WASTELAND",
+		"title": WastelandStyle.DISPLAY_NAMES["Sudoku"],
 		"tagline": "Nine by nine. Three lives. No second chances.",
-		"accent": Color(0.45, 0.95, 0.3),
+		"accent": WastelandStyle.ACCENTS["Sudoku"],
 		"icon": "res://game icons/sudoku_icon.png",
 	},
 	"Spider": {
-		"title": "SPIDER SOLITAIRE",
+		"title": WastelandStyle.DISPLAY_NAMES["Spider"],
 		"tagline": "Two decks. Eight runs. Don't get tangled.",
-		"accent": Color(0.95, 0.5, 0.15),
+		"accent": WastelandStyle.ACCENTS["Spider"],
 		"icon": "res://game icons/spider_icon.png",
 	},
 }
@@ -65,9 +66,6 @@ var _menu_selected_index: int = 0
 var _menu_accent: Color = Color(0.9, 0.18, 0.14)
 var _menu_accent_tween: Tween
 
-# Carousel swipe vs tap discrimination
-const _TAP_MAX_DISTANCE: float = 20.0
-var _icon_press_pos: Dictionary = {}  # icon name -> Vector2 of press start
 
 func _ready() -> void:
 	# Get current theme from PlayerData
@@ -207,7 +205,7 @@ func _setup_main_menu() -> void:
 	# Add FontAwesome gear icon for settings (FontAwesome 6 naming)
 	var settings_icon = FontAwesome.new()
 	settings_icon.icon_name = "gear"
-	settings_icon.add_theme_color_override("font_color", Color(0.93, 0.87, 0.72))  # Bone white
+	settings_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	settings_icon.icon_size = 64
 	settings_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	settings_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -231,13 +229,10 @@ func _setup_main_menu() -> void:
 	_menu_container.add_child(top_spacer)
 
 	var is_mobile := OS.has_feature("mobile")
-	var title := _make_menu_label("CHOOSE YOUR FATE", 84 if is_mobile else 68, Color(0.93, 0.87, 0.72), 6, 10)
-	title.add_theme_color_override("font_shadow_color", Color(0.6, 0.05, 0.03, 0.8))
-	title.add_theme_constant_override("shadow_offset_x", 0)
-	title.add_theme_constant_override("shadow_offset_y", 6)
+	var title := WastelandStyle.title("CHOOSE YOUR FATE", 84 if is_mobile else 68)
 	_menu_container.add_child(title)
 
-	var subtitle := _make_menu_label("— swipe to pick your poison —", 30, Color(0.93, 0.87, 0.72, 0.55), 2)
+	var subtitle := WastelandStyle.label("— swipe to pick your poison —", 30, WastelandStyle.BONE_MUTED, 2)
 	_menu_container.add_child(subtitle)
 
 	# Flexible spacers above the carousel and below the button center that group on tall screens
@@ -269,12 +264,7 @@ func _setup_main_menu() -> void:
 	game_carousel.manual_carousel_transtion_type = Tween.TRANS_CUBIC
 	game_carousel.manual_carousel_ease_type = Tween.EASE_OUT
 
-	# Add game icons as clickable TextureRect children
-	var icon_handlers := {
-		"Solitaire": _on_solitaire_icon_clicked,
-		"Sudoku": _on_sudoku_icon_clicked,
-		"Spider": _on_spider_icon_clicked,
-	}
+	# Game icons are swipe-only; the ENTER button opens the selected game
 	for game in _MENU_GAMES:
 		var icon = TextureRect.new()
 		icon.texture = load(_MENU_GAME_INFO[game].icon)
@@ -282,8 +272,7 @@ func _setup_main_menu() -> void:
 		icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.name = game
-		icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow carousel drag but detect clicks
-		icon.gui_input.connect(icon_handlers[game])
+		icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Let drags reach the carousel
 		game_carousel.add_child(icon)
 
 	# Connect to carousel change signals
@@ -295,10 +284,10 @@ func _setup_main_menu() -> void:
 	_menu_carousel = game_carousel
 
 	# Selected game name and tagline
-	_menu_game_title = _make_menu_label("", 64 if is_mobile else 54, Color.WHITE, 4, 8)
+	_menu_game_title = WastelandStyle.label("", 64 if is_mobile else 54, Color.WHITE, 4, 8)
 	_menu_container.add_child(_menu_game_title)
 
-	_menu_game_tagline = _make_menu_label("", 32 if is_mobile else 26, Color(0.93, 0.87, 0.72, 0.85), 1)
+	_menu_game_tagline = WastelandStyle.label("", 32 if is_mobile else 26, Color(WastelandStyle.BONE, 0.85), 1)
 	_menu_game_tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_menu_container.add_child(_menu_game_tagline)
 
@@ -327,32 +316,11 @@ func _setup_main_menu() -> void:
 	_menu_container.add_child(play_spacer)
 
 	# ENTER button: dark metal with an accent-colored border and glow
-	_menu_play_style = StyleBoxFlat.new()
-	_menu_play_style.bg_color = Color(0.12, 0.1, 0.09, 0.92)
-	_menu_play_style.set_border_width_all(4)
-	_menu_play_style.set_corner_radius_all(14)
-	_menu_play_style.shadow_size = 18
-	var play_pressed_style := _menu_play_style.duplicate() as StyleBoxFlat
-	play_pressed_style.bg_color = Color(0.06, 0.05, 0.04, 0.95)
-	var play_button = Button.new()
+	var play_button := WastelandStyle.make_button("ENTER", _menu_accent, true, Vector2(440, 112), 48)
 	play_button.name = "MenuPlayButton"
-	play_button.text = "ENTER"
-	play_button.custom_minimum_size = Vector2(440, 112)
-	play_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	play_button.add_theme_font_override("font", _get_menu_font(8))
-	play_button.add_theme_font_size_override("font_size", 48)
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		play_button.add_theme_color_override(state, Color(0.93, 0.87, 0.72))
-	play_button.add_theme_stylebox_override("normal", _menu_play_style)
-	play_button.add_theme_stylebox_override("hover", _menu_play_style)
-	play_button.add_theme_stylebox_override("focus", _menu_play_style)
-	play_button.add_theme_stylebox_override("pressed", play_pressed_style)
+	_menu_play_style = play_button.get_theme_stylebox("normal") as StyleBoxFlat
 	play_button.pressed.connect(_on_menu_play_pressed)
 	_menu_container.add_child(play_button)
-	# Keep the pressed style's border/glow in sync with the accent color
-	_menu_play_style.changed.connect(func():
-		play_pressed_style.border_color = _menu_play_style.border_color
-		play_pressed_style.shadow_color = _menu_play_style.shadow_color)
 
 	var lower_flex = Control.new()
 	lower_flex.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -424,75 +392,6 @@ func create_difficulty_carousel_item(item_name: String) -> Control:
 	
 	return item
 
-func _on_solitaire_icon_clicked(event: InputEvent) -> void:
-	var key = "Solitaire"
-	if event is InputEventScreenTouch:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Solitaire"
-					_on_game_selected()
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Solitaire"
-					_on_game_selected()
-
-func _on_sudoku_icon_clicked(event: InputEvent) -> void:
-	var key = "Sudoku"
-	if event is InputEventScreenTouch:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Sudoku"
-					_on_game_selected()
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Sudoku"
-					_on_game_selected()
-
-func _on_spider_icon_clicked(event: InputEvent) -> void:
-	var key = "Spider"
-	if event is InputEventScreenTouch:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Spider"
-					_on_game_selected()
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_icon_press_pos[key] = event.position
-		else:
-			if key in _icon_press_pos:
-				var dist = event.position.distance_to(_icon_press_pos[key])
-				_icon_press_pos.erase(key)
-				if dist < _TAP_MAX_DISTANCE:
-					_current_game_type = "Spider"
-					_on_game_selected()
-
 func _on_game_carousel_selection_changed(index: int = -1) -> void:
 	"""Handle game carousel selection change and update icon scales"""
 	# If no index provided, get current index from carousel
@@ -524,7 +423,7 @@ func _set_menu_selection(index: int, animate: bool = true) -> void:
 	for i in range(_menu_dots.size()):
 		var dot: Panel = _menu_dots[i]
 		var dot_style := dot.get_theme_stylebox("panel") as StyleBoxFlat
-		dot_style.bg_color = info.accent if i == index else Color(0.93, 0.87, 0.72, 0.3)
+		dot_style.bg_color = info.accent if i == index else Color(WastelandStyle.BONE, 0.3)
 		var dot_width := 44.0 if i == index else 16.0
 		if animate:
 			create_tween().tween_property(dot, "custom_minimum_size:x", dot_width, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -621,27 +520,6 @@ func _create_menu_embers() -> CPUParticles2D:
 	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	embers.material = additive
 	return embers
-
-func _get_menu_font(letter_spacing: int = 0) -> FontVariation:
-	var base := SystemFont.new()
-	base.font_names = PackedStringArray(["Avenir Next Condensed", "Impact", "Arial Narrow", "sans-serif"])
-	base.font_weight = 800
-	var font := FontVariation.new()
-	font.base_font = base
-	font.spacing_glyph = letter_spacing
-	return font
-
-func _make_menu_label(text: String, font_size: int, color: Color, letter_spacing: int = 0, outline: int = 0) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_override("font", _get_menu_font(letter_spacing))
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	if outline > 0:
-		label.add_theme_constant_override("outline_size", outline)
-		label.add_theme_color_override("font_outline_color", Color(0.08, 0.05, 0.04))
-	return label
 
 func _on_game_selected() -> void:
 	"""Handle game selection from carousel - show game-specific menu"""
@@ -1101,6 +979,8 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 		settings_button.visible = false
 	
 	# Create multiplayer menu container
+	var is_mobile := OS.has_feature("mobile")
+	var accent := WastelandStyle.accent_for(game_type)
 	var mp_menu = VBoxContainer.new()
 	mp_menu.name = "MultiplayerMenu"
 	mp_menu.set_anchors_preset(Control.PRESET_CENTER)
@@ -1112,72 +992,56 @@ func _on_show_multiplayer_menu(game_type: String = "") -> void:
 	mp_menu.offset_top = -250
 	mp_menu.offset_right = 250
 	mp_menu.offset_bottom = 250
+	# Content (e.g. the title on iPhone) can be wider than 500, so grow both ways to stay centered
+	mp_menu.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	mp_menu.grow_vertical = Control.GROW_DIRECTION_BOTH
+	mp_menu.add_theme_constant_override("separation", 0)
 	add_child(mp_menu)
-	
-	# Title - show game type if specified
-	var title = Label.new()
+
+	# Title: "MULTIPLAYER" heading with the game's name in its accent color below
+	mp_menu.add_child(WastelandStyle.title("MULTIPLAYER", 84 if is_mobile else 68))
 	if game_type != "":
-		title.text = game_type + " Multiplayer"
-	else:
-		title.text = "Multiplayer"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		title.add_theme_font_size_override("font_size", 72)
-	else:
-		title.add_theme_font_size_override("font_size", 56)
-	mp_menu.add_child(title)
-	
+		mp_menu.add_child(WastelandStyle.label(WastelandStyle.display_name(game_type), 52 if is_mobile else 44, accent.lightened(0.15), 4, 8))
+	mp_menu.add_child(WastelandStyle.label("— race a rival on the same Wi-Fi —", 30, WastelandStyle.BONE_MUTED, 2))
+
 	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 60)
+	spacer1.custom_minimum_size = Vector2(0, 80)
 	mp_menu.add_child(spacer1)
-	
-	# Host button
-	var host_button = Button.new()
-	host_button.text = "Host " + game_type + " Game"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		host_button.custom_minimum_size = Vector2(500, 120)
-		host_button.add_theme_font_size_override("font_size", 48)
-	else:
-		host_button.custom_minimum_size = Vector2(400, 100)
-		host_button.add_theme_font_size_override("font_size", 36)
+
+	# Host button + hint
+	var host_button := WastelandStyle.make_button("HOST GAME", accent, true, Vector2(500, 120) if is_mobile else Vector2(440, 104), 48 if is_mobile else 40)
 	host_button.pressed.connect(_on_host_game.bind(game_type))
 	mp_menu.add_child(host_button)
-	
+	var host_hint := WastelandStyle.label("Open a lobby and share a QR code", 28, Color(WastelandStyle.BONE, 0.7), 1)
+	host_hint.custom_minimum_size = Vector2(0, 60)
+	host_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mp_menu.add_child(host_hint)
+
 	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 20)
+	spacer2.custom_minimum_size = Vector2(0, 30)
 	mp_menu.add_child(spacer2)
-	
-	# Join button
-	var join_button = Button.new()
-	join_button.text = "Join " + game_type + " Game"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		join_button.custom_minimum_size = Vector2(500, 120)
-		join_button.add_theme_font_size_override("font_size", 48)
-	else:
-		join_button.custom_minimum_size = Vector2(400, 100)
-		join_button.add_theme_font_size_override("font_size", 36)
+
+	# Join button + hint
+	var join_button := WastelandStyle.make_button("JOIN GAME", accent, true, Vector2(500, 120) if is_mobile else Vector2(440, 104), 48 if is_mobile else 40)
 	join_button.pressed.connect(_on_join_game.bind(game_type))
 	mp_menu.add_child(join_button)
-	
+	var join_hint := WastelandStyle.label("Scan the host's QR code or enter their IP", 28, Color(WastelandStyle.BONE, 0.7), 1)
+	join_hint.custom_minimum_size = Vector2(0, 60)
+	join_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mp_menu.add_child(join_hint)
+
 	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 60)
+	spacer3.custom_minimum_size = Vector2(0, 70)
 	mp_menu.add_child(spacer3)
-	
+
 	# Back button
-	var back_button = Button.new()
-	back_button.text = "Back"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		back_button.custom_minimum_size = Vector2(500, 120)
-		back_button.add_theme_font_size_override("font_size", 48)
-	else:
-		back_button.custom_minimum_size = Vector2(400, 80)
-		back_button.add_theme_font_size_override("font_size", 36)
+	var back_button := WastelandStyle.make_button("BACK", accent, false, Vector2(360, 100) if is_mobile else Vector2(320, 88), 40 if is_mobile else 34)
 	back_button.pressed.connect(_on_multiplayer_back)
 	mp_menu.add_child(back_button)
+
+	# Fade in
+	mp_menu.modulate.a = 0.0
+	create_tween().tween_property(mp_menu, "modulate:a", 1.0, 0.3)
 
 func _on_game_carousel_changed():
 	# Get the current index from the carousel
@@ -1293,6 +1157,7 @@ func _show_main_menu() -> void:
 		create_tween().tween_property(_menu_container, "modulate:a", 1.0, 0.35)
 	if _menu_carousel:
 		_set_menu_selection(_menu_carousel.get_current_carousel_index(), false)
+		_update_menu_glow_position()
 	
 	# Show settings button only on main menu (if it exists)
 	var settings_button = get_node_or_null("settings_button")
@@ -2070,10 +1935,13 @@ func _show_multiplayer_lobby(as_host: bool, player_name: String) -> void:
 	if _menu_container:
 		_menu_container.visible = false
 	
-	# Hide menu background
+	# Keep the menu backdrop behind the lobby, with the glow moved up behind the lobby title
 	var menu_bg = get_node_or_null("MenuBackground")
 	if menu_bg:
-		menu_bg.visible = false
+		menu_bg.visible = true
+	if _menu_bg_material:
+		_menu_bg_material.set_shader_parameter("glow_center", Vector2(0.5, 0.12))
+		_menu_bg_material.set_shader_parameter("glow_color", WastelandStyle.accent_for(_current_game_type))
 	
 	# IMPORTANT: Hide all game boards when showing lobby
 	_board.visible = false
