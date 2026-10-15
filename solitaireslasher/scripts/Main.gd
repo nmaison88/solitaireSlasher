@@ -13,7 +13,7 @@ var _menu_container: VBoxContainer
 var _menu_button: Button
 var _player_status_label: Label
 var _ready_button: Button
-var _last_standing_notification: Panel
+var _last_standing_notification: Control
 
 # Sudoku-specific variables
 var _sudoku_game: SudokuGame
@@ -1413,11 +1413,12 @@ func _show_new_game_button():
 		var forfeit_icon = FontAwesome.new()
 		forfeit_icon.icon_name = "flag"
 		forfeit_icon.icon_type = "solid"
-		forfeit_icon.icon_size = 64
+		forfeit_icon.icon_size = 54
 		forfeit_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		forfeit_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		forfeit_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		new_game_button.add_child(forfeit_icon)
+		_add_hud_caption(new_game_button, "FORFEIT")
 	else:
 		# Retry button in single player
 		new_game_button.tooltip_text = "New Game"
@@ -1427,7 +1428,8 @@ func _show_new_game_button():
 		var retry_icon = FontAwesome.new()
 		retry_icon.icon_name = "rotate-right"
 		retry_icon.icon_type = "solid"
-		retry_icon.icon_size = 60
+		retry_icon.icon_size = 56
+		_add_hud_caption(new_game_button, "NEW")
 		retry_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 		retry_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		retry_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1511,8 +1513,13 @@ func _show_new_game_button():
 	# Adjust position for Sudoku to avoid number selector overlap
 	menu_button.position = Vector2(_HUD_MARGIN, top_padding)
 	menu_button.size = Vector2(_HUD_BUTTON_SIZE, _HUD_BUTTON_SIZE)
-	menu_button.tooltip_text = "Main Menu"
-	menu_button.pressed.connect(_on_back_to_menu_pressed)
+	# In a race this leaves the session (with confirmation); otherwise it returns to the menu
+	if is_multiplayer_mode:
+		menu_button.tooltip_text = "Leave Race"
+		menu_button.pressed.connect(_on_leave_game_button_pressed)
+	else:
+		menu_button.tooltip_text = "Main Menu"
+		menu_button.pressed.connect(_on_back_to_menu_pressed)
 	
 	menu_button.add_theme_stylebox_override("normal",   _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
 	menu_button.add_theme_stylebox_override("hover",    _circle_style(Color(0, 0, 0, 0.45), _HUD_BUTTON_SIZE))
@@ -1520,16 +1527,25 @@ func _show_new_game_button():
 	menu_button.add_theme_stylebox_override("disabled", _circle_style(Color(0, 0, 0, 0.25), _HUD_BUTTON_SIZE))
 
 	var menu_icon = FontAwesome.new()
-	menu_icon.icon_name = "chevron-left"
+	menu_icon.icon_name = "door-open" if is_multiplayer_mode else "house"
 	menu_icon.icon_type = "solid"
-	menu_icon.icon_size = 56
+	menu_icon.icon_size = 50
 	menu_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	menu_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu_button.add_child(menu_icon)
 	
+	_add_hud_caption(menu_button, "LEAVE" if is_multiplayer_mode else "MENU")
 	add_child(menu_button)
 	_menu_button = menu_button
+
+func _add_hud_caption(button: Button, text: String) -> void:
+	"""Small label under a round HUD button so its purpose is clear"""
+	var caption := WastelandStyle.label(text, 22, Color(WastelandStyle.BONE, 0.85), 3, 4)
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.position = Vector2(-40, _HUD_BUTTON_SIZE + 6)
+	caption.size = Vector2(_HUD_BUTTON_SIZE + 80, 30)
+	button.add_child(caption)
 
 func _setup_multiplayer_game() -> void:
 	# Stop background music when entering a game
@@ -1726,121 +1742,25 @@ func _on_leave_game_button_pressed() -> void:
 	_show_leave_confirmation_dialog()
 
 func _show_leave_confirmation_dialog() -> void:
-	"""Create and show a confirmation dialog for leaving the game (matching ready screen style)"""
-	# Create notification panel (matching ready screen style)
-	var dialog = Panel.new()
-	dialog.name = "LeaveConfirmationDialog"
-	dialog.set_anchors_preset(Control.PRESET_CENTER)
-	dialog.anchor_left = 0.5
-	dialog.anchor_top = 0.5
-	dialog.anchor_right = 0.5
-	dialog.anchor_bottom = 0.5
-	dialog.offset_left = -250
-	dialog.offset_top = -180
-	dialog.offset_right = 250
-	dialog.offset_bottom = 180
-	dialog.z_index = 1000
-	add_child(dialog)
+	"""Confirm before leaving a multiplayer game"""
+	if get_node_or_null("LeaveConfirmationDialog"):
+		return
+	var leave_accent := WastelandStyle.accent_for("Solitaire")  # Blood red: destructive action
+	var modal := _make_modal("LeaveConfirmationDialog", leave_accent, "LEAVE RACE?",
+		"You'll drop out of this round and return to the main menu.")
+	var dialog: Control = modal[0]
+	var row := _modal_button_row(modal[1])
 
-	# Style panel with professional appearance
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.15, 0.98)
-	style.corner_radius_top_left = 16
-	style.corner_radius_top_right = 16
-	style.corner_radius_bottom_left = 16
-	style.corner_radius_bottom_right = 16
-	style.border_width_left = 3
-	style.border_width_right = 3
-	style.border_width_top = 3
-	style.border_width_bottom = 3
-	style.border_color = Color(0.6, 0.6, 0.6)
-	dialog.add_theme_stylebox_override("panel", style)
-
-	# Create layout matching ready screen
-	var vbox = VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 25)
-	dialog.add_child(vbox)
-
-	# Add padding
-	var top_spacer = Control.new()
-	top_spacer.custom_minimum_size = Vector2(0, 15)
-	vbox.add_child(top_spacer)
-
-	# Title
-	var title = Label.new()
-	title.text = "Leave Game?"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 48)
-	vbox.add_child(title)
-
-	# Message
-	var message = Label.new()
-	message.text = "Are you sure you want to leave?\nYour progress will be lost."
-	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message.add_theme_font_size_override("font_size", 28)
-	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(message)
-
-	# Spacer
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 15)
-	vbox.add_child(spacer)
-
-	# Button container for side-by-side buttons
-	var button_hbox = HBoxContainer.new()
-	button_hbox.add_theme_constant_override("separation", 20)
-	vbox.add_child(button_hbox)
-
-	# Center spacer
-	var left_spacer = Control.new()
-	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button_hbox.add_child(left_spacer)
-
-	# Stay button
-	var stay_button = Button.new()
-	stay_button.text = "Stay"
-	stay_button.custom_minimum_size = Vector2(140, 70)
-	stay_button.add_theme_font_size_override("font_size", 32)
-	var stay_style = StyleBoxFlat.new()
-	stay_style.bg_color = Color(0.3, 0.5, 0.3)
-	stay_style.corner_radius_top_left = 12
-	stay_style.corner_radius_top_right = 12
-	stay_style.corner_radius_bottom_left = 12
-	stay_style.corner_radius_bottom_right = 12
-	stay_button.add_theme_stylebox_override("normal", stay_style)
-	stay_button.add_theme_color_override("font_color", Color.WHITE)
+	var stay_button := WastelandStyle.make_button("STAY", leave_accent, false, Vector2(300, 108), 38)
 	stay_button.pressed.connect(func(): dialog.queue_free())
-	button_hbox.add_child(stay_button)
+	row.add_child(stay_button)
 
-	# Leave button
-	var leave_button = Button.new()
-	leave_button.text = "Leave"
-	leave_button.custom_minimum_size = Vector2(140, 70)
-	leave_button.add_theme_font_size_override("font_size", 32)
-	var leave_style = StyleBoxFlat.new()
-	leave_style.bg_color = Color(0.7, 0.3, 0.3)
-	leave_style.corner_radius_top_left = 12
-	leave_style.corner_radius_top_right = 12
-	leave_style.corner_radius_bottom_left = 12
-	leave_style.corner_radius_bottom_right = 12
-	leave_button.add_theme_stylebox_override("normal", leave_style)
-	leave_button.add_theme_color_override("font_color", Color.WHITE)
+	var leave_button := WastelandStyle.make_button("LEAVE", leave_accent, true, Vector2(300, 108), 38)
 	leave_button.pressed.connect(func():
 		dialog.queue_free()
 		_on_leave_game_pressed()
 	)
-	button_hbox.add_child(leave_button)
-
-	# Right spacer
-	var right_spacer = Control.new()
-	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button_hbox.add_child(right_spacer)
-
-	# Bottom spacer
-	var bottom_spacer = Control.new()
-	bottom_spacer.custom_minimum_size = Vector2(0, 15)
-	vbox.add_child(bottom_spacer)
+	row.add_child(leave_button)
 
 func _on_back_to_menu_pressed() -> void:
 	# Clean up game state
@@ -2264,59 +2184,22 @@ func _on_multiplayer_spider_card_moved() -> void:
 	MultiplayerGameManager.check_player_status(_spider_board._game)
 
 func _setup_multiplayer_ui() -> void:
-	"""Setup UI elements specific to multiplayer mode"""
-	# Player status label (top center)
-	_player_status_label = Label.new()
-	_player_status_label.name = "PlayerStatusLabel"
-	_player_status_label.position = Vector2(400, 10)
-	_player_status_label.size = Vector2(200, 30)
-	_player_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_player_status_label.text = "Race in progress..."
-	add_child(_player_status_label)
-	
-	# Leave game button (top right, next to menu button) - FontAwesome times-circle icon
-	var leave_button = Button.new()
-	leave_button.name = "leave_game_button"
-	var bottom_padding = 0
-	var left_padding = 0
-	if DisplayServer.get_name() == "iOS":
-		var safe_area = DisplayServer.get_display_safe_area()
-		bottom_padding = safe_area.size.y - get_viewport().get_visible_rect().size.y
-		left_padding = safe_area.position.x
-	# Position leave button to the right of the menu button (top area)
-	var top_padding = 10
+	"""Race status in the center of the top HUD row (leaving is the LEAVE button on the left)"""
+	var top_padding := 10.0
 	if OS.has_feature("mobile"):
-		var safe_area = DisplayServer.get_display_safe_area()
-		top_padding = max(10, safe_area.position.y)
-	
-	# Position to the right of the menu button (which is at 10, top_padding with size 100x100)
-	var leave_x = 120 + left_padding  # Right of menu button (10 + 100 + 10 spacing)
-	var leave_y = top_padding  # Same vertical level as menu button
-	
-	leave_button.position = Vector2(leave_x, leave_y)
-	leave_button.size = Vector2(100, 100)
-	leave_button.tooltip_text = "Leave Game"
-	leave_button.pressed.connect(_on_leave_game_button_pressed)
-	
-	# Make button background transparent
-	var leave_transparent_style = StyleBoxFlat.new()
-	leave_transparent_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent
-	leave_transparent_style.draw_center = false  # Don't draw background
-	leave_button.add_theme_stylebox_override("normal", leave_transparent_style)
-	leave_button.add_theme_stylebox_override("hover", leave_transparent_style)
-	leave_button.add_theme_stylebox_override("pressed", leave_transparent_style)
-	leave_button.add_theme_stylebox_override("disabled", leave_transparent_style)
-	
-	# Add FontAwesome circle-xmark icon (FontAwesome 6 naming)
-	var leave_icon = FontAwesome.new()
-	leave_icon.icon_name = "circle-xmark"
-	leave_icon.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))  # Red color
-	leave_icon.icon_size = 64
-	leave_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	leave_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	leave_button.add_child(leave_icon)
-	
-	add_child(leave_button)
+		top_padding = maxf(10.0, DisplayServer.get_display_safe_area().position.y)
+	_player_status_label = WastelandStyle.label("Race in progress...", 30, Color(WastelandStyle.BONE, 0.85), 2, 6)
+	_player_status_label.name = "PlayerStatusLabel"
+	_player_status_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	var side_clearance := _HUD_MARGIN + _HUD_BUTTON_SIZE + 16.0
+	_player_status_label.offset_left = side_clearance
+	_player_status_label.offset_right = -side_clearance
+	_player_status_label.offset_top = top_padding
+	_player_status_label.offset_bottom = top_padding + _HUD_BUTTON_SIZE
+	_player_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_player_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_player_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_player_status_label)
 
 func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float) -> void:
 	"""Handle race completion - disable gameplay and show ready screen"""
@@ -2345,67 +2228,24 @@ func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float
 
 func _show_ready_notification(winner_id: int) -> void:
 	"""Show notification with ready button after race ends"""
-	# Remove old notification if exists
-	if _last_standing_notification:
+	if is_instance_valid(_last_standing_notification):
 		_last_standing_notification.queue_free()
-	
-	# Create notification panel (larger for mobile)
-	_last_standing_notification = Panel.new()
-	_last_standing_notification.name = "RaceEndedNotification"
-	_last_standing_notification.set_anchors_preset(Control.PRESET_CENTER)
-	_last_standing_notification.anchor_left = 0.5
-	_last_standing_notification.anchor_top = 0.5
-	_last_standing_notification.anchor_right = 0.5
-	_last_standing_notification.anchor_bottom = 0.5
-	_last_standing_notification.offset_left = -300
-	_last_standing_notification.offset_top = -200
-	_last_standing_notification.offset_right = 300
-	_last_standing_notification.offset_bottom = 200
-	_last_standing_notification.z_index = 1000  # Ensure it appears above board/cards
-	add_child(_last_standing_notification)
-	
-	var vbox = VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 30)
-	_last_standing_notification.add_child(vbox)
-	
-	var title = Label.new()
+
 	var local_player_id = MultiplayerGameManager.get_local_player_id()
-	
+	var title_text := "RACE OVER"
+	var message_text := "Another player finished first."
 	if winner_id == -1:
-		# No winner - all players jammed
-		title.text = "Round Ended"
+		title_text = "ROUND OVER"
+		message_text = "Everyone is out. Ready up for the next round!"
 	elif winner_id == local_player_id:
-		title.text = "You Won!"
-	else:
-		title.text = "Race Ended"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
-	vbox.add_child(title)
-	
-	var message = Label.new()
-	if winner_id == -1:
-		message.text = "All players are jammed. Ready up for next round!"
-	elif winner_id == local_player_id:
-		message.text = "Congratulations! You completed the game first!"
-	else:
-		message.text = "Another player has won the race."
-	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message.add_theme_font_size_override("font_size", 32)
-	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(message)
-	
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 20)
-	vbox.add_child(spacer)
-	
-	# Ready button (larger for mobile)
-	_ready_button = Button.new()
-	_ready_button.text = "Ready for Next Round"
-	_ready_button.custom_minimum_size = Vector2(400, 80)
-	_ready_button.add_theme_font_size_override("font_size", 36)
+		title_text = "YOU WON!"
+		message_text = "You finished first. Ready up for a rematch!"
+	var modal := _make_modal("RaceEndedNotification", WastelandStyle.accent_for(_current_game_type), title_text, message_text)
+	_last_standing_notification = modal[0]
+
+	_ready_button = WastelandStyle.make_button("READY FOR NEXT ROUND", WastelandStyle.accent_for(_current_game_type), true, Vector2(560, 112), 38)
 	_ready_button.pressed.connect(_on_ready_pressed)
-	vbox.add_child(_ready_button)
+	modal[1].add_child(_ready_button)
 
 func _on_player_status_changed(player_id: int, status: String) -> void:
 	"""Handle player status changes"""
@@ -2417,48 +2257,22 @@ func _on_last_player_standing(player_id: int) -> void:
 	"""Show notification when player is last one standing"""
 	if is_instance_valid(_last_standing_notification):
 		return  # Already showing
-	# Create notification panel (larger for mobile)
-	_last_standing_notification = Panel.new()
-	_last_standing_notification.name = "LastStandingNotification"
-	_last_standing_notification.set_anchors_preset(Control.PRESET_CENTER)
-	_last_standing_notification.anchor_left = 0.5
-	_last_standing_notification.anchor_top = 0.5
-	_last_standing_notification.anchor_right = 0.5
-	_last_standing_notification.anchor_bottom = 0.5
-	_last_standing_notification.offset_left = -300
-	_last_standing_notification.offset_top = -200
-	_last_standing_notification.offset_right = 300
-	_last_standing_notification.offset_bottom = 200
-	_last_standing_notification.z_index = 1000  # Ensure it appears above board/cards
-	add_child(_last_standing_notification)
-	
-	var vbox = VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 30)
-	_last_standing_notification.add_child(vbox)
-	
-	var title = Label.new()
-	title.text = "Last Player Standing!"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 56)
-	vbox.add_child(title)
-	
-	var message = Label.new()
-	message.text = "All other players are jammed or finished.\nYou can continue playing or start next round."
-	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message.add_theme_font_size_override("font_size", 32)
-	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(message)
-	
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 30)
-	vbox.add_child(spacer)
-	
-	# End the round now and ready up (readying alone left the others with no ready screen,
-	# because the round only ends once nobody is still playing)
-	var end_round_button := WastelandStyle.make_button("END ROUND & READY", WastelandStyle.accent_for(_current_game_type), true, Vector2(480, 104), 34)
+	var accent := WastelandStyle.accent_for(_current_game_type)
+	var modal := _make_modal("LastStandingNotification", accent, "LAST ONE STANDING",
+		"Everyone else is out. Keep playing, or end the round now.")
+	_last_standing_notification = modal[0]
+	var row := _modal_button_row(modal[1])
+
+	var keep_button := WastelandStyle.make_button("KEEP PLAYING", accent, false, Vector2(310, 108), 32)
+	keep_button.pressed.connect(func():
+		if is_instance_valid(_last_standing_notification):
+			_last_standing_notification.queue_free())
+	row.add_child(keep_button)
+
+	# Ending the round (not just readying) is what gives everyone else a ready screen
+	var end_round_button := WastelandStyle.make_button("END ROUND & READY", accent, true, Vector2(410, 108), 32)
 	end_round_button.pressed.connect(_on_last_standing_end_round_pressed)
-	vbox.add_child(end_round_button)
+	row.add_child(end_round_button)
 
 func _on_last_standing_end_round_pressed() -> void:
 	"""Last player standing chose to end the round: step out of the race (which ends it for
@@ -2476,7 +2290,7 @@ func _on_ready_pressed() -> void:
 	MultiplayerGameManager.set_player_ready(true)
 	if _ready_button:
 		_ready_button.disabled = true
-		_ready_button.text = "Waiting for others..."
+		_ready_button.text = "WAITING FOR OTHERS..."
 	
 	if _player_status_label:
 		_player_status_label.text = "Waiting for all players to be ready..."
@@ -2599,7 +2413,7 @@ func _update_player_status_display() -> void:
 			MultiplayerGameManager.PlayerStatus.COMPLETED:
 				completed += 1
 	
-	_player_status_label.text = "Playing: %d | Jammed: %d | Completed: %d" % [playing, jammed, completed]
+	_player_status_label.text = "%d PLAYING  ·  %d OUT  ·  %d DONE" % [playing, jammed, completed]
 
 func _on_settings_button_pressed() -> void:
 	"""Show the settings page over the menu backdrop"""
@@ -2946,85 +2760,87 @@ func _show_continue_game_dialog(saved_games: Array) -> void:
 	new_game_btn.offset_bottom = 35
 	dialog.add_child(new_game_btn)
 
+func _make_modal(node_name: String, accent: Color, title_text: String, message_text: String) -> Array:
+	"""Dimmed full-screen overlay with a centered styled card. Returns [overlay, content_box];
+	free the overlay to close it."""
+	var overlay = Control.new()
+	overlay.name = node_name
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.z_index = 3000  # Above boards (z 1000) and their cards, under the 4096 cap
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var dim = ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.65)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(dim)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(center)
+
+	var card = WastelandStyle.card(accent)
+	var card_style := (card.get_theme_stylebox("panel") as StyleBoxFlat).duplicate() as StyleBoxFlat
+	card_style.bg_color = Color(0.07, 0.06, 0.05, 0.97)
+	card_style.border_color = Color(accent, 0.6)
+	card_style.set_content_margin_all(44)
+	card_style.shadow_color = Color(accent, 0.25)
+	card_style.shadow_size = 24
+	card.add_theme_stylebox_override("panel", card_style)
+	card.custom_minimum_size = Vector2(minf(get_viewport_rect().size.x - 80.0, 820.0), 0)
+	center.add_child(card)
+
+	var box = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 26)
+	card.add_child(box)
+
+	var title := WastelandStyle.title(title_text, 64)
+	title.add_theme_color_override("font_color", accent.lightened(0.15))
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(title)
+	if message_text != "":
+		var message := WastelandStyle.label(message_text, 32, Color(WastelandStyle.BONE, 0.8), 1)
+		message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(message)
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	box.add_child(spacer)
+
+	add_child(overlay)
+	overlay.modulate.a = 0.0
+	create_tween().tween_property(overlay, "modulate:a", 1.0, 0.2)
+	return [overlay, box]
+
+func _modal_button_row(box: VBoxContainer) -> HBoxContainer:
+	var row = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 20)
+	box.add_child(row)
+	return row
+
 func _show_continue_game_dialog_for_type(game_type: String) -> void:
 	"""Show dialog offering to continue or start new game for a specific type"""
-	# Create notification panel matching ready notification style
-	var dialog = Panel.new()
-	dialog.name = "ContinueGameDialog"
-	dialog.set_anchors_preset(Control.PRESET_CENTER)
-	dialog.anchor_left = 0.5
-	dialog.anchor_top = 0.5
-	dialog.anchor_right = 0.5
-	dialog.anchor_bottom = 0.5
-	dialog.offset_left = -350
-	dialog.offset_top = -220
-	dialog.offset_right = 350
-	dialog.offset_bottom = 220
-	dialog.z_index = 1000
-	add_child(dialog)
+	var accent := WastelandStyle.accent_for(game_type)
+	var modal := _make_modal("ContinueGameDialog", accent, "SAVED GAME",
+		"You have a %s game in progress." % WastelandStyle.display_name(game_type))
+	var dialog: Control = modal[0]
+	var row := _modal_button_row(modal[1])
 
-	var vbox = VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 25)
-	dialog.add_child(vbox)
-
-	# Title
-	var title = Label.new()
-	title.text = "Saved Game Found"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 48)
-	vbox.add_child(title)
-
-	# Message
-	var message = Label.new()
-	message.text = "You have a saved %s game in progress.\nWhat would you like to do?" % game_type
-	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message.add_theme_font_size_override("font_size", 28)
-	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(message)
-
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 15)
-	vbox.add_child(spacer)
-
-	# Continue button - positioned on left side
-	var continue_btn = Button.new()
-	continue_btn.text = "Continue"
-	continue_btn.custom_minimum_size = Vector2(160, 70)
-	continue_btn.add_theme_font_size_override("font_size", 28)
+	var continue_btn := WastelandStyle.make_button("CONTINUE", accent, true, Vector2(320, 108), 38)
 	continue_btn.pressed.connect(func():
 		_handle_continue_game(game_type)
 		dialog.queue_free()
 	)
-	continue_btn.anchor_left = 0.25
-	continue_btn.anchor_right = 0.25
-	continue_btn.anchor_top = 0.75
-	continue_btn.anchor_bottom = 0.75
-	continue_btn.offset_left = -80
-	continue_btn.offset_right = 80
-	continue_btn.offset_top = -35
-	continue_btn.offset_bottom = 35
-	dialog.add_child(continue_btn)
+	row.add_child(continue_btn)
 
-	# New Game button - positioned on right side
-	var new_game_btn = Button.new()
-	new_game_btn.text = "New Game"
-	new_game_btn.custom_minimum_size = Vector2(160, 70)
-	new_game_btn.add_theme_font_size_override("font_size", 28)
+	var new_game_btn := WastelandStyle.make_button("NEW GAME", accent, false, Vector2(320, 108), 38)
 	new_game_btn.pressed.connect(func():
 		PlayerData.clear_saved_game(game_type)
 		_start_new_game_after_dialog(game_type)
 		dialog.queue_free()
 	)
-	new_game_btn.anchor_left = 0.75
-	new_game_btn.anchor_right = 0.75
-	new_game_btn.anchor_top = 0.75
-	new_game_btn.anchor_bottom = 0.75
-	new_game_btn.offset_left = -80
-	new_game_btn.offset_right = 80
-	new_game_btn.offset_top = -35
-	new_game_btn.offset_bottom = 35
-	dialog.add_child(new_game_btn)
+	row.add_child(new_game_btn)
 
 func _start_new_game_after_dialog(game_type: String) -> void:
 	"""Start a new game after the continue/new game dialog is handled"""
