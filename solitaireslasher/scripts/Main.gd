@@ -1717,6 +1717,11 @@ func _on_player_disconnected(player_id: int) -> void:
 		print("Player ", player_id, " dropped out of the game")
 		# Update player status display if visible
 		_update_player_status_display()
+	# If we're waiting on the round-over screen and nobody else is left, switch it to the
+	# "everyone left" version so we aren't stuck waiting for players who are gone
+	if is_instance_valid(_last_standing_notification) and _last_standing_notification.name == "RaceEndedNotification" \
+			and _other_players_remaining() == 0:
+		_show_ready_notification(-1)
 	# Note: Clients will get server_disconnected if host leaves, not this signal
 
 func _on_leave_game_pressed() -> void:
@@ -2224,12 +2229,27 @@ func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float
 	_show_ready_notification(winner_id)
 	if _ready_when_round_ends:
 		_ready_when_round_ends = false
-		_on_ready_pressed()
+		if is_instance_valid(_ready_button):  # Not when everyone else has left
+			_on_ready_pressed()
 
 func _show_ready_notification(winner_id: int) -> void:
 	"""Show notification with ready button after race ends"""
 	if is_instance_valid(_last_standing_notification):
+		_last_standing_notification.name = "ClosingNotification"  # Free the name for the replacement
 		_last_standing_notification.queue_free()
+
+	var accent := WastelandStyle.accent_for(_current_game_type)
+	_ready_button = null
+
+	# Nobody left to play with: a ready button could never complete, so offer the way out instead
+	if _other_players_remaining() == 0:
+		var alone := _make_modal("RaceEndedNotification", accent, "EVERYONE LEFT",
+			"The other players have left the race.")
+		_last_standing_notification = alone[0]
+		var menu_button := WastelandStyle.make_button("MAIN MENU", accent, true, Vector2(420, 112), 38)
+		menu_button.pressed.connect(_on_leave_game_pressed)
+		alone[1].add_child(menu_button)
+		return
 
 	var local_player_id = MultiplayerGameManager.get_local_player_id()
 	var title_text := "RACE OVER"
@@ -2240,12 +2260,24 @@ func _show_ready_notification(winner_id: int) -> void:
 	elif winner_id == local_player_id:
 		title_text = "YOU WON!"
 		message_text = "You finished first. Ready up for a rematch!"
-	var modal := _make_modal("RaceEndedNotification", WastelandStyle.accent_for(_current_game_type), title_text, message_text)
+	var modal := _make_modal("RaceEndedNotification", accent, title_text, message_text)
 	_last_standing_notification = modal[0]
+	var row := _modal_button_row(modal[1])
 
-	_ready_button = WastelandStyle.make_button("READY FOR NEXT ROUND", WastelandStyle.accent_for(_current_game_type), true, Vector2(560, 112), 38)
+	_ready_button = WastelandStyle.make_button("READY UP", accent, true, Vector2(420, 112), 38)
 	_ready_button.pressed.connect(_on_ready_pressed)
-	modal[1].add_child(_ready_button)
+	row.add_child(_ready_button)
+
+	# Always a way out, even after readying up
+	var leave_button := WastelandStyle.make_button("LEAVE", accent, false, Vector2(240, 112), 38)
+	leave_button.pressed.connect(_on_leave_game_pressed)
+	row.add_child(leave_button)
+
+func _other_players_remaining() -> int:
+	"""How many other players are still connected to this session"""
+	if not NetworkManager:
+		return 0
+	return maxi(0, NetworkManager.get_players().size() - 1)
 
 func _on_player_status_changed(player_id: int, status: String) -> void:
 	"""Handle player status changes"""
@@ -2288,9 +2320,9 @@ func _on_last_standing_end_round_pressed() -> void:
 func _on_ready_pressed() -> void:
 	"""Handle ready button press"""
 	MultiplayerGameManager.set_player_ready(true)
-	if _ready_button:
+	if is_instance_valid(_ready_button):
 		_ready_button.disabled = true
-		_ready_button.text = "WAITING FOR OTHERS..."
+		_ready_button.text = "WAITING..."
 	
 	if _player_status_label:
 		_player_status_label.text = "Waiting for all players to be ready..."
