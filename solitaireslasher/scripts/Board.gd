@@ -203,7 +203,7 @@ func _show_win_screen() -> void:
 	box.add_child(msg_label)
 
 	var seconds = int(game.get_game_time()) if game else 0
-	var stats = "%d MOVES  ·  %d:%02d" % [game.get_moves_count() if game else 0, seconds / 60, seconds % 60]
+	var stats = WastelandStyle.stats_text(game.get_moves_count() if game else 0, seconds)
 	box.add_child(WastelandStyle.label(stats, 34, WastelandStyle.BONE_MUTED, 3))
 
 	var spacer = Control.new()

@@ -9,6 +9,8 @@ const FACE_DOWN_GAP_Y = 22.0
 const FACE_UP_GAP_Y   = 55.0
 const TABLEAU_TOP_Y   = 250.0   # Header gap: increased to give more space between stock and tableau
 
+const WastelandStyle = preload("res://scripts/WastelandStyle.gd")
+
 const WIN_MESSAGES = [
 	"YOU WIN!", "NICE JOB!", "MAN YOU'RE GOOD!",
 	"GENIUS ALERT!", "ABSOLUTELY NAILED IT!",
@@ -394,12 +396,9 @@ func _draw_column_slot(pos: Vector2) -> void:
 	panel.size = CARD_SIZE
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
-	style.border_width_left   = 2
-	style.border_width_right  = 2
-	style.border_width_top    = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(1.0, 1.0, 1.0, 0.22)
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.32)
+	style.set_border_width_all(2)
+	style.border_color = Color(WastelandStyle.BONE, 0.22)
 	style.corner_radius_top_left     = 10
 	style.corner_radius_top_right    = 10
 	style.corner_radius_bottom_left  = 10
@@ -476,7 +475,8 @@ func _draw_stock_deck() -> void:
 	const STACK_OFFSET_X = 18.0  # Spread out 3 visible stock cards horizontally
 
 	for i in range(visible_cards):
-		var offset = Vector2(i * STACK_OFFSET_X, i * STACK_OFFSET_Y)
+		# Fan leftward so the top card sits on the last column and the pile stays on screen
+		var offset = Vector2((i - (visible_cards - 1)) * STACK_OFFSET_X, i * STACK_OFFSET_Y)
 		var is_top = (i == visible_cards - 1)
 
 		var cv: CardView = preload("res://scenes/CardView.tscn").instantiate()
@@ -506,13 +506,14 @@ func _draw_stock_deck() -> void:
 # ── Undo / Redo buttons ────────────────────────────────────────────────────────
 
 func _circle_style(color: Color, radius: float) -> StyleBoxFlat:
+	"""Round metal button; darker bg alphas read as pressed"""
 	var s = StyleBoxFlat.new()
-	s.bg_color = color
-	var r = radius / 2.0
-	s.corner_radius_top_left     = r
-	s.corner_radius_top_right    = r
-	s.corner_radius_bottom_left  = r
-	s.corner_radius_bottom_right = r
+	s.bg_color = WastelandStyle.METAL_DARK if color.a > 0.6 else Color(WastelandStyle.METAL, 0.85)
+	s.set_border_width_all(3)
+	s.border_color = Color(WastelandStyle.BONE, 0.35)
+	s.set_corner_radius_all(int(radius / 2.0))
+	s.shadow_color = Color(0, 0, 0, 0.4)
+	s.shadow_size = 6
 	return s
 
 func _create_undo_redo_buttons() -> void:
@@ -546,14 +547,12 @@ func _create_undo_redo_buttons() -> void:
 	var undo_icon = FontAwesome.new()
 	undo_icon.icon_name = "rotate-left"
 	undo_icon.icon_type = "solid"
-	undo_icon.icon_size = 52
+	undo_icon.icon_size = 48
+	undo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	undo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_icon)
 
-	var undo_lbl = Label.new()
-	undo_lbl.text = "Undo"
-	undo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	undo_lbl.add_theme_font_size_override("font_size", 17)
+	var undo_lbl = WastelandStyle.label("UNDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
 	undo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	undo_vbox.add_child(undo_lbl)
 
@@ -604,14 +603,12 @@ func _create_undo_redo_buttons() -> void:
 	var redo_icon = FontAwesome.new()
 	redo_icon.icon_name = "rotate-right"
 	redo_icon.icon_type = "solid"
-	redo_icon.icon_size = 52
+	redo_icon.icon_size = 48
+	redo_icon.add_theme_color_override("font_color", WastelandStyle.BONE)
 	redo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	redo_vbox.add_child(redo_icon)
 
-	var redo_lbl = Label.new()
-	redo_lbl.text = "Redo"
-	redo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	redo_lbl.add_theme_font_size_override("font_size", 17)
+	var redo_lbl = WastelandStyle.label("REDO", 18, Color(WastelandStyle.BONE, 0.8), 2)
 	redo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	redo_vbox.add_child(redo_lbl)
 
@@ -1159,42 +1156,49 @@ func _show_win_screen() -> void:
 	if is_instance_valid(_win_overlay):
 		return
 
+	var accent = WastelandStyle.accent_for("Spider")
 	var overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 10000
+	overlay.z_index = 3000  # Stay under the 4096 z cap
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_win_overlay = overlay
 	add_child(overlay)
 
 	var bg = ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.0, 0.05, 0.15, 0.88)
+	bg.color = Color(0.05, 0.04, 0.02, 0.86)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.add_child(bg)
 
-	var msg_label = Label.new()
-	msg_label.text = WIN_MESSAGES[randi() % WIN_MESSAGES.size()]
-	msg_label.add_theme_font_size_override("font_size", 52)
-	msg_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
-	msg_label.set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER)
-	overlay.add_child(msg_label)
+	var box = VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.add_theme_constant_override("separation", 24)
+	overlay.add_child(box)
 
-	var play_btn = Button.new()
-	play_btn.text = "Play Again"
-	play_btn.add_theme_font_size_override("font_size", 28)
-	play_btn.custom_minimum_size = Vector2(240, 70)
+	var msg_label = WastelandStyle.title(WIN_MESSAGES[randi() % WIN_MESSAGES.size()], 72)
+	msg_label.add_theme_color_override("font_color", accent.lightened(0.2))
+	box.add_child(msg_label)
+
+	var seconds = int(_game.get_game_time()) if _game else 0
+	var stats = WastelandStyle.stats_text(_game.get_moves_count() if _game else 0, seconds)
+	box.add_child(WastelandStyle.label(stats, 34, WastelandStyle.BONE_MUTED, 3))
+
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 30)
+	box.add_child(spacer)
+
+	var play_btn = WastelandStyle.make_button("PLAY AGAIN", accent, true, Vector2(440, 112), 44)
 	play_btn.pressed.connect(_restart_game)
-	overlay.add_child(play_btn)
-
-	await get_tree().process_frame
-	msg_label.position = Vector2((size.x - msg_label.size.x) * 0.5, size.y * 0.35)
-	msg_label.pivot_offset = msg_label.size * 0.5
-	play_btn.position = Vector2((size.x - 240.0) * 0.5, size.y * 0.55)
+	box.add_child(play_btn)
 
 	overlay.modulate.a = 0.0
 	var fade = create_tween()
 	fade.tween_property(overlay, "modulate:a", 1.0, 0.4)
 
+	await get_tree().process_frame
+	msg_label.pivot_offset = msg_label.size * 0.5
 	msg_label.scale = Vector2(0.3, 0.3)
 	var bounce = msg_label.create_tween()
 	bounce.set_ease(Tween.EASE_OUT)

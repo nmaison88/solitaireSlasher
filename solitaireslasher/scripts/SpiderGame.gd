@@ -14,6 +14,7 @@ var stock: Array = []          # Array[SolitaireCard]
 var sequences_completed: int = 0
 var _difficulty: String = "Easy"
 var _start_time: float = 0.0  # Time when game started (in seconds)
+var _moves_count: int = 0  # Moves + deals this game (shown in the HUD and win screen)
 var _seed: int = -1  # Seed used for RNG (for mirror mode)
 
 var _history: Array = []    # stack of state snapshots for undo
@@ -75,6 +76,7 @@ func new_game(difficulty_string: String = "Easy", seed: int = -1) -> void:
 	_history.clear()
 	_redo_stack.clear()
 	_start_time = Time.get_ticks_msec() / 1000.0  # Start timer
+	_moves_count = 0
 
 	# Reset tableaus and stock
 	tableaus.clear()
@@ -208,6 +210,7 @@ func move_cards(from_col: int, card_idx: int, to_col: int) -> bool:
 		return false
 
 	_history.append(_save_state())
+	_moves_count += 1
 	_redo_stack.clear()
 
 	# Slice the cards to move
@@ -238,6 +241,7 @@ func deal_from_stock() -> bool:
 		return false
 
 	_history.append(_save_state())
+	_moves_count += 1
 	_redo_stack.clear()
 
 	# Deal one card to each column that has cards, filling empty columns left-to-right
@@ -382,6 +386,7 @@ func new_game_mirror(mirror_data: Dictionary) -> void:
 	_history.clear()
 	_redo_stack.clear()
 	_start_time = Time.get_ticks_msec() / 1000.0
+	_moves_count = 0
 
 	# Reset tableaus and stock
 	tableaus.clear()
@@ -402,6 +407,9 @@ func new_game_mirror(mirror_data: Dictionary) -> void:
 	# Use common deal logic
 	_deal_from_deck(deck)
 
+
+func get_moves_count() -> int:
+	return _moves_count
 
 func get_game_time() -> float:
 	"""Get elapsed time in seconds since game start"""
@@ -434,13 +442,16 @@ func get_save_data() -> Dictionary:
 		"tableaus": tableaus_data,
 		"stock": stock_data,
 		"sequences_completed": sequences_completed,
-		"difficulty": _difficulty
+		"difficulty": _difficulty,
+		"moves": _moves_count
 	}
 
 func restore_from_save(save_data: Dictionary) -> void:
 	"""Restore game state from saved data"""
 	if save_data.is_empty():
 		return
+
+	_moves_count = save_data.get("moves", 0)
 
 	# Reconstruct tableaus
 	tableaus.clear()

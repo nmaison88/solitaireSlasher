@@ -175,12 +175,16 @@ func _create_hud_stats_label() -> void:
 func _process(_delta: float) -> void:
 	if not _hud_stats_label:
 		return
-	var show_stats: bool = _board.visible and _current_game_type == "Solitaire" and is_instance_valid(_game) \
-		and not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer)
-	_hud_stats_label.visible = show_stats
-	if show_stats:
-		var seconds := int(_game.get_game_time())
-		_hud_stats_label.text = "%d MOVES  ·  %d:%02d" % [_game.get_moves_count(), seconds / 60, seconds % 60]
+	var stats_game: Object = null
+	if not (MultiplayerGameManager and MultiplayerGameManager.is_multiplayer):
+		if _current_game_type == "Solitaire" and _board.visible and is_instance_valid(_game):
+			stats_game = _game
+		elif _current_game_type == "Spider" and _spider_board.visible and is_instance_valid(_spider_board._game):
+			stats_game = _spider_board._game
+	_hud_stats_label.visible = stats_game != null
+	if stats_game:
+		var seconds := int(stats_game.get_game_time())
+		_hud_stats_label.text = WastelandStyle.stats_text(stats_game.get_moves_count(), seconds)
 
 func _setup_main_menu() -> void:
 	var viewport_size := get_viewport_rect().size
@@ -787,25 +791,25 @@ func _update_game_background(game_type: String) -> void:
 	
 	var current_theme = PlayerData.get_theme()
 	
-	# Solitaire gets the wasteland atmosphere (charcoal table, red glow in the empty lower area)
+	# Card games get the wasteland atmosphere: tinted table with the game's accent glowing
+	# in the empty lower area. Card backs match the game (oxblood Solitaire, rust Spider).
 	game_bg.material = null
-	if game_type == "Solitaire":
-		if current_theme == "light":
-			game_bg.color = Color(0.0, 0.5, 0.2)  # Traditional green
+	CardView.back_color = CardView.BACK_RUST if game_type == "Spider" else CardView.BACK_OXBLOOD
+	if game_type == "Solitaire" or game_type == "Spider":
+		if game_type == "Solitaire":
+			game_bg.color = Color(0.0, 0.5, 0.2) if current_theme == "light" else Color(0.14, 0.1, 0.09)  # Green felt / warm charcoal
 		else:
-			game_bg.color = Color(0.14, 0.1, 0.09)  # Warm charcoal
+			game_bg.color = Color(0.0, 0.28, 0.12) if current_theme == "light" else Color(0.11, 0.11, 0.08)  # Green felt / olive charcoal
 		if _game_bg_material == null:
 			_game_bg_material = ShaderMaterial.new()
 			_game_bg_material.shader = load("res://shaders/menu_wasteland.gdshader")
 			_game_bg_material.set_shader_parameter("glow_center", Vector2(0.5, 1.0))
 			_game_bg_material.set_shader_parameter("glow_radius", 0.4)
 			_game_bg_material.set_shader_parameter("glow_strength", 0.3)
-			_game_bg_material.set_shader_parameter("glow_color", WastelandStyle.accent_for("Solitaire"))
+		_game_bg_material.set_shader_parameter("glow_color", WastelandStyle.accent_for(game_type))
 		var bg_size: Vector2 = game_bg.size
 		_game_bg_material.set_shader_parameter("aspect", bg_size.x / maxf(bg_size.y, 1.0))
 		game_bg.material = _game_bg_material
-	elif game_type == "Spider":
-		game_bg.color = Color(0.0, 0.28, 0.12) if current_theme == "light" else Color(0.02, 0.12, 0.05)
 	else:  # Sudoku
 		# Sky blue for light mode, original dark for dark mode
 		if current_theme == "light":
@@ -2052,6 +2056,7 @@ func _on_multiplayer_game_started(game_type: String, difficulty: String) -> void
 	
 	# Hide main menu and start multiplayer game
 	_hide_main_menu()
+	_update_game_background(game_type)
 	
 	# Set multiplayer flag before starting game
 	MultiplayerGameManager.is_multiplayer = true

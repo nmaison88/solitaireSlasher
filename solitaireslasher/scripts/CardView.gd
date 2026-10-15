@@ -11,6 +11,9 @@ signal card_drag_moved(card_view: CardView, new_position: Vector2)
 
 static var _corner_shader: Shader = null
 const _BACK_SHADER = preload("res://shaders/card_back_slasher.gdshader")
+const BACK_OXBLOOD := Color(0.34, 0.05, 0.04)
+const BACK_RUST := Color(0.4, 0.17, 0.05)
+static var back_color: Color = BACK_OXBLOOD  # Set per game (Main._update_game_background)
 
 var card: SolitaireCard
 var is_dragging: bool = false
@@ -61,6 +64,7 @@ void fragment() {
 	_texture_rect.material = mat
 	var mat2 = ShaderMaterial.new()
 	mat2.shader = _BACK_SHADER
+	mat2.set_shader_parameter("base_color", back_color)
 	_card_back.material = mat2
 	_add_shadow()
 

@@ -27,6 +27,10 @@ static func accent_for(game_type: String) -> Color:
 static func display_name(game_type: String) -> String:
 	return DISPLAY_NAMES.get(game_type, game_type.to_upper())
 
+static func stats_text(moves: int, seconds: int) -> String:
+	"""e.g. "12 MOVES  ·  3:05" """
+	return "%d MOVE%s  ·  %d:%02d" % [moves, "" if moves == 1 else "S", seconds / 60, seconds % 60]
+
 static func font(letter_spacing: int = 0) -> FontVariation:
 	var base := SystemFont.new()
 	base.font_names = PackedStringArray(["Avenir Next Condensed", "Impact", "Arial Narrow", "sans-serif"])
