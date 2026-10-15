@@ -6,6 +6,8 @@ var role := ""
 var game := "Solitaire"
 var num_clients := 1  # Host: how many clients to wait for
 var idx := 1  # Client: 1-based index; staggers join time and when it drops out
+var scenario := ""  # "", "host_last" (client forfeits, host ends round), "client_last" (host forfeits, client ends round)
+var _last_standing_seen := false
 var main: Node
 var _last_move := []
 var _race_ended_count := 0
@@ -25,6 +27,8 @@ func _ready() -> void:
 			num_clients = int(a.split("=")[1])
 		elif a.begins_with("--idx="):
 			idx = int(a.split("=")[1])
+		elif a.begins_with("--scenario="):
+			scenario = a.split("=")[1]
 	if role == "client":
 		role = "client%d" % idx
 	MultiplayerGameManager.player_status_changed.connect(func(pid, st):
@@ -32,7 +36,9 @@ func _ready() -> void:
 	MultiplayerGameManager.race_ended.connect(func(w, _n, _t):
 		_race_ended_count += 1
 		log_line("race_ended winner=%s" % w))
-	MultiplayerGameManager.last_player_standing.connect(func(pid): log_line("last_player_standing %s" % pid))
+	MultiplayerGameManager.last_player_standing.connect(func(pid):
+		_last_standing_seen = true
+		log_line("last_player_standing %s" % pid))
 	MultiplayerGameManager.all_players_ready.connect(func():
 		_all_ready_seen = true
 		log_line("all_players_ready"))
@@ -114,6 +120,41 @@ func run() -> void:
 	var ready1 = await wait_until(deal_ready, 30.0)
 	await get_tree().create_timer(2.0).timeout
 	log_line("round1 ready=%s players=%d SIG=%s" % [ready1, NetworkManager.get_players().size(), signature() if ready1 else "-"])
+	if scenario != "":
+		await last_standing_scenario()
+	else:
+		await default_dropouts()
+
+	var ended = await wait_until(func(): return main._ready_button != null and is_instance_valid(main._ready_button), 20.0)
+	log_line("ready screen shown=%s" % ended)
+	await get_tree().create_timer(0.5).timeout
+	main._on_ready_pressed()
+
+	await wait_until(func(): return _all_ready_seen, 60.0)
+	await get_tree().create_timer(4.0).timeout  # New round: settings, game start and mirror data
+	var ready2 = await wait_until(deal_ready, 20.0)
+	await get_tree().create_timer(1.0).timeout
+	log_line("round2 ready=%s SIG=%s" % [ready2, signature() if ready2 else "-"])
+	await get_tree().create_timer(3.0).timeout
+	log_line("DONE")
+	get_tree().quit()
+
+func last_standing_scenario() -> void:
+	# One player forfeits; the remaining (last standing) player presses END ROUND & READY
+	var quitter = "client1" if scenario == "host_last" else "host"
+	if role == quitter:
+		await get_tree().create_timer(3.0).timeout
+		log_line("%s forfeiting" % role)
+		main._on_forfeit_pressed()
+		return
+	var saw = await wait_until(func(): return _last_standing_seen, 30.0)
+	await get_tree().create_timer(1.0).timeout
+	log_line("last standing popup seen=%s showing=%s; ending round" % [saw, is_instance_valid(main._last_standing_notification)])
+	main._on_last_standing_end_round_pressed()
+	await get_tree().create_timer(0.5).timeout
+	log_line("after END ROUND: race_ended=%d i_am_ready=%s" % [_race_ended_count, MultiplayerGameManager.players_ready.get(NetworkManager.local_player_id, false)])
+
+func default_dropouts() -> void:
 	# Stagger drop-outs: client k waits k*8s first, so they leave the race one at a time
 	if role.begins_with("client"):
 		await get_tree().create_timer(idx * 8.0).timeout
@@ -142,19 +183,6 @@ func run() -> void:
 		log_line("host saw client jammed=%s; race ended before host forfeited=%s (expect false); host forfeiting" % [saw, _race_ended_count > 0])
 		main._on_forfeit_pressed()
 
-	var ended = await wait_until(func(): return main._ready_button != null and is_instance_valid(main._ready_button), 20.0)
-	log_line("ready screen shown=%s" % ended)
-	await get_tree().create_timer(0.5).timeout
-	main._on_ready_pressed()
-
-	await wait_until(func(): return _all_ready_seen, 60.0)
-	await get_tree().create_timer(4.0).timeout  # New round: settings, game start and mirror data
-	var ready2 = await wait_until(deal_ready, 20.0)
-	await get_tree().create_timer(1.0).timeout
-	log_line("round2 ready=%s SIG=%s" % [ready2, signature() if ready2 else "-"])
-	await get_tree().create_timer(3.0).timeout
-	log_line("DONE")
-	get_tree().quit()
 
 func play_steps(n: int) -> void:
 	for i in range(n):

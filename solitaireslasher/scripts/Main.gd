@@ -20,6 +20,7 @@ var _sudoku_game: SudokuGame
 var _sudoku_board: SudokuBoard
 var _sudoku_mirror_mode_enabled: bool = false  # Track if Sudoku mirror mode is active
 var _waiting_for_ready: bool = false
+var _ready_when_round_ends: bool = false  # Set when the last player standing ends the round
 
 # Spider Solitaire
 var _spider_board: SpiderBoard
@@ -2334,8 +2335,15 @@ func _on_multiplayer_race_ended(winner_id: int, winner_name: String, time: float
 		if child is Button and (child.name == "new_game" or child.name == "undo_button"):
 			child.disabled = true
 	
+	# The round is over, so any "last player standing" prompt is moot
+	if is_instance_valid(_last_standing_notification):
+		_last_standing_notification.queue_free()
+
 	# Show ready notification to all players
 	_show_ready_notification(winner_id)
+	if _ready_when_round_ends:
+		_ready_when_round_ends = false
+		_on_ready_pressed()
 
 func _show_ready_notification(winner_id: int) -> void:
 	"""Show notification with ready button after race ends"""
@@ -2448,13 +2456,22 @@ func _on_last_player_standing(player_id: int) -> void:
 	spacer.custom_minimum_size = Vector2(0, 30)
 	vbox.add_child(spacer)
 	
-	# Ready button (larger for mobile)
-	_ready_button = Button.new()
-	_ready_button.text = "Ready for Next Round"
-	_ready_button.custom_minimum_size = Vector2(400, 80)
-	_ready_button.add_theme_font_size_override("font_size", 36)
-	_ready_button.pressed.connect(_on_ready_pressed)
-	vbox.add_child(_ready_button)
+	# End the round now and ready up (readying alone left the others with no ready screen,
+	# because the round only ends once nobody is still playing)
+	var end_round_button := WastelandStyle.make_button("END ROUND & READY", WastelandStyle.accent_for(_current_game_type), true, Vector2(480, 104), 34)
+	end_round_button.pressed.connect(_on_last_standing_end_round_pressed)
+	vbox.add_child(end_round_button)
+
+func _on_last_standing_end_round_pressed() -> void:
+	"""Last player standing chose to end the round: step out of the race (which ends it for
+	everyone) and ready up automatically once the ready screen appears"""
+	if is_instance_valid(_last_standing_notification):
+		_last_standing_notification.queue_free()
+	_ready_when_round_ends = true
+	_on_forfeit_pressed()
+	# If the round ended immediately (we were the host), forfeit's status text overwrote the ready message
+	if not _ready_when_round_ends and _player_status_label:
+		_player_status_label.text = "Waiting for all players to be ready..."
 
 func _on_ready_pressed() -> void:
 	"""Handle ready button press"""

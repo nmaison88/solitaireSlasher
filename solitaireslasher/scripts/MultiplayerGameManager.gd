@@ -453,6 +453,8 @@ func forfeit_player() -> void:
 
 func set_player_ready(ready: bool) -> void:
 	"""Set local player ready status for next round"""
+	if not _race_ended:
+		return  # Only meaningful on the end-of-round screen
 	var local_player_id = network_manager.local_player_id
 	players_ready[local_player_id] = ready
 	
@@ -465,6 +467,11 @@ func set_player_ready(ready: bool) -> void:
 func receive_player_ready(player_id: int, ready: bool) -> void:
 	"""Receive player ready status from network"""
 	print("Player ", player_id, " ready status: ", ready)
+	if not _race_ended:
+		# Stale ready from the previous round (messages are ordered, so a ready for the current
+		# round can't arrive before its RACE_ENDED); keep it from counting toward the next round
+		print("Ignoring ready - round in progress")
+		return
 	players_ready[player_id] = ready
 	_check_all_players_ready()
 
@@ -605,6 +612,12 @@ func receive_mirror_data(mirror_data: Dictionary) -> void:
 
 func _check_all_players_ready() -> void:
 	"""Check if all players are ready for next round"""
+	# Readies only count on the end-of-round screen; a late or duplicate ready that arrives after
+	# the next round has started must not start yet another round
+	if not _race_ended:
+		print("Ignoring ready check - round not ended")
+		return
+
 	var all_ready = true
 	var total_players = network_manager.players.size()
 
@@ -621,16 +634,22 @@ func _check_all_players_ready() -> void:
 	for player_id in stale_players:
 		players_ready.erase(player_id)
 
-	# Also clean up stale players from network_manager that disconnected before registering
+	# Also drop players whose connection is gone (based on live peers, not race statuses,
+	# which are empty between rounds and would otherwise wipe everyone, including ourselves)
+	var connected = multiplayer.get_peers()
+	connected.append(network_manager.local_player_id)
 	stale_players.clear()
 	for player_id in network_manager.players:
-		if not player_statuses.has(player_id):
+		if not connected.has(player_id):
 			stale_players.append(player_id)
 	for player_id in stale_players:
 		network_manager.players.erase(player_id)
 
 	# Update total_players after cleanup
 	total_players = network_manager.players.size()
+	if total_players < 2:
+		print("Not enough players for new round after cleanup: ", total_players, "/2")
+		return
 
 	print("Checking ready status: ", players_ready.size(), "/", total_players, " players")
 
