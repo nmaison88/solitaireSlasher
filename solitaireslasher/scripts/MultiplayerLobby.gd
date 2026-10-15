@@ -76,28 +76,36 @@ func _create_ui() -> void:
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	# Use smaller margins on mobile devices (narrow screens)
+	# Use smaller margins on mobile devices (narrow screens); top/bottom clear the notch and home indicator
 	var horizontal_margin = 40 if get_viewport().get_visible_rect().size.x < 600 else 80
-	var vertical_margin = 40 if get_viewport().get_visible_rect().size.y < 900 else 80
+	var top_margin = 40
+	var bottom_margin = 32
 	if OS.has_feature("mobile"):
-		vertical_margin += int(DisplayServer.get_display_safe_area().position.y)
+		var safe_area = DisplayServer.get_display_safe_area()
+		top_margin += int(safe_area.position.y)
+		bottom_margin += int(DisplayServer.screen_get_size().y - safe_area.end.y)
 
 	margin.add_theme_constant_override("margin_left", horizontal_margin)
 	margin.add_theme_constant_override("margin_right", horizontal_margin)
-	margin.add_theme_constant_override("margin_top", vertical_margin)
-	margin.add_theme_constant_override("margin_bottom", vertical_margin)
+	margin.add_theme_constant_override("margin_top", top_margin)
+	margin.add_theme_constant_override("margin_bottom", bottom_margin)
 	add_child(margin)
-	
-	# Add scroll container to ensure all content is accessible
+
+	# Scrollable content fills the screen above a fixed footer holding START / LEAVE,
+	# so the main actions are always visible and scrolling is only needed for long player lists
+	var layout = VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 20)
+	margin.add_child(layout)
+
 	var scroll_outer = ScrollContainer.new()
 	scroll_outer.name = "ScrollOuter"
-	scroll_outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll_outer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll_outer.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll_outer)
+	layout.add_child(scroll_outer)
 	
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBoxContainer"
-	vbox.add_theme_constant_override("separation", 28)
+	vbox.add_theme_constant_override("separation", 22)
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_outer.add_child(vbox)
 	main_vbox = vbox  # Store reference for later use
@@ -168,12 +176,12 @@ func _create_ui() -> void:
 	player_list.custom_minimum_size = Vector2(0, 60)
 	players_box.add_child(player_list)
 	
-	# Buttons
+	# Footer buttons (outside the scroll area)
 	var button_box = HBoxContainer.new()
 	button_box.name = "ButtonBox"
 	button_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	button_box.add_theme_constant_override("separation", 20)
-	vbox.add_child(button_box)
+	layout.add_child(button_box)
 	
 	start_button = WastelandStyle.make_button("START RACE", accent, true, Vector2(360, 112), 38)
 	start_button.pressed.connect(_on_start_pressed)
@@ -235,50 +243,11 @@ func _create_game_settings_display() -> void:
 	if current_index == -1:
 		current_index = 1
 
-	var face_row = HBoxContainer.new()
-	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	face_row.add_theme_constant_override("separation", 18)
-	settings_box.add_child(face_row)
-
-	var face_icon = FontAwesome.new()
-	face_icon.name = "DifficultyFaceIcon"
-	face_icon.icon_size = 64
-	face_icon.add_theme_color_override("font_color", accent)
-	_set_difficulty_face_icon(face_icon, current_index)
-	face_row.add_child(face_icon)
-
-	var face_label = WastelandStyle.label(difficulties[current_index].to_upper(), 44, WastelandStyle.BONE, 4)
-	face_label.name = "DifficultyFaceLabel"
-	face_row.add_child(face_label)
-
-	var slider_row = HBoxContainer.new()
-	slider_row.add_theme_constant_override("separation", 20)
-	var easy_lbl = WastelandStyle.label("EASY", 28, WastelandStyle.BONE_MUTED, 2)
-	easy_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slider_row.add_child(easy_lbl)
-
-	var diff_slider = HSlider.new()
-	diff_slider.name = "DifficultySlider"
-	diff_slider.min_value = 0
-	diff_slider.max_value = 2
-	diff_slider.step = 1
-	diff_slider.value = current_index
-	diff_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	diff_slider.custom_minimum_size = Vector2(260, 100)  # Tall hit area for thumbs
-	WastelandStyle.style_slider(diff_slider, accent)
-
-	# Tap-to-position: left third = Easy, middle = Medium, right = Hard
-	diff_slider.gui_input.connect(func(event: InputEvent) -> void:
-		if (event is InputEventMouseButton or event is InputEventScreenTouch) and event.pressed:
-			var relative_pos = event.position.x / diff_slider.size.x  # gui_input positions are local
-			diff_slider.value = 0 if relative_pos < 0.33 else (1 if relative_pos < 0.67 else 2)
-	)
-
-	slider_row.add_child(diff_slider)
-	var hard_lbl = WastelandStyle.label("HARD", 28, WastelandStyle.BONE_MUTED, 2)
-	hard_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slider_row.add_child(hard_lbl)
-	settings_box.add_child(slider_row)
+	var picker = WastelandStyle.segmented(difficulties, current_index, accent, func(idx: int):
+		selected_difficulty = difficulties[idx]
+		print("Multiplayer difficulty changed to: ", selected_difficulty))
+	picker.name = "DifficultyPicker"
+	settings_box.add_child(picker)
 
 	# Mirror Mode
 	var mirror_checkbox = CheckBox.new()
@@ -301,14 +270,6 @@ func _create_game_settings_display() -> void:
 	mirror_explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(mirror_explanation)
 
-	diff_slider.value_changed.connect(func(val: float) -> void:
-		var idx = int(val)
-		selected_difficulty = difficulties[idx]
-		face_label.text = difficulties[idx].to_upper()
-		_set_difficulty_face_icon(face_icon, idx)
-		print("Multiplayer difficulty changed to: ", selected_difficulty)
-	)
-
 	_insert_before(settings_container, "PlayerList")
 
 func _insert_before(node: Control, sibling_name: String) -> void:
@@ -319,12 +280,6 @@ func _insert_before(node: Control, sibling_name: String) -> void:
 	var sibling = main_vbox.get_node_or_null(sibling_name)
 	if sibling:
 		main_vbox.move_child(node, sibling.get_index())
-
-func _set_difficulty_face_icon(icon: FontAwesome, index: int) -> void:
-	match index:
-		0: icon.icon_name = "face-smile"
-		1: icon.icon_name = "face-meh"
-		2: icon.icon_name = "face-angry"
 
 func _update_game_settings_display() -> void:
 	"""Update the game type label in the settings display"""
@@ -617,7 +572,7 @@ func _generate_qr_code(ip_address: String, container: VBoxContainer) -> void:
 
 			qr_texture_rect = TextureRect.new()
 			qr_texture_rect.texture = qr_texture
-			qr_texture_rect.custom_minimum_size = Vector2(460, 460)
+			qr_texture_rect.custom_minimum_size = Vector2(400, 400)
 			qr_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			qr_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			qr_texture_rect.mouse_filter = Control.MOUSE_FILTER_PASS

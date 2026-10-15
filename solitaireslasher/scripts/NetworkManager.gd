@@ -437,6 +437,10 @@ func leave_game() -> void:
 	if discovery_server:
 		discovery_server.stop()  # UDPServer uses stop() not close()
 
+	# Leaving the network session ends multiplayer mode too
+	if MultiplayerGameManager:
+		MultiplayerGameManager.reset_session()
+
 func get_players() -> Dictionary:
 	return players.duplicate()
 

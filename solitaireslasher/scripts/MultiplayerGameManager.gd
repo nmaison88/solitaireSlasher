@@ -340,6 +340,16 @@ func get_discovered_games() -> Array:
 func get_connected_players() -> Dictionary:
 	return network_manager.get_players()
 
+func reset_session() -> void:
+	"""Clear all race state after leaving a multiplayer session, so single-player games
+	don't keep behaving as multiplayer (e.g. showing the forfeit flag instead of New Game)"""
+	is_multiplayer = false
+	player_statuses.clear()
+	players_ready.clear()
+	_pending_mirror_data.clear()
+	local_player_finished = false
+	_race_ended = false
+
 func leave_multiplayer_game() -> void:
 	network_manager.leave_game()
 	is_multiplayer = false

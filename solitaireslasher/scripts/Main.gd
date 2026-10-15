@@ -583,220 +583,99 @@ func _on_game_selected() -> void:
 
 func _show_game_menu(game_type: String) -> void:
 	"""Show game-specific menu with difficulty and multiplayer options"""
-	# Create game menu container
+	var is_mobile := OS.has_feature("mobile")
+	var accent := WastelandStyle.accent_for(game_type)
 	var game_menu = VBoxContainer.new()
 	game_menu.name = "GameMenu"
 	game_menu.set_anchors_preset(Control.PRESET_CENTER)
 	game_menu.anchor_left = 0.5
 	game_menu.anchor_top = 0.5
-	game_menu.offset_left = -300
+	game_menu.offset_left = -360
 	game_menu.offset_top = -400
-	game_menu.offset_right = 300
+	game_menu.offset_right = 360
 	game_menu.offset_bottom = 400
 	game_menu.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	game_menu.grow_vertical = Control.GROW_DIRECTION_BOTH
+	game_menu.add_theme_constant_override("separation", 18)
 	add_child(game_menu)
-	
-	# Title
-	var title = Label.new()
-	title.text = game_type
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		title.add_theme_font_size_override("font_size", 72)
-	else:
-		title.add_theme_font_size_override("font_size", 56)
+
+	# Title and one-line description
+	var title := WastelandStyle.title(WastelandStyle.display_name(game_type), 76 if is_mobile else 62)
+	title.add_theme_color_override("font_color", accent.lightened(0.15))
 	game_menu.add_child(title)
 
-	# Game description
-	var description = Label.new()
-	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var descriptions := {
+		"Solitaire": "Build each suit from Ace to King on the foundations",
+		"Spider": "Build King-to-Ace runs in one suit to clear them",
+		"Sudoku": "Fill the grid so every row, column and box has 1–9",
+	}
+	var description := WastelandStyle.label(descriptions.get(game_type, ""), 30, Color(WastelandStyle.BONE, 0.7), 1)
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	description.add_theme_font_size_override("font_size", 28)
-	description.modulate = Color(0.8, 0.8, 0.8)  # Slightly dimmed text
+	game_menu.add_child(description)
 
-	match game_type:
-		"Solitaire":
-			description.text = "Build sequences from King to Ace in the foundation piles"
-		"Spider":
-			description.text = "Create complete K→A sequences to move cards to foundation"
-		"Sudoku":
-			description.text = "Fill the grid so each row, column, and box has numbers 1–9"
-		_:
-			description.text = ""
-
-	if description.text != "":
-		game_menu.add_child(description)
-
-	# Add spacing
 	var spacer1 = Control.new()
 	spacer1.custom_minimum_size = Vector2(0, 40)
 	game_menu.add_child(spacer1)
-	
-	_make_difficulty_slider(game_menu)
-	
-	# Add spacing
+
+	_make_difficulty_slider(game_menu, game_type)
+
 	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 40)
+	spacer2.custom_minimum_size = Vector2(0, 50)
 	game_menu.add_child(spacer2)
-	
-	# Play Single Player button
-	var play_button = Button.new()
-	play_button.text = "Play Single Player"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		play_button.custom_minimum_size = Vector2(500, 120)
-		play_button.add_theme_font_size_override("font_size", 48)
-	else:
-		play_button.custom_minimum_size = Vector2(400, 80)
-		play_button.add_theme_font_size_override("font_size", 36)
+
+	var button_size := Vector2(560, 120) if is_mobile else Vector2(480, 104)
+	var play_button := WastelandStyle.make_button("PLAY SOLO", accent, true, button_size, 46 if is_mobile else 40)
 	play_button.pressed.connect(_on_single_player_start.bind(game_type))
 	game_menu.add_child(play_button)
-	
-	# Add spacing
-	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 20)
-	game_menu.add_child(spacer3)
 
-	# Multiplayer button
-	var multiplayer_button = Button.new()
-	multiplayer_button.text = "Multiplayer"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		multiplayer_button.custom_minimum_size = Vector2(500, 120)
-		multiplayer_button.add_theme_font_size_override("font_size", 48)
-	else:
-		multiplayer_button.custom_minimum_size = Vector2(400, 80)
-		multiplayer_button.add_theme_font_size_override("font_size", 36)
+	var multiplayer_button := WastelandStyle.make_button("MULTIPLAYER", accent, false, button_size, 46 if is_mobile else 40)
 	multiplayer_button.pressed.connect(_on_show_multiplayer_menu.bind(game_type))
 	game_menu.add_child(multiplayer_button)
 
-	# Add spacing
-	var spacer4 = Control.new()
-	spacer4.custom_minimum_size = Vector2(0, 40)
-	game_menu.add_child(spacer4)
-	
-	# Back button
-	var back_button = Button.new()
-	back_button.text = "Back"
-	# Larger button for iPhone
-	if OS.has_feature("mobile"):
-		back_button.custom_minimum_size = Vector2(500, 120)
-		back_button.add_theme_font_size_override("font_size", 48)
-	else:
-		back_button.custom_minimum_size = Vector2(400, 80)
-		back_button.add_theme_font_size_override("font_size", 36)
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 30)
+	game_menu.add_child(spacer3)
+
+	var back_button := WastelandStyle.make_button("BACK", accent, false, Vector2(360, 100) if is_mobile else Vector2(320, 88), 38)
 	back_button.pressed.connect(_on_game_menu_back)
 	game_menu.add_child(back_button)
-	
-	
-func _make_difficulty_slider(parent_vbox: VBoxContainer) -> void:
-	"""Build the difficulty HSlider with emoji face indicator and add it to parent_vbox"""
+
+	# Fade in
+	game_menu.modulate.a = 0.0
+	create_tween().tween_property(game_menu, "modulate:a", 1.0, 0.3)
+
+func _make_difficulty_slider(parent_vbox: VBoxContainer, game_type: String = "") -> void:
+	"""Difficulty picker: EASY | MEDIUM | HARD segmented control plus what the level means for this game"""
+	if game_type == "":
+		game_type = _current_game_type
 	var difficulties = ["Easy", "Medium", "Hard"]
 	var current_index = difficulties.find(_current_difficulty)
 	if current_index == -1:
 		current_index = 1  # Default Medium
+		_current_difficulty = "Medium"
 
-	# Difficulty text label (centered, above face)
-	var face_label = Label.new()
-	face_label.name = "DifficultyFaceLabel"
-	face_label.text = difficulties[current_index]
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		face_label.add_theme_font_size_override("font_size", 56)
-	else:
-		face_label.add_theme_font_size_override("font_size", 40)
-	face_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	face_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent_vbox.add_child(face_label)
-
-	# Large face icon (centered, under the text)
-	var face_icon = FontAwesome.new()
-	face_icon.name = "DifficultyFaceIcon"
-	# Much larger icon for iPhone (200 as requested)
-	if OS.has_feature("mobile"):
-		face_icon.icon_size = 200
-	else:
-		face_icon.icon_size = 70
-	face_icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_set_difficulty_face(face_icon, current_index)
-	parent_vbox.add_child(face_icon)
-
-	# Slider row: "Easy" label | HSlider | "Hard" label
-	var slider_row = HBoxContainer.new()
-	slider_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slider_row.add_theme_constant_override("separation", 16)
-
-	var easy_label = Label.new()
-	easy_label.text = "Easy"
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		easy_label.add_theme_font_size_override("font_size", 42)
-	else:
-		easy_label.add_theme_font_size_override("font_size", 28)
-	easy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slider_row.add_child(easy_label)
-
-	var slider = HSlider.new()
-	slider.name = "DifficultySlider"
-	slider.min_value = 0
-	slider.max_value = 2
-	slider.step = 1
-	slider.value = current_index
-	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Larger slider for iPhone
-	if OS.has_feature("mobile"):
-		slider.custom_minimum_size = Vector2(500, 80)  # Much larger for iPhone
-	else:
-		slider.custom_minimum_size = Vector2(300, 48)
-	slider_row.add_child(slider)
-
-	var hard_label = Label.new()
-	hard_label.text = "Hard"
-	# Larger font for iPhone
-	if OS.has_feature("mobile"):
-		hard_label.add_theme_font_size_override("font_size", 42)
-	else:
-		hard_label.add_theme_font_size_override("font_size", 28)
-	hard_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slider_row.add_child(hard_label)
-
-	parent_vbox.add_child(slider_row)
-
-	# Difficulty description label (small text explaining the selected difficulty)
-	var difficulty_description = Label.new()
-	difficulty_description.name = "DifficultyDescription"
-	difficulty_description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	difficulty_description.add_theme_font_size_override("font_size", 20)
-	difficulty_description.modulate = Color(0.7, 0.7, 0.7)  # Dimmed text for secondary info
-	difficulty_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	difficulty_description.custom_minimum_size = Vector2(500, 0)
-
-	# Set initial difficulty description
-	var difficulty_descriptions = {
-		0: "More cards visible, easier puzzle solving",
-		1: "Balanced challenge with strategic play",
-		2: "Limited visibility, high difficulty"
+	# What each level actually changes, per game
+	var level_notes := {
+		"Solitaire": ["Draw 1 card at a time", "Draw 2 cards at a time", "Draw 3 cards at a time"],
+		"Spider": ["One suit (spades)", "Two suits (spades and hearts)", "All four suits"],
+		"Sudoku": ["71 numbers given", "30 numbers given", "26 numbers given"],
 	}
-	difficulty_description.text = difficulty_descriptions.get(current_index, "")
-	parent_vbox.add_child(difficulty_description)
+	var notes: Array = level_notes.get(game_type, ["", "", ""])
 
-	# Wire up: update face icon + label + _current_difficulty on slide
-	slider.value_changed.connect(func(val: float) -> void:
-		var idx = int(val)
+	parent_vbox.add_child(WastelandStyle.section_header("DIFFICULTY"))
+
+	var difficulty_description := WastelandStyle.label(notes[current_index], 28, Color(WastelandStyle.BONE, 0.7), 1)
+	difficulty_description.name = "DifficultyDescription"
+
+	var picker := WastelandStyle.segmented(difficulties, current_index, WastelandStyle.accent_for(game_type), func(idx: int):
 		_current_difficulty = difficulties[idx]
-		face_label.text = difficulties[idx]
-		_set_difficulty_face(face_icon, idx)
-		difficulty_description.text = difficulty_descriptions.get(idx, "")
-		print("Difficulty changed to: ", _current_difficulty)
-	)
-
-func _set_difficulty_face(icon: FontAwesome, index: int) -> void:
-	"""Update a FontAwesome node to show the face for the given difficulty index"""
-	match index:
-		0: icon.icon_name = "face-smile"   # Easy — happy
-		1: icon.icon_name = "face-meh"     # Medium — neutral
-		2: icon.icon_name = "face-angry"   # Hard — angry
+		difficulty_description.text = notes[idx]
+		if SoundManager:
+			SoundManager.play_swipe()
+		print("Difficulty changed to: ", _current_difficulty))
+	picker.name = "DifficultyPicker"
+	parent_vbox.add_child(picker)
+	parent_vbox.add_child(difficulty_description)
 
 func _update_game_background(game_type: String) -> void:
 	"""Update background color based on game type and theme"""
@@ -1113,7 +992,7 @@ func _on_game_carousel_changed():
 					break
 
 func _on_difficulty_carousel_changed():
-	pass  # Legacy stub — difficulty now controlled by HSlider via _make_difficulty_slider
+	pass  # Legacy stub — difficulty now controlled by the segmented picker in _make_difficulty_slider
 
 func _on_single_player_start_legacy():
 	"""Handle single player start button (legacy function)"""

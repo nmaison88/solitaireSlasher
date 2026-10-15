@@ -175,6 +175,46 @@ static func style_check_box(check: CheckBox, accent: Color, font_size: int = 36)
 	check.add_theme_icon_override("checked", _box_texture(48, accent, true))
 	check.add_theme_constant_override("h_separation", 18)
 
+static func segmented(options: Array, selected: int, accent: Color, on_change: Callable, font_size: int = 34) -> HBoxContainer:
+	"""Pill segmented control (e.g. EASY | MEDIUM | HARD). The selected segment is filled with the
+	accent; on_change(index) fires when the selection changes."""
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var group := ButtonGroup.new()
+	var on_style := StyleBoxFlat.new()
+	on_style.bg_color = accent
+	on_style.set_corner_radius_all(48)
+	on_style.shadow_color = Color(accent, 0.45)
+	on_style.shadow_size = 14
+	var off_style := StyleBoxFlat.new()
+	off_style.bg_color = METAL
+	off_style.set_border_width_all(3)
+	off_style.border_color = Color(BONE, 0.25)
+	off_style.set_corner_radius_all(48)
+	for i in options.size():
+		var segment := Button.new()
+		segment.text = str(options[i]).to_upper()
+		segment.toggle_mode = true
+		segment.button_group = group
+		segment.button_pressed = i == selected
+		segment.custom_minimum_size = Vector2(0, 96)
+		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		segment.add_theme_font_override("font", font(4))
+		segment.add_theme_font_size_override("font_size", font_size)
+		for state in ["normal", "hover", "focus"]:
+			segment.add_theme_stylebox_override(state, off_style)
+		segment.add_theme_stylebox_override("pressed", on_style)
+		segment.add_theme_stylebox_override("hover_pressed", on_style)
+		for state in ["font_color", "font_hover_color", "font_focus_color"]:
+			segment.add_theme_color_override(state, Color(BONE, 0.75))
+		segment.add_theme_color_override("font_pressed_color", INK)
+		segment.add_theme_color_override("font_hover_pressed_color", INK)
+		segment.toggled.connect(func(on: bool):
+			if on:
+				on_change.call(i))
+		row.add_child(segment)
+	return row
+
 static func style_switch(button: CheckButton, accent: Color, font_size: int = 34) -> void:
 	"""Full-width settings row: label on the left, pill switch on the right"""
 	var empty := StyleBoxEmpty.new()

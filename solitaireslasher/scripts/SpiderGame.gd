@@ -87,15 +87,17 @@ func new_game(difficulty_string: String = "Easy", seed: int = -1) -> void:
 	# Build deck
 	var deck: Array = []
 	if _difficulty == "Easy" or _difficulty == "Medium":
-		# 4 copies of 13 Spades cards (suit=3, rank 1–13) = 52 total
-		for _copy in range(4):
-			for r in range(1, 14):
-				var c = SolitaireCard.new()
-				c.suit = SolitaireCard.Suit.SPADES
-				c.rank = r
-				c.face_up = false
-				c.stock = false
-				deck.append(c)
+		# Easy: 4 copies of Spades; Medium: 2 copies each of Spades and Hearts (52 total, 4 runs either way)
+		var suits = [SolitaireCard.Suit.SPADES] if _difficulty == "Easy" else [SolitaireCard.Suit.SPADES, SolitaireCard.Suit.HEARTS]
+		for _copy in range(4 / suits.size()):
+			for suit in suits:
+				for r in range(1, 14):
+					var c = SolitaireCard.new()
+					c.suit = suit
+					c.rank = r
+					c.face_up = false
+					c.stock = false
+					deck.append(c)
 	else:
 		# Hard: 1 copy each of all 4 suits = 52 total
 		for s in range(4):
