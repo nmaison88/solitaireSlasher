@@ -14,6 +14,8 @@ const _BACK_SHADER = preload("res://shaders/card_back_slasher.gdshader")
 const BACK_OXBLOOD := Color(0.34, 0.05, 0.04)
 const BACK_RUST := Color(0.4, 0.17, 0.05)
 static var back_color: Color = BACK_OXBLOOD  # Set per game (Main._update_game_background)
+const CLASSIC_DIR := "res://card_assets/classic"
+const SLASHER_TEXTURE_SIZE := Vector2(140, 190)  # Native size of the Slasher deck images
 
 var card: SolitaireCard
 var is_dragging: bool = false
@@ -63,10 +65,49 @@ void fragment() {
 	mat.shader = _corner_shader
 	_texture_rect.material = mat
 	var mat2 = ShaderMaterial.new()
-	mat2.shader = _BACK_SHADER
-	mat2.set_shader_parameter("base_color", back_color)
+	if _is_classic():
+		# Classic art is rendered at high resolution; show it at the same on-screen size as the
+		# Slasher deck's 140x190 images so the board layout is identical for both decks
+		for rect: TextureRect in [_texture_rect, _card_back]:
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.custom_minimum_size = SLASHER_TEXTURE_SIZE
+		# Classic art is bright white with its own navy outline: no parchment tint or edge darkening
+		mat.set_shader_parameter("tint", Vector3.ONE)
+		mat.set_shader_parameter("border_width", 0.0)
+		mat2.shader = _corner_shader
+		mat2.set_shader_parameter("tint", Vector3.ONE)
+		mat2.set_shader_parameter("border_width", 0.0)
+	else:
+		mat2.shader = _BACK_SHADER
+		mat2.set_shader_parameter("base_color", back_color)
 	_card_back.material = mat2
 	_add_shadow()
+
+static func _is_classic() -> bool:
+	return PlayerData.get_deck_style() == "classic"
+
+static func _rank_name(rank: int) -> String:
+	match rank:
+		1: return "A"
+		11: return "J"
+		12: return "Q"
+		13: return "K"
+	return str(rank)
+
+func _back_texture() -> Texture2D:
+	# The Slasher back is drawn by its shader; the texture only sizes it
+	return load(CLASSIC_DIR + "/back.png") if _is_classic() else load("res://card_assets/cardBack_blue2.png")
+
+func _face_texture_path() -> String:
+	var suit_names := ["Clubs", "Diamonds", "Hearts", "Spades"]
+	if _is_classic():
+		return "%s/card%s%s.png" % [CLASSIC_DIR, suit_names[card.suit], _rank_name(card.rank)]
+	# Slasher deck files have inconsistent casing: face cards use "Spades",
+	# Ace and number cards use "spades" (lowercase)
+	var suit_name: String = suit_names[card.suit]
+	if card.suit == 3 and card.rank < 11:
+		suit_name = "spades"
+	return "res://card_assets/Alternative-Face-Deck/card%s%s.png" % [suit_name, _rank_name(card.rank)]
 
 func _add_shadow() -> void:
 	"""Soft drop shadow behind the card for depth on stacked piles"""
@@ -87,47 +128,15 @@ func _add_shadow() -> void:
 func _refresh() -> void:
 	if not is_node_ready() or not card:
 		return
-	
-		
-	if card.face_up:
-		# Show card face using new card asset format (same as Board.gd)
-		var texture_path = ""
-		# Note: card.stock is only for cards still in stock pile, not for drawn cards
-		if card.stock:
-			texture_path = "res://card_assets/cardBack_blue2.png"
-		else:
-			var rank_name = ""
-			match card.rank:
-				1:  rank_name = "A"
-				11: rank_name = "J"
-				12: rank_name = "Q"
-				13: rank_name = "K"
-				_:  rank_name = str(card.rank)
-
-			# Spades files have inconsistent casing: face cards use "Spades",
-			# Ace and number cards use "spades" (lowercase)
-			var suit_name = ""
-			match card.suit:
-				0: suit_name = "Clubs"
-				1: suit_name = "Diamonds"
-				2: suit_name = "Hearts"
-				3: suit_name = "Spades" if card.rank >= 11 else "spades"
-
-			texture_path = "res://card_assets/Alternative-Face-Deck/card%s%s.png" % [suit_name, rank_name]
-		
-		var texture = load(texture_path)
-		if texture:
-			_texture_rect.texture = texture
-			_texture_rect.show()
-			_card_back.hide()
-		else:
-			_texture_rect.hide()
-			_card_back.texture = load("res://card_assets/cardBack_blue2.png")
-			_card_back.show()
+	# Faces only for face-up cards that have left the stock (card.stock marks cards still in it)
+	var texture = load(_face_texture_path()) if card.face_up and not card.stock else null
+	if texture:
+		_texture_rect.texture = texture
+		_texture_rect.show()
+		_card_back.hide()
 	else:
-		# Show card back using new format
 		_texture_rect.hide()
-		_card_back.texture = load("res://card_assets/cardBack_blue2.png")
+		_card_back.texture = _back_texture()
 		_card_back.show()
 
 func _on_gui_input(event: InputEvent) -> void:

@@ -2531,6 +2531,19 @@ func _on_settings_button_pressed() -> void:
 	WastelandStyle.style_switch(music_toggle, accent)
 	music_toggle.toggled.connect(_on_background_music_toggled)
 	sound_box.add_child(music_toggle)
+
+	# Deck card: style picker with a live preview (ace, king and back)
+	var deck_box = _settings_card(settings_menu, "CARD DECK", accent)
+	var deck_styles := ["slasher", "classic"]
+	var deck_preview = HBoxContainer.new()
+	deck_preview.alignment = BoxContainer.ALIGNMENT_CENTER
+	deck_preview.add_theme_constant_override("separation", 18)
+	var deck_picker := WastelandStyle.segmented(["Slasher", "Classic"], maxi(0, deck_styles.find(PlayerData.get_deck_style())), accent, func(idx: int):
+		PlayerData.set_deck_style(deck_styles[idx])
+		_fill_deck_preview(deck_preview))
+	deck_box.add_child(deck_picker)
+	deck_box.add_child(deck_preview)
+	_fill_deck_preview(deck_preview)
 	
 	var spacer2 = Control.new()
 	spacer2.custom_minimum_size = Vector2(0, 20)
@@ -2543,6 +2556,25 @@ func _on_settings_button_pressed() -> void:
 	# Fade in
 	settings_root.modulate.a = 0.0
 	create_tween().tween_property(settings_root, "modulate:a", 1.0, 0.3)
+
+func _fill_deck_preview(row: HBoxContainer) -> void:
+	"""Show three sample cards (A♥, K♠, back) in the current deck style"""
+	for child in row.get_children():
+		child.queue_free()
+	var samples := [[SolitaireCard.Suit.HEARTS, 1, true], [SolitaireCard.Suit.SPADES, 13, true], [SolitaireCard.Suit.CLUBS, 5, false]]
+	for sample in samples:
+		var sample_card := SolitaireCard.new()
+		sample_card.suit = sample[0]
+		sample_card.rank = sample[1]
+		sample_card.face_up = sample[2]
+		var holder = Control.new()
+		holder.custom_minimum_size = CardView.SLASHER_TEXTURE_SIZE  # On-screen card size for both decks
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var view: CardView = preload("res://scenes/CardView.tscn").instantiate()
+		view.card = sample_card
+		view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(view)
+		row.add_child(holder)
 
 func _settings_card(parent: Control, heading: String, accent: Color) -> VBoxContainer:
 	"""Add a titled card to the settings page and return its content box"""

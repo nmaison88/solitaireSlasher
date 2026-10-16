@@ -5,6 +5,7 @@ const SAVE_FILE_PATH = "user://player_data.json"
 var player_name: String = "Player"
 var theme: String = "dark"
 var background_music_enabled: bool = true
+var deck_style: String = "slasher"  # Card deck look: "slasher" or "classic"
 var stats: Dictionary = {
 	"games_played": 0,
 	"games_won": 0,
@@ -28,6 +29,7 @@ func save_data() -> void:
 		"player_name": player_name,
 		"theme": theme,
 		"background_music_enabled": background_music_enabled,
+		"deck_style": deck_style,
 		"stats": stats,
 		"solitaire_save": solitaire_save,
 		"spider_save": spider_save,
@@ -67,6 +69,9 @@ func load_data() -> void:
 
 			if data.has("background_music_enabled"):
 				background_music_enabled = data.background_music_enabled
+
+			if data.has("deck_style"):
+				deck_style = data.deck_style
 
 			if data.has("stats"):
 				stats = data.stats
@@ -123,6 +128,14 @@ func set_theme(new_theme: String) -> void:
 func is_background_music_enabled() -> bool:
 	"""Get background music setting"""
 	return background_music_enabled
+
+func get_deck_style() -> String:
+	return deck_style
+
+func set_deck_style(style: String) -> void:
+	"""Set the card deck look ("slasher" or "classic") and save"""
+	deck_style = style
+	save_data()
 
 func set_background_music_enabled(enabled: bool) -> void:
 	"""Set background music and save"""
