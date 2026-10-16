@@ -26,6 +26,7 @@ var _last_render_frame: int = -1
 var _stock_button: Button
 var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
 var _animating: bool = false
+var _stock_tap_queued: bool = false  # A stock tap made during an animation, run when it ends
 var _win_overlay: Control = null
 
 const WIN_MESSAGES = [
@@ -309,9 +310,14 @@ func _play_deal_animation() -> void:
 	render()
 
 func _on_stock_pressed() -> void:
-	if _animating or game == null:
+	if game == null:
+		return
+	if _animating:
+		# Remember one tap made mid-animation so quick tapping doesn't feel dropped
+		_stock_tap_queued = true
 		return
 	_animating = true
+	var was_recycle = game.stock.is_empty()
 
 	var col_step = CARD_SIZE.x + _get_col_gap()
 	var lx = _get_left_x()
@@ -342,14 +348,20 @@ func _on_stock_pressed() -> void:
 	tween.set_trans(Tween.TRANS_CUBIC)
 	var tweener_count = 0
 
-	# Animate each previously-visible waste card to its new position (or off-screen)
+	# Animate each previously-visible waste card to its new position (or off-screen).
+	# On a recycle the whole waste goes back into the stock, so slide it there.
 	for i in range(old_vis_start, old_waste.size()):
 		var card = old_waste[i]
 		if not old_views.has(card):
 			continue
 		var view: CardView = old_views[card]
 		var new_idx = game.waste.find(card)
-		if new_idx == -1 or new_idx < new_vis_start:
+		if was_recycle:
+			view.z_index = 50
+			tween.tween_property(view, "position:x", stock_pos.x, dur * 0.6)
+			tween.tween_property(view, "modulate:a", 0.0, dur * 0.6)
+			tweener_count += 1
+		elif new_idx == -1 or new_idx < new_vis_start:
 			tween.tween_property(view, "position:x", waste_anchor.x - 55.0, dur)
 			tween.tween_property(view, "modulate:a", 0.0, dur)
 			tweener_count += 1
@@ -359,10 +371,12 @@ func _on_stock_pressed() -> void:
 				_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
 			tweener_count += 1
 
-	# Slide newly drawn card(s) in from the stock position
-	var drawn_count = new_size - old_waste.size()
+	# Slide newly drawn card(s) in from the stock position (after a recycle, everything on
+	# the waste was just drawn, and it starts once the old waste has gone back to the stock)
+	var first_drawn = 0 if was_recycle else old_waste.size()
+	var drawn_count = new_size - first_drawn
 	for di in range(drawn_count):
-		var wi = old_waste.size() + di
+		var wi = first_drawn + di
 		if wi < new_vis_start:
 			continue
 		var card = game.waste[wi]
@@ -373,8 +387,10 @@ func _on_stock_pressed() -> void:
 		ghost.position = Vector2(stock_pos.x, waste_anchor.y)
 		ghost.z_index  = 100 + di
 		add_child(ghost)
-		tween.tween_property(ghost, "position:x",
+		var slide = tween.tween_property(ghost, "position:x",
 			_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+		if was_recycle:
+			slide.set_delay(dur * 0.5)
 		tweener_count += 1
 
 	if tweener_count > 0:
@@ -383,6 +399,9 @@ func _on_stock_pressed() -> void:
 		tween.kill()
 	_animating = false
 	render()
+	if _stock_tap_queued:
+		_stock_tap_queued = false
+		_on_stock_pressed.call_deferred()
 
 func render() -> void:
 	if game == null:
