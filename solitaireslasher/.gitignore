@@ -25,3 +25,4 @@ xcuserdata/
 
 # libgodot.a is stored with Git LFS (see /.gitattributes); never add new copies outside it
 /export/**/libgodot.a
+tests/multiplayer/logs/
