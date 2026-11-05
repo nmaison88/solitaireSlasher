@@ -46,7 +46,8 @@ for i in $(seq 1 "$CLIENTS"); do
 done
 for pid in $pids; do wait $pid; done
 
-files=("$LOGS/$TAG"-*.log)
+files=("$LOGS/$TAG-host.log")
+for i in $(seq 1 "$CLIENTS"); do files+=("$LOGS/$TAG-client$i.log"); done
 players=$(( CLIENTS + 1 ))
 errors=$(cat $files | grep -c 'SCRIPT ERROR')
 finished=$(cat $files | grep -c 'MPTEST.*DONE')
