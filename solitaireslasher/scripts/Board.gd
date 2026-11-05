@@ -24,9 +24,11 @@ var _dragged_card_views: Array[CardView] = []  # Track all CardViews being dragg
 var _dragged_card_offsets: Dictionary = {}  # Store relative positions for stack dragging
 var _last_render_frame: int = -1
 var _stock_button: Button
-var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
+var _animation_duration: float = 0.3  # Card move speed (tap-to-move, drops, undo)
 var _animating: bool = false
 var _stock_tap_queued: bool = false  # A stock tap made during an animation, run when it ends
+var _queued_tap_card: SolitaireCard = null  # A card tapped during an animation, played when it ends
+var _moving_card: SolitaireCard = null  # The card whose move is animating now
 var _auto_finishing: bool = false  # Cards are flying to the foundations on their own
 var _win_overlay: Control = null
 
@@ -481,7 +483,24 @@ func render() -> void:
 		else:
 			print("Board.render: Tableau column ", col, " not ready, skipping")
 
+	_run_queued_tap()
 	_maybe_start_auto_finish()
+
+func _queue_card_tap(card: SolitaireCard) -> void:
+	"""Remember a tap made while cards are moving, so quick players don't lose it. Tapping the
+	card that's already moving does nothing (that's a double tap, not a new move)."""
+	if card != _moving_card:
+		_queued_tap_card = card
+
+func _run_queued_tap() -> void:
+	if _queued_tap_card == null or _animating:
+		return
+	var card = _queued_tap_card
+	_queued_tap_card = null
+	for child in get_children():
+		if child is CardView and child.card == card and card.face_up and not child.is_queued_for_deletion():
+			_on_card_clicked.call_deferred(child)
+			return
 
 func _maybe_start_auto_finish() -> void:
 	"""Once the game can finish itself, send the remaining cards up (checked after every render,
@@ -496,6 +515,7 @@ func _maybe_start_auto_finish() -> void:
 		if multiplayer_manager._race_ended or local_status == multiplayer_manager.PlayerStatus.JAMMED:
 			return
 	_auto_finishing = true
+	_queued_tap_card = null
 	_run_auto_finish.call_deferred()
 
 func _run_auto_finish() -> void:
@@ -868,10 +888,14 @@ func _create_drop_zone(zone_name: String, pos: Vector2) -> void:
 	add_child(drop_zone)
 
 func _on_card_clicked(card_view: CardView) -> void:
-	if _animating or not is_instance_valid(card_view) or not card_view.card:
+	if not is_instance_valid(card_view) or not card_view.card:
+		return
+	if _animating:
+		_queue_card_tap(card_view.card)
 		return
 	_animating = true
 	var card = card_view.card
+	_moving_card = card
 
 	# Foundation move (correct suit first, then fallback)
 	for foundation_index in range(4):
@@ -986,6 +1010,7 @@ func animate_undo() -> void:
 			game.undo()
 			render()
 	_animating = false
+	_run_queued_tap()
 
 func _anim_ghost(card: SolitaireCard, from_pos: Vector2, to_pos: Vector2) -> void:
 	"""Slide a ghost card from from_pos to to_pos, surviving render() in-flight."""
@@ -1080,14 +1105,14 @@ func _animate_card_flip(card_view: CardView) -> void:
 	var t1 = create_tween()
 	t1.set_ease(Tween.EASE_IN)
 	t1.set_trans(Tween.TRANS_QUAD)
-	t1.tween_property(card_view, "scale:x", 0.0, 0.1)
+	t1.tween_property(card_view, "scale:x", 0.0, 0.07)
 	await t1.finished
 	# card.face_up is already true (set by game logic); refresh shows face-up texture
 	card_view._refresh()
 	var t2 = create_tween()
 	t2.set_ease(Tween.EASE_OUT)
 	t2.set_trans(Tween.TRANS_QUAD)
-	t2.tween_property(card_view, "scale:x", 1.0, 0.1)
+	t2.tween_property(card_view, "scale:x", 1.0, 0.07)
 	await t2.finished
 	card_view.pivot_offset = Vector2.ZERO
 

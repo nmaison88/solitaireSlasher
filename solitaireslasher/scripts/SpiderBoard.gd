@@ -20,7 +20,7 @@ const WIN_MESSAGES = [
 
 var _game: SpiderGame = null
 var _animating: bool = false
-var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
+var _animation_duration: float = 0.3  # Card move speed (tap-to-move, drops, undo)
 var _drop_zones: Dictionary = {}       # col_index(int) -> ColorRect
 var _dragged_card_view: CardView = null
 var _dragged_cards: Array = []         # Array[SolitaireCard]
@@ -28,6 +28,8 @@ var _dragged_card_views: Array = []    # Array[CardView]
 var _dragged_card_offsets: Dictionary = {}
 var _win_overlay: Control = null
 var _last_render_frame: int = -1
+var _queued_tap_card: SolitaireCard = null  # A card tapped during an animation, played when it ends
+var _moving_card: SolitaireCard = null  # The card whose move is animating now
 var _undo_btn: Button = null
 var _redo_btn: Button = null
 var _foundation_stacks: Array = []     # Array[Array[SolitaireCard]] - tracks completed sequences (max 4)
@@ -389,6 +391,23 @@ func render() -> void:
 		_create_undo_redo_buttons()
 
 	_update_undo_redo_state()
+	_run_queued_tap()
+
+func _queue_card_tap(card: SolitaireCard) -> void:
+	"""Remember a tap made while cards are moving, so quick players don't lose it. Tapping the
+	card that's already moving does nothing (that's a double tap, not a new move)."""
+	if card != _moving_card:
+		_queued_tap_card = card
+
+func _run_queued_tap() -> void:
+	if _queued_tap_card == null or _animating:
+		return
+	var card = _queued_tap_card
+	_queued_tap_card = null
+	for child in get_children():
+		if child is CardView and child.card == card and card.face_up and not child.is_queued_for_deletion():
+			_on_card_clicked.call_deferred(child)
+			return
 
 func _draw_column_slot(pos: Vector2) -> void:
 	var panel = Panel.new()
@@ -784,11 +803,13 @@ func _on_redo_pressed() -> void:
 # ── Click to move ──────────────────────────────────────────────────────────────
 
 func _on_card_clicked(card_view: CardView) -> void:
-	if _animating:
-		return
 	var card = card_view.card
 	if card == null or not card.face_up:
 		return
+	if _animating:
+		_queue_card_tap(card)
+		return
+	_moving_card = card
 
 	var src_col = -1
 	var card_idx = -1
@@ -1074,13 +1095,13 @@ func _animate_card_flip(card_view: CardView) -> void:
 	var t1 = create_tween()
 	t1.set_ease(Tween.EASE_IN)
 	t1.set_trans(Tween.TRANS_QUAD)
-	t1.tween_property(card_view, "scale:x", 0.0, 0.1)
+	t1.tween_property(card_view, "scale:x", 0.0, 0.07)
 	await t1.finished
 	card_view._refresh()
 	var t2 = create_tween()
 	t2.set_ease(Tween.EASE_OUT)
 	t2.set_trans(Tween.TRANS_QUAD)
-	t2.tween_property(card_view, "scale:x", 1.0, 0.1)
+	t2.tween_property(card_view, "scale:x", 1.0, 0.07)
 	await t2.finished
 	card_view.pivot_offset = Vector2.ZERO
 
