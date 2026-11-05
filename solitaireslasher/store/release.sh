@@ -95,9 +95,11 @@ OPTIONS=$(mktemp).plist
 cp store/ExportOptions.plist "$OPTIONS"
 (( UPLOAD )) || plutil -replace destination -string export "$OPTIONS"
 print "› $( (( UPLOAD )) && print 'Uploading to App Store Connect' || print 'Signing for the App Store (no upload)')"
+EXPORT_LOG=$(mktemp)
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OPTIONS" \
-  -exportPath "$EXPORT_DIR" -allowProvisioningUpdates 2>&1 | grep -E 'error:|EXPORT SUCCEEDED|EXPORT FAILED|Upload' || true
-[[ -f $EXPORT_DIR/DistributionSummary.plist || -n $(ls "$EXPORT_DIR"/*.ipa 2>/dev/null) ]] || { print "Export failed."; exit 1; }
+  -exportPath "$EXPORT_DIR" -allowProvisioningUpdates > "$EXPORT_LOG" 2>&1 || true
+grep -E 'error:|EXPORT SUCCEEDED|EXPORT FAILED|Upload' "$EXPORT_LOG" || true
+grep -q 'EXPORT SUCCEEDED' "$EXPORT_LOG" || { print "Upload/export failed; full log: $EXPORT_LOG"; exit 1; }
 
 # Xcode raises the build number at upload if Apple already has it; keep ours in step
 if [[ -f $EXPORT_DIR/DistributionSummary.plist ]]; then
@@ -125,7 +127,7 @@ fi
 
 RELEASED=1
 git add $PRESETS $XCPROJ export/solitaireslasher.pck
-git commit -q -m "Release $VERSION ($BUILD)"
+git commit -q -m "Release $VERSION ($BUILD)" -- $PRESETS $XCPROJ export/solitaireslasher.pck
 git tag "v$VERSION-$BUILD"
 git checkout -- export  # Back to the tracked debug engine; only this script ships release builds
 print "✔ Uploaded $VERSION ($BUILD), committed and tagged v$VERSION-$BUILD (run: git push --follow-tags)."
