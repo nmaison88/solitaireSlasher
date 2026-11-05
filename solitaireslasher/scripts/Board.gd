@@ -321,6 +321,7 @@ func _on_stock_pressed() -> void:
 	if _animating:
 		# Remember one tap made mid-animation so quick tapping doesn't feel dropped
 		_stock_tap_queued = true
+		_queued_tap_card = null
 		return
 	_animating = true
 	var was_recycle = game.stock.is_empty()
@@ -405,9 +406,6 @@ func _on_stock_pressed() -> void:
 		tween.kill()
 	_animating = false
 	render()
-	if _stock_tap_queued:
-		_stock_tap_queued = false
-		_on_stock_pressed.call_deferred()
 
 func render() -> void:
 	if game == null:
@@ -491,9 +489,18 @@ func _queue_card_tap(card: SolitaireCard) -> void:
 	card that's already moving does nothing (that's a double tap, not a new move)."""
 	if card != _moving_card:
 		_queued_tap_card = card
+		_stock_tap_queued = false
 
 func _run_queued_tap() -> void:
-	if _queued_tap_card == null or _animating:
+	"""Plays the tap saved during an animation. Called wherever animations end, so a saved tap
+	can't linger and fire on top of a later press."""
+	if _animating:
+		return
+	if _stock_tap_queued:
+		_stock_tap_queued = false
+		_on_stock_pressed.call_deferred()
+		return
+	if _queued_tap_card == null:
 		return
 	var card = _queued_tap_card
 	_queued_tap_card = null
@@ -516,12 +523,12 @@ func _maybe_start_auto_finish() -> void:
 			return
 	_auto_finishing = true
 	_queued_tap_card = null
+	_stock_tap_queued = false
 	_run_auto_finish.call_deferred()
 
 func _run_auto_finish() -> void:
 	var finishing_game = game
 	_animating = true
-	_stock_tap_queued = false
 	for _step in range(AUTO_FINISH_MAX_STEPS):
 		# Stop if the player left or started a new game mid-finish
 		if finishing_game != game or not is_instance_valid(finishing_game) or not visible:
