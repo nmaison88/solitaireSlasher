@@ -28,9 +28,12 @@ PRESETS=export_presets.cfg
 if [[ -n $(git status --porcelain -- . ':!export' ':!.DS_Store') ]]; then
   print "Commit your changes first, so the release matches git:"; git status --short -- . ':!export' ':!.DS_Store'; exit 1
 fi
-if pgrep -f 'Godot.app/Contents/MacOS/Godot.*--editor|Godot.app/Contents/MacOS/Godot$' >/dev/null; then
+if pgrep -f "Godot.*--path $ROOT.*--editor" >/dev/null; then
   print "Close the Godot editor first: it can overwrite export_presets.cfg."; exit 1
 fi
+
+print "› Importing assets"
+"$GODOT" --headless --path . --import >/dev/null 2>&1 || true
 
 if (( TESTS )); then
   print "› Multiplayer race tests"
@@ -80,13 +83,15 @@ if ar t export/solitaireslasher.xcframework/ios-arm64/libgodot.a | grep -q templ
   print "Export produced a debug engine build; not shipping it."; exit 1
 fi
 
-ARCHIVE=~/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/"Solitaire Slasher $VERSION ($BUILD).xcarchive"
+EXPORT_DIR=$(mktemp -d)
+# Real releases go where Xcode's Organizer shows them
+ARCHIVE=$EXPORT_DIR/test.xcarchive
+(( UPLOAD )) && ARCHIVE=~/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/"Solitaire Slasher $VERSION ($BUILD).xcarchive"
 print "› Archiving"
 xcodebuild -project export/solitaireslasher.xcodeproj -scheme solitaireslasher -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -allowProvisioningUpdates -quiet archive
 
 OPTIONS=$(mktemp).plist
-EXPORT_DIR=$(mktemp -d)
 cp store/ExportOptions.plist "$OPTIONS"
 (( UPLOAD )) || plutil -replace destination -string export "$OPTIONS"
 print "› $( (( UPLOAD )) && print 'Uploading to App Store Connect' || print 'Signing for the App Store (no upload)')"
