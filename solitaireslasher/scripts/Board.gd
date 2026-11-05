@@ -57,12 +57,9 @@ func _get_left_x() -> float:
 	var available_w = maxf(0.0, size.x - 2.0 * margin_x)
 	return margin_x + maxf(0.0, (available_w - total_w) * 0.5)
 
-func _waste_card_x(anchor_x: float, i: int, card_count: int) -> float:
-	# Mirror the positioning logic in _draw_waste so all helpers agree
-	var total_width = (card_count - 1) * WASTE_SPREAD
-	var center_offset = total_width * 0.5
-	var card_offset = (card_count - 1 - i) * WASTE_SPREAD - center_offset
-	return anchor_x - card_offset
+func _waste_card_x(anchor_x: float, slot: int) -> float:
+	# The waste fans across three fixed slots (0 = left), so cards never shift as it fills up
+	return anchor_x + (slot - 1) * WASTE_SPREAD
 
 func _get_foundation_pos(foundation_index: int) -> Vector2:
 	return Vector2(_get_left_x() + foundation_index * (CARD_SIZE.x + _get_col_gap()), 16.0)
@@ -369,13 +366,13 @@ func _on_stock_pressed() -> void:
 			tween.tween_property(view, "modulate:a", 0.0, dur * 0.6)
 			tweener_count += 1
 		elif new_idx == -1 or new_idx < new_vis_start:
-			tween.tween_property(view, "position:x", waste_anchor.x - 55.0, dur)
-			tween.tween_property(view, "modulate:a", 0.0, dur)
+			# Tuck under the left slot; the card staying there covers it
+			tween.tween_property(view, "position:x", _waste_card_x(waste_anchor.x, 0), dur)
 			tweener_count += 1
 		else:
 			var vis_i = new_idx - new_vis_start
 			tween.tween_property(view, "position:x",
-				_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+				_waste_card_x(waste_anchor.x, vis_i), dur)
 			tweener_count += 1
 
 	# Slide newly drawn card(s) in from the stock position (after a recycle, everything on
@@ -395,7 +392,7 @@ func _on_stock_pressed() -> void:
 		ghost.z_index  = 100 + di
 		add_child(ghost)
 		var slide = tween.tween_property(ghost, "position:x",
-			_waste_card_x(waste_anchor.x, vis_i, new_vis_count), dur)
+			_waste_card_x(waste_anchor.x, vis_i), dur)
 		if was_recycle:
 			slide.set_delay(dur * 0.5)
 		tweener_count += 1
@@ -726,12 +723,7 @@ func _draw_waste(pos: Vector2) -> void:
 		# Create a CardView for waste cards
 		var waste_card_view = preload("res://scenes/CardView.tscn").instantiate()
 		
-		# Center the 3-card group - calculate center offset
-		var total_width = (card_count - 1) * WASTE_SPREAD
-		var center_offset = total_width / 2
-
-		var card_offset = (card_count - 1 - i) * WASTE_SPREAD - center_offset
-		waste_card_view.position = pos + Vector2(-card_offset, 0)
+		waste_card_view.position = Vector2(_waste_card_x(pos.x, i), pos.y)
 		
 		waste_card_view.card = c
 		waste_card_view._refresh()  # Setup the visual
@@ -909,6 +901,7 @@ func _on_card_clicked(card_view: CardView) -> void:
 		if game.can_place_on_foundation(card, foundation_index):
 			if game.waste.has(card) and card == game.waste[-1]:
 				if game.move_to_foundation("waste", -1, foundation_index):
+					_shift_waste_after_play()
 					await _animate_single_card(card_view, _get_foundation_pos(foundation_index))
 					_animating = false
 					render()
@@ -920,12 +913,13 @@ func _on_card_clicked(card_view: CardView) -> void:
 					if game.tableau[j].size() >= 2 and not game.tableau[j][-2].face_up:
 						below_flip = game.tableau[j][-2]
 					if game.move_to_foundation("tableau", j, foundation_index):
-						await _animate_single_card(card_view, _get_foundation_pos(foundation_index))
+						var landed = await _animate_single_card(card_view, _get_foundation_pos(foundation_index), below_flip != null)
 						if below_flip != null:
 							for child in get_children():
 								if child is CardView and child.card == below_flip:
 									await _animate_card_flip(child)
 									break
+							landed.queue_free()
 						_animating = false
 						render()
 						return
@@ -935,6 +929,7 @@ func _on_card_clicked(card_view: CardView) -> void:
 		for j in range(7):
 			if game.can_place_on_tableau(card, j):
 				if game.move_waste_to_tableau(j):
+					_shift_waste_after_play()
 					await _animate_single_card(card_view, _get_tableau_card_pos(j, game.tableau[j].size() - 1))
 					_animating = false
 					render()
@@ -1052,7 +1047,7 @@ func _anim_undo_to_foundation(hint: Dictionary) -> void:
 		to_pos = _get_tableau_card_pos(from_col, game.tableau[from_col].size() - 1)
 	else:
 		var cs = CARD_SIZE.x + _get_col_gap()
-		to_pos = Vector2(_get_left_x() + cs * 4.5, 16.0)
+		to_pos = Vector2(_waste_card_x(_get_left_x() + cs * 4.5, mini(game.waste.size(), 2)), 16.0)
 	await _anim_ghost(card, from_pos, to_pos)
 
 func _anim_undo_tableau_to_tableau(hint: Dictionary) -> void:
@@ -1103,7 +1098,7 @@ func _anim_undo_waste_to_tableau(hint: Dictionary) -> void:
 	var from_pos = _get_tableau_card_pos(to_col, game.tableau[to_col].size() - 1)
 	game.undo()
 	var cs     = CARD_SIZE.x + _get_col_gap()
-	var to_pos = Vector2(_get_left_x() + cs * 4.5, 16.0)
+	var to_pos = Vector2(_waste_card_x(_get_left_x() + cs * 4.5, mini(game.waste.size(), 2)), 16.0)
 	await _anim_ghost(card, from_pos, to_pos)
 
 func _animate_card_flip(card_view: CardView) -> void:
@@ -1123,8 +1118,10 @@ func _animate_card_flip(card_view: CardView) -> void:
 	await t2.finished
 	card_view.pivot_offset = Vector2.ZERO
 
-func _animate_single_card(card_view: CardView, target_pos: Vector2) -> void:
-	"""Slide a single card to target_pos. Caller is responsible for render() afterward."""
+func _animate_single_card(card_view: CardView, target_pos: Vector2, keep_landed: bool = false) -> Control:
+	"""Slide a single card to target_pos. Caller is responsible for render() afterward.
+	With keep_landed the moving copy stays and is returned, so it can hold its spot until the
+	caller's render; otherwise the card would vanish if the caller animates anything else first."""
 	var temp = preload("res://scenes/CardView.tscn").instantiate()
 	temp.card = card_view.card
 	temp._refresh()
@@ -1139,8 +1136,35 @@ func _animate_single_card(card_view: CardView, target_pos: Vector2) -> void:
 	tween.tween_property(temp, "position", target_pos, _animation_duration)
 	await tween.finished
 
+	if keep_landed:
+		return temp
 	if is_instance_valid(temp) and not temp.is_queued_for_deletion():
 		temp.queue_free()
+	return null
+
+func _shift_waste_after_play() -> void:
+	"""After the top waste card is played: slide the rest along and bring the next one in underneath"""
+	var anchor_x = _get_left_x() + (CARD_SIZE.x + _get_col_gap()) * 4.5
+	var start = max(0, game.waste.size() - 3)
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	for i in range(game.waste.size() - start):
+		var card = game.waste[start + i]
+		var view: CardView = null
+		for child in get_children():
+			if child is CardView and child.card == card:
+				view = child
+				break
+		if view == null:
+			view = preload("res://scenes/CardView.tscn").instantiate()
+			view.card = card
+			view._refresh()
+			view.position = Vector2(_waste_card_x(anchor_x, 0), 16.0)
+			view.z_index = -1  # Under the cards sliding off it
+			add_child(view)
+		tween.tween_property(view, "position:x", _waste_card_x(anchor_x, i), _animation_duration)
 
 func _on_card_drag_started(card_view: CardView) -> void:
 	var card = card_view.card
