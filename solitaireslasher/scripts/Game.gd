@@ -22,7 +22,6 @@ var max_stock_passes: int = -1  # -1 = unlimited, else limited passes
 # Undo state tracking
 var _last_move_state: Dictionary = {}
 var _can_undo: bool = false
-var _auto_winning: bool = false  # Guard against recursive auto-win calls
 # Hint used by Board to play a reverse animation when undo is triggered
 var last_move_hint: Dictionary = {}
 
@@ -183,9 +182,6 @@ func draw_from_stock_3() -> void:
 
 	print("DEBUG: Game.draw_from_stock_3 - after draw: stock size: ", stock.size(), ", waste size: ", waste.size())
 
-	# Check for auto-win after drawing from stock
-	_check_auto_win()
-
 	# Play card draw sound
 	if SoundManager:
 		SoundManager.play_card_draw()
@@ -247,7 +243,9 @@ func has_card_texture(card: SolitaireCard) -> bool:
 	return ResourceLoader.exists(card_texture_path(card))
 
 func can_place_on_foundation(card: SolitaireCard, foundation_index: int) -> bool:
-	var foundation = foundations[foundation_index]
+	return _fits_foundation(card, foundations[foundation_index])
+
+func _fits_foundation(card: SolitaireCard, foundation: Array) -> bool:
 	if foundation.is_empty():
 		return card.rank == 1  # Only Ace on empty foundation
 
@@ -301,7 +299,6 @@ func move_to_foundation(from_pile: String, from_index: int, foundation_index: in
 	_moves_count += 1
 	card_moved.emit(from_pile, "foundation", 1)
 	_check_completion()
-	_check_auto_win()  # Check for auto-win after foundation move
 
 	# Play card place sound
 	if SoundManager:
@@ -348,9 +345,6 @@ func move_tableau_to_tableau(from_index: int, to_index: int, card_count: int) ->
 	_moves_count += 1
 	card_moved.emit("tableau", "tableau", card_count)
 
-	# Check for auto-win after cards are flipped
-	_check_auto_win()
-
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
@@ -381,9 +375,6 @@ func move_foundation_to_tableau(foundation_index: int, tableau_index: int) -> bo
 	_moves_count += 1
 	card_moved.emit("foundation", "tableau", 1)
 
-	# Check for auto-win after foundation move
-	_check_auto_win()
-
 	# Play card place sound
 	if SoundManager:
 		SoundManager.play_card_place()
@@ -404,9 +395,6 @@ func move_waste_to_tableau(tableau_index: int) -> bool:
 	tableau[tableau_index].append(waste.pop_back())
 	_moves_count += 1
 	card_moved.emit("waste", "tableau", 1)
-
-	# Check for auto-win after waste move
-	_check_auto_win()
 
 	# Play card place sound
 	if SoundManager:
@@ -431,88 +419,80 @@ func _check_completion() -> void:
 
 	print("Game completed! Moves: ", _moves_count, " Time: ", Time.get_ticks_msec() / 1000.0 - _start_time)
 
-func _check_auto_win() -> void:
-	"""Auto-win when stock is empty and every tableau card is face-up.
-	At that point the player can always complete the game, so we do it for them."""
-	print("DEBUG: _check_auto_win called - _is_completed: ", _is_completed, ", _auto_winning: ", _auto_winning)
-
-	if _is_completed or _auto_winning:
-		print("DEBUG: Early return - already completed or auto-winning")
-		return
-
-	# Condition 1: stock must be empty
-	print("DEBUG: Stock size: ", stock.size())
-	if not stock.is_empty():
-		print("DEBUG: Stock not empty, returning")
-		return
-
-	# Condition 2: all tableau cards must be face-up (no hidden cards remain)
-	var face_down_count = 0
-	for pile_idx in range(tableau.size()):
-		for card_idx in range(tableau[pile_idx].size()):
-			var card = tableau[pile_idx][card_idx]
-			if not card.face_up:
-				print("DEBUG: Found face-down card at tableau[", pile_idx, "][", card_idx, "]")
-				face_down_count += 1
-
-	print("DEBUG: Face-down cards in tableau: ", face_down_count)
-	if face_down_count > 0:
-		print("DEBUG: Face-down cards exist, returning")
-		return
-
-	# All cards are visible — auto-complete to foundation
-	var total_cards = 0
-	var tableau_cards = 0
-	var waste_cards = waste.size() if waste else 0
-
+func can_auto_finish() -> bool:
+	"""True once the stock is empty, every tableau card is face-up, and the remaining cards can
+	all reach the foundations (drawing through the waste as needed). Board runs the finish."""
+	if _is_completed or not stock.is_empty():
+		return false
 	for pile in tableau:
-		tableau_cards += pile.size()
-		total_cards += pile.size()
-	total_cards += waste_cards
+		for card in pile:
+			if not card.face_up:
+				return false
 
-	print("DEBUG: Auto-win conditions met! Tableau cards: ", tableau_cards, ", Waste cards: ", waste_cards, ", Total: ", total_cards)
+	# Play it out on copies so a finish never starts unless it can complete
+	var sim_tableau: Array = []
+	for pile in tableau:
+		sim_tableau.append(pile.duplicate())
+	var sim_foundations: Array = []
+	for pile in foundations:
+		sim_foundations.append(pile.duplicate())
+	var sim_stock: Array = stock.duplicate()
+	var sim_waste: Array = waste.duplicate()
+	var fruitless_draws := 0
+	var max_fruitless_draws := 2 * (int(ceil(sim_waste.size() / float(maxi(draw_count, 1)))) + 1)
+	while true:
+		var move := _next_auto_move(sim_tableau, sim_foundations, sim_stock, sim_waste)
+		if move.is_empty():
+			return _foundation_card_count(sim_foundations) == 52
+		if move.type == "draw":
+			fruitless_draws += 1
+			if fruitless_draws > max_fruitless_draws:
+				return false
+			_draw_into(sim_stock, sim_waste)
+		else:
+			fruitless_draws = 0
+			if move.pile == "waste":
+				sim_waste.pop_back()
+			else:
+				sim_tableau[move.col].pop_back()
+			sim_foundations[move.foundation].append(move.card)
+	return false
 
-	if total_cards > 0:
-		print("Auto-win detected! Moving all ", total_cards, " cards to foundation")
-		_auto_winning = true
-		_auto_move_all_to_foundation()
-		_auto_winning = false
-	else:
-		print("DEBUG: No cards to move, already complete?")
+func get_auto_finish_move() -> Dictionary:
+	"""The next step of an auto-finish: {"type": "draw"}, a foundation move, or {} when done"""
+	return _next_auto_move(tableau, foundations, stock, waste)
 
-func _auto_move_all_to_foundation() -> void:
-	"""Automatically move all remaining cards to foundation with quick animation"""
-	var moved = true
-	var moves_made = 0
+func _next_auto_move(piles: Array, foundation_piles: Array, stock_cards: Array, waste_cards: Array) -> Dictionary:
+	if not waste_cards.is_empty():
+		var waste_top = waste_cards[-1]
+		for f_idx in range(foundation_piles.size()):
+			if _fits_foundation(waste_top, foundation_piles[f_idx]):
+				return {"type": "foundation", "pile": "waste", "col": -1, "foundation": f_idx, "card": waste_top}
+	for col in range(piles.size()):
+		if piles[col].is_empty():
+			continue
+		var top_card = piles[col][-1]
+		for f_idx in range(foundation_piles.size()):
+			if _fits_foundation(top_card, foundation_piles[f_idx]):
+				return {"type": "foundation", "pile": "tableau", "col": col, "foundation": f_idx, "card": top_card}
+	if not stock_cards.is_empty() or not waste_cards.is_empty():
+		return {"type": "draw"}
+	return {}
 
-	# Keep moving until no more moves possible
-	while moved:
-		moved = false
+func _foundation_card_count(foundation_piles: Array) -> int:
+	var total := 0
+	for pile in foundation_piles:
+		total += pile.size()
+	return total
 
-		# Try moving waste cards to foundation
-		if not waste.is_empty():
-			var card = waste[-1]
-			if can_place_on_foundation(card, card.suit):
-				move_to_foundation("waste", -1, card.suit)
-				moved = true
-				moves_made += 1
-				# Small delay for quick animation effect (much faster than normal)
-				await get_tree().create_timer(0.05).timeout
-
-		# Try moving tableau cards to foundation
-		for i in range(tableau.size()):
-			if not tableau[i].is_empty():
-				var card = tableau[i][-1]
-				if can_place_on_foundation(card, card.suit):
-					move_to_foundation("tableau", i, card.suit)
-					moved = true
-					moves_made += 1
-					# Small delay for quick animation effect (much faster than normal)
-					await get_tree().create_timer(0.05).timeout
-
-	print("Auto-win completed! Moved ", moves_made, " cards automatically")
-	# Trigger win after all cards are moved
-	_check_completion()
+func _draw_into(stock_cards: Array, waste_cards: Array) -> void:
+	"""One draw on simulated piles, recycling the waste first if the stock is empty"""
+	if stock_cards.is_empty():
+		for i in range(waste_cards.size() - 1, -1, -1):
+			stock_cards.append(waste_cards[i])
+		waste_cards.clear()
+	for _i in range(mini(maxi(draw_count, 1), stock_cards.size())):
+		waste_cards.append(stock_cards.pop_back())
 
 func get_game_time() -> float:
 	if _start_time == 0.0:
@@ -739,13 +719,7 @@ func _stock_cycle_has_playable_card() -> bool:
 	# Two passes' worth of draws covers every card that can reach the waste top from any starting point
 	var max_draws = 2 * (int(ceil(total / float(step))) + 1)
 	for _i in range(max_draws):
-		if sim_stock.is_empty():
-			# Recycle: waste goes back to stock in the same draw order
-			for j in range(sim_waste.size() - 1, -1, -1):
-				sim_stock.append(sim_waste[j])
-			sim_waste.clear()
-		for _k in range(mini(step, sim_stock.size())):
-			sim_waste.append(sim_stock.pop_back())
+		_draw_into(sim_stock, sim_waste)
 		var top_card = sim_waste[-1]
 		for f_idx in range(4):
 			if can_place_on_foundation(top_card, f_idx):

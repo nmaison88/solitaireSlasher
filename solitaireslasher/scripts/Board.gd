@@ -27,7 +27,11 @@ var _stock_button: Button
 var _animation_duration: float = 0.4  # Card move speed (tap-to-move, drops, undo)
 var _animating: bool = false
 var _stock_tap_queued: bool = false  # A stock tap made during an animation, run when it ends
+var _auto_finishing: bool = false  # Cards are flying to the foundations on their own
 var _win_overlay: Control = null
+
+const AUTO_FINISH_STEP_TIME = 0.11  # Seconds per card when the game finishes itself
+const AUTO_FINISH_MAX_STEPS = 600  # Safety cap; a finish is at most 52 moves plus draws
 
 const WIN_MESSAGES = [
 	"YOU WIN!", "NICE JOB!", "MAN YOU'RE GOOD!",
@@ -340,7 +344,7 @@ func _on_stock_pressed() -> void:
 	var new_size      = game.waste.size()
 	var new_vis_start = max(0, new_size - 3)
 	var new_vis_count = new_size - new_vis_start
-	var dur           = 0.38
+	var dur           = 0.22
 
 	var tween = create_tween()
 	tween.set_parallel(true)
@@ -476,6 +480,62 @@ func render() -> void:
 			_draw_tableau_column(game.tableau[col], Vector2(x, tableau_y), tableau_h, col)
 		else:
 			print("Board.render: Tableau column ", col, " not ready, skipping")
+
+	_maybe_start_auto_finish()
+
+func _maybe_start_auto_finish() -> void:
+	"""Once the game can finish itself, send the remaining cards up (checked after every render,
+	which is when moves and their animations have settled)"""
+	if _auto_finishing or _animating or _dragged_card_view != null or not visible:
+		return
+	if game == null or not game.can_auto_finish():
+		return
+	if multiplayer_manager and multiplayer_manager.is_multiplayer:
+		# A forfeited player can't win the race, and nothing runs after it has ended
+		var local_status = multiplayer_manager.player_statuses.get(NetworkManager.local_player_id)
+		if multiplayer_manager._race_ended or local_status == multiplayer_manager.PlayerStatus.JAMMED:
+			return
+	_auto_finishing = true
+	_run_auto_finish.call_deferred()
+
+func _run_auto_finish() -> void:
+	var finishing_game = game
+	_animating = true
+	_stock_tap_queued = false
+	for _step in range(AUTO_FINISH_MAX_STEPS):
+		# Stop if the player left or started a new game mid-finish
+		if finishing_game != game or not is_instance_valid(finishing_game) or not visible:
+			break
+		var move: Dictionary = finishing_game.get_auto_finish_move()
+		if move.is_empty():
+			break
+		if move.type == "draw":
+			finishing_game.draw_from_stock_3()
+			render()
+			await get_tree().create_timer(AUTO_FINISH_STEP_TIME * 0.5).timeout
+			continue
+
+		var flying: CardView = null
+		for child in get_children():
+			if child is CardView and child.card == move.card and not child.is_queued_for_deletion():
+				flying = child
+				break
+		if flying:
+			flying.z_index = 1500
+			var tween = create_tween()
+			tween.set_ease(Tween.EASE_IN_OUT)
+			tween.set_trans(Tween.TRANS_CUBIC)
+			tween.tween_property(flying, "position", _get_foundation_pos(move.foundation), AUTO_FINISH_STEP_TIME)
+			await tween.finished
+		else:
+			await get_tree().process_frame
+		if finishing_game != game or not is_instance_valid(finishing_game):
+			break
+		finishing_game.move_to_foundation(move.pile, move.col, move.foundation)
+		render()
+	_auto_finishing = false
+	if finishing_game == game:
+		_animating = false
 
 func _on_test_button_pressed():
 	print("TEST BUTTON PRESSED! Mouse input works!")
